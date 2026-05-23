@@ -67,10 +67,18 @@ export default function Signin() {
         body: JSON.stringify({ email, otp }),
       });
 
-      const data = await res.json();
+      const rawText = await res.text();
+      let data = null;
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseErr) {
+        console.error("verify-otp non-json response:", res.status, rawText);
+      }
 
       if (!res.ok) {
-        throw new Error(data.message || "Invalid OTP");
+        console.error("verify-otp error:", res.status, data || rawText);
+        const errorMessage = data?.message || data?.error || rawText || `Request failed with status ${res.status}`;
+        throw new Error(errorMessage);
       }
 
       if (data.newUser) {
@@ -82,8 +90,13 @@ export default function Signin() {
 
       localStorage.setItem("token", data.token);
       showSuccess("Login successful!");
-      window.location.href = "/dashboard";
+      if (data.isAdmin) {
+        window.location.href = "/admin";
+      } else {
+        window.location.href = "/dashboard";
+      }
     } catch (err) {
+      console.error("verify error:", err);
       showError(err.message || "Verification failed");
     } finally {
       setLoading(false);
@@ -195,7 +208,6 @@ export default function Signin() {
                       }} />
                       <input
                         type="email"
-                        placeholder="Shyam@pickyourhire.com"
                         value={email}
                         onChange={(e) => {
                           setEmail(e.target.value);

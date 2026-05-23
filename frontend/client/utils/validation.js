@@ -44,9 +44,10 @@ export const validateReferralForm = (form) => {
   if (!form.name || form.name.trim() === '') errors.name = 'Name is required';
   if (!form.email || !validateEmail(form.email)) errors.email = 'Valid email is required';
   if (!form.phone || !validatePhone(form.phone)) errors.phone = 'Valid 10-digit phone is required';
-  if (!form.experience || form.experience < 0) errors.experience = 'Valid experience is required';
+  if (!form.skills || form.skills.trim() === '') errors.skills = 'Skills are required';
+  if (!form.experience) errors.experience = 'Experience level is required';
   if (!form.company || form.company.trim() === '') errors.company = 'Company is required';
-  if (!form.linkedin || !validateLinkedInURL(form.linkedin)) errors.linkedin = 'Valid LinkedIn URL is required';
+  // LinkedIn is now optional
 
   return errors;
 };

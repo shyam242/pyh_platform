@@ -9,9 +9,11 @@ import {
   verifyProfile,
   downloadReferralCv,
   downloadCandidateResume,
-  getReferralDetails
+  getReferralDetails,
+  getApprovalStatus
 } from "../controllers/recruitercontroller.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { checkRecruiterApproved } from "../middleware/recruiterMiddleware.js";
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -38,11 +40,15 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
-router.get("/all", getAllReferrals);
-router.get("/:referralId/details", getReferralDetails);
-router.post("/update", updateStatus);
-router.post("/verify", protect, upload.single("resume"), verifyProfile);
-router.get("/:referralId/cv/download", downloadReferralCv);
-router.get("/candidate/:userId/resume/download", downloadCandidateResume);
+// Get recruiter approval status (any recruiter can check their own status)
+router.get("/approval-status", protect, getApprovalStatus);
+
+// Restricted endpoints - only approved recruiters
+router.get("/all", protect, checkRecruiterApproved, getAllReferrals);
+router.get("/:referralId/details", protect, checkRecruiterApproved, getReferralDetails);
+router.post("/update", protect, checkRecruiterApproved, updateStatus);
+router.post("/verify", protect, checkRecruiterApproved, upload.single("resume"), verifyProfile);
+router.get("/:referralId/cv/download", protect, checkRecruiterApproved, downloadReferralCv);
+router.get("/candidate/:userId/resume/download", protect, checkRecruiterApproved, downloadCandidateResume);
 
 export default router;

@@ -10,6 +10,16 @@ const otpStore = new Map();
 
 let transporter = null;
 
+// Get admin emails from env
+const getAdminEmails = () => {
+  const adminEmailsEnv = process.env.ADMIN_EMAILS || "";
+  return adminEmailsEnv.split(",").map(email => email.trim()).filter(email => email);
+};
+
+const isAdminEmail = (email) => {
+  return getAdminEmails().includes(email);
+};
+
 const getTransporter = () => {
   if (!transporter) {
     console.log("🔧 Initializing OTP email transporter...");
@@ -95,16 +105,57 @@ export const verifyOtp = async (req, res) => {
       [email]
     );
 
+    // Check if this is an admin email
+    const adminEmail = isAdminEmail(email);
+
     if (user.rows.length === 0) {
+      // New user
+      if (adminEmail) {
+        // Create admin user automatically
+        const newUser = await pool.query(
+          "INSERT INTO users(name,email,role) VALUES($1,$2,$3) RETURNING *",
+          [email.split("@")[0], email, "admin"]
+        );
+
+        const token = jwt.sign(
+          { id: newUser.rows[0].id, role: "admin" },
+          process.env.JWT_SECRET
+        );
+
+        console.log(`✓ Admin user created: ${email}`);
+        return res.json({ 
+          token, 
+          user: newUser.rows[0],
+          isAdmin: true 
+        });
+      }
+
+      // Regular new user - show role selection
       return res.json({ newUser: true, email });
     }
 
+    // Existing user
+    const userRole = user.rows[0].role;
+
+    // If this email should be admin but isn't, update role
+    if (adminEmail && userRole !== "admin") {
+      await pool.query(
+        "UPDATE users SET role=$1 WHERE email=$2",
+        ["admin", email]
+      );
+      userRole = "admin";
+    }
+
     const token = jwt.sign(
-      { id: user.rows[0].id, role: user.rows[0].role },
+      { id: user.rows[0].id, role: userRole || user.rows[0].role },
       process.env.JWT_SECRET
     );
 
-    res.json({ token, user: user.rows[0] });
+    res.json({ 
+      token, 
+      user: { ...user.rows[0], role: userRole || user.rows[0].role },
+      isAdmin: adminEmail
+    });
   } catch (error) {
     console.error("❌ Error verifying OTP:", error.message);
     res.status(500).json({ message: "Failed to verify OTP", error: error.message });

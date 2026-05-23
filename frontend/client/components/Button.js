@@ -9,7 +9,7 @@ export default function Button({
   const baseStyles = "font-semibold rounded-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed";
 
   const variants = {
-    primary: "bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:shadow-lg hover:shadow-blue-500/30 hover:from-blue-500 hover:to-blue-600",
+    primary: "bg-orange-500 text-white hover:bg-orange-600 hover:shadow-lg hover:shadow-orange-400/30",
     secondary: "border-2 border-gray-600 text-gray-100 hover:border-gray-400 hover:bg-gray-800/50",
     danger: "bg-red-600 text-white hover:bg-red-700 hover:shadow-lg hover:shadow-red-500/30",
     success: "bg-green-600 text-white hover:bg-green-700 hover:shadow-lg hover:shadow-green-500/30",

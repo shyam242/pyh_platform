@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import {
   Sparkles,
   Check,
@@ -12,12 +11,6 @@ import {
 } from "lucide-react";
 
 export default function Home() {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#fff", color: "#000" }}>
       {/* NAVBAR */}
@@ -38,23 +31,23 @@ export default function Home() {
           justifyContent: "space-between",
           alignItems: "center"
         }}>
-          <button
-            onClick={() => (window.location.href = "/")}
+          <a
+            href="/"
             style={{
               fontSize: "1.5rem",
               fontWeight: "bold",
-              border: "none",
-              backgroundColor: "transparent",
+              color: "#000",
+              textDecoration: "none",
               cursor: "pointer"
             }}
           >
-            PickYourHire
-          </button>
+            PICKYOURHIRE
+          </a>
           <button
             onClick={() => (window.location.href = "/signin")}
             style={{
               padding: "0.75rem 2rem",
-              backgroundColor: "#000",
+              backgroundColor: "#f97316",
               color: "#fff",
               border: "none",
               borderRadius: "0.5rem",
@@ -101,7 +94,7 @@ export default function Home() {
               onClick={() => (window.location.href = "/signin")}
               style={{
                 padding: "0.75rem 2rem",
-                backgroundColor: "#000",
+                backgroundColor: "#f97316",
                 color: "#fff",
                 border: "none",
                 borderRadius: "0.5rem",
@@ -225,7 +218,7 @@ export default function Home() {
               onClick={() => (window.location.href = "/signin")}
               style={{
                 padding: "0.75rem 2rem",
-                backgroundColor: "#000",
+                backgroundColor: "#f97316",
                 color: "#fff",
                 border: "none",
                 borderRadius: "0.5rem",

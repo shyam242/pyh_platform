@@ -6,11 +6,50 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// GET RECRUITER APPROVAL STATUS
+export const getApprovalStatus = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await pool.query(
+      "SELECT id, name, email, is_recruiter_approved, recruiter_approved_at FROM users WHERE id=$1 AND role='recruiter'",
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Recruiter not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Error fetching approval status:", error);
+    res.status(500).json({ error: "Failed to fetch approval status" });
+  }
+};
+
 export const getAllReferrals = async (req, res) => {
-  const result = await pool.query(
-    "SELECT * FROM referrals ORDER BY id DESC"
-  );
-  res.json(result.rows);
+  try {
+    const result = await pool.query(
+      `SELECT 
+        r.*,
+        u.name as referrer_name,
+        u.company as referrer_company,
+        u.experience as referrer_experience
+      FROM referrals r
+      LEFT JOIN users u ON r.referrer_id = u.id
+      ORDER BY r.id DESC`
+    );
+
+    const referrals = result.rows.map((row) => ({
+      ...row,
+      candidate_image_url: null,
+    }));
+
+    res.json(referrals);
+  } catch (error) {
+    console.error("Error fetching all referrals:", error);
+    res.status(500).json({ error: "Failed to fetch referrals" });
+  }
 };
 
 export const updateStatus = async (req, res) => {
@@ -132,13 +171,23 @@ export const downloadCandidateResume = async (req, res) => {
   }
 };
 
-// GET REFERRAL DETAILS WITH CANDIDATE INFO
+// GET REFERRAL DETAILS WITH CANDIDATE INFO AND REFERRER INFO
 export const getReferralDetails = async (req, res) => {
   try {
     const { referralId } = req.params;
 
     const result = await pool.query(
-      "SELECT * FROM referrals WHERE id=$1",
+      `SELECT 
+        r.*,
+        u.id as referrer_id,
+        u.name as referrer_name,
+        u.email as referrer_email,
+        u.company as referrer_company,
+        u.experience as referrer_experience
+      FROM referrals r
+      LEFT JOIN users u ON r.referrer_id = u.id
+      LEFT JOIN users c ON r.email = c.email AND c.role = 'candidate'
+      WHERE r.id=$1`,
       [referralId]
     );
 
@@ -146,7 +195,11 @@ export const getReferralDetails = async (req, res) => {
       return res.status(404).json({ error: "Referral not found" });
     }
 
-    res.json(result.rows[0]);
+    const referral = result.rows[0];
+    res.json({
+      ...referral,
+      candidate_image_url: null,
+    });
   } catch (error) {
     console.error("Error fetching referral:", error);
     res.status(500).json({ error: "Failed to fetch referral" });

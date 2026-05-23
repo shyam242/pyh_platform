@@ -61,14 +61,25 @@ export default function CandidateCard({ candidate, onStatusUpdate }) {
     return colors[status] || colors.pending;
   };
 
+  const avatarUrl = candidate.candidate_image_url || "/user.svg";
+
   return (
     <>
       {/* Card View */}
       <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500 hover:shadow-lg transition">
-        <div className="flex justify-between items-start mb-4">
-          <div className="flex-1">
-            <h3 className="text-lg font-bold text-gray-900">{candidate.name}</h3>
-            <p className="text-sm text-gray-600">{candidate.company}</p>
+        <div className="flex justify-between items-start mb-4 gap-4">
+          <div className="flex items-center gap-4 flex-1">
+            <div className="h-16 w-16 rounded-full overflow-hidden bg-slate-100 border border-slate-200">
+              <img
+                src={avatarUrl}
+                alt={`${candidate.name} avatar`}
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">{candidate.name}</h3>
+              <p className="text-sm text-gray-600">{candidate.company}</p>
+            </div>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(candidate.status)}`}>
             {candidate.status}
@@ -77,24 +88,24 @@ export default function CandidateCard({ candidate, onStatusUpdate }) {
 
         <div className="space-y-2 text-sm mb-6">
           <div className="flex items-center text-gray-700">
-            <span className="text-blue-600 mr-2">✉️</span>
+            <span className="mr-2 font-semibold text-gray-800">Email:</span>
             <a href={`mailto:${candidate.email}`} className="text-blue-600 hover:underline">
               {candidate.email}
             </a>
           </div>
           <div className="flex items-center text-gray-700">
-            <span className="text-gray-600 mr-2">📱</span>
+            <span className="mr-2 font-semibold text-gray-800">Phone:</span>
             {candidate.phone}
           </div>
           <div className="flex items-center text-gray-700">
-            <span className="text-gray-600 mr-2">💼</span>
-            {candidate.experience} years experience
+            <span className="mr-2 font-semibold text-gray-800">Experience:</span>
+            {candidate.experience} years
           </div>
           {candidate.linkedin && (
-            <div className="flex items-center text-gray-700">
-              <span className="text-blue-700 mr-2">🔗</span>
-              <a href={candidate.linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                LinkedIn Profile
+            <div className="text-gray-700">
+              <span className="font-semibold text-gray-800">LinkedIn:</span>
+              <a href={candidate.linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline ml-1">
+                View profile
               </a>
             </div>
           )}
@@ -104,16 +115,16 @@ export default function CandidateCard({ candidate, onStatusUpdate }) {
         <div className="flex flex-wrap gap-2 mb-4">
           <button
             onClick={() => setShowDetails(true)}
-            className="flex-1 min-w-[120px] bg-blue-600 text-white py-2 px-4 rounded font-semibold hover:bg-blue-700 transition text-sm"
+            className="flex-1 min-w-30 bg-blue-600 text-white py-2 px-4 rounded font-semibold hover:bg-blue-700 transition text-sm"
           >
             View Details
           </button>
           {candidate.cv_file && (
             <button
               onClick={handleDownloadCv}
-              className="flex-1 min-w-[120px] bg-purple-600 text-white py-2 px-4 rounded font-semibold hover:bg-purple-700 transition text-sm"
+              className="flex-1 min-w-30 bg-purple-600 text-white py-2 px-4 rounded font-semibold hover:bg-purple-700 transition text-sm"
             >
-              📥 Download CV
+              Download CV
             </button>
           )}
         </div>
@@ -125,21 +136,21 @@ export default function CandidateCard({ candidate, onStatusUpdate }) {
             disabled={isLoading || candidate.status === "shortlist"}
             className="flex-1 bg-green-500 text-white py-2 rounded font-semibold hover:bg-green-600 transition disabled:opacity-50 text-sm"
           >
-            ✓ Shortlist
+            Shortlist
           </button>
           <button
             onClick={() => handleStatusChange("hold")}
             disabled={isLoading || candidate.status === "hold"}
             className="flex-1 bg-blue-500 text-white py-2 rounded font-semibold hover:bg-blue-600 transition disabled:opacity-50 text-sm"
           >
-            ⏸ Hold
+            Hold
           </button>
           <button
             onClick={() => handleStatusChange("reject")}
             disabled={isLoading || candidate.status === "reject"}
             className="flex-1 bg-red-500 text-white py-2 rounded font-semibold hover:bg-red-600 transition disabled:opacity-50 text-sm"
           >
-            ✕ Reject
+            Reject
           </button>
         </div>
       </div>
@@ -152,9 +163,9 @@ export default function CandidateCard({ candidate, onStatusUpdate }) {
               <h2 className="text-2xl font-bold text-gray-900">{candidate.name}</h2>
               <button
                 onClick={() => setShowDetails(false)}
-                className="text-gray-600 hover:text-gray-900 text-2xl"
+                className="text-gray-600 hover:text-gray-900 text-sm font-semibold"
               >
-                ✕
+                Close
               </button>
             </div>
 
@@ -202,7 +213,7 @@ export default function CandidateCard({ candidate, onStatusUpdate }) {
                     }}
                     className="w-full bg-purple-600 text-white py-3 rounded font-semibold hover:bg-purple-700 transition"
                   >
-                    📥 Download CV
+                    Download CV
                   </button>
                 </div>
               )}

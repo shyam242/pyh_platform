@@ -25,11 +25,29 @@ const roleCards = [
 export default function CreateProfile() {
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
+  const [company, setCompany] = useState("");
+  const [experience, setExperience] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [companyWebsite, setCompanyWebsite] = useState("");
+  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
   const submit = async () => {
     const validationErrors = validateForm({ name, role }, ["name", "role"]);
+
+    // Additional validation for referrer
+    if (role === "referrer") {
+      if (!company) validationErrors.company = "Company name is required";
+      if (!experience) validationErrors.experience = "Experience is required";
+      if (!phone) validationErrors.phone = "Mobile number is required";
+    }
+
+    // Additional validation for recruiter
+    if (role === "recruiter") {
+      if (!companyName) validationErrors.companyName = "Company name is required";
+      if (!phone) validationErrors.phone = "Phone number is required";
+    }
 
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
@@ -47,10 +65,18 @@ export default function CreateProfile() {
         return;
       }
 
+      const payload = { name, role, email, company, experience, phone };
+      
+      // Add recruiter-specific fields
+      if (role === "recruiter") {
+        payload.company_name = companyName;
+        payload.company_website = companyWebsite;
+      }
+
       const res = await fetch("http://localhost:5000/api/profile/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, role, email }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) throw new Error("Failed to create profile");
@@ -58,8 +84,10 @@ export default function CreateProfile() {
       const data = await res.json();
 
       localStorage.setItem("token", data.token);
-      showSuccess("Profile created successfully!");
-      window.location.href = "/dashboard";
+      showSuccess("Profile created successfully! Redirecting to your dashboard...");
+      setTimeout(() => {
+        window.location.href = "/dashboard";
+      }, 800);
     } catch (err) {
       showError(err.message || "Failed to create profile");
     } finally {
@@ -267,6 +295,298 @@ export default function CreateProfile() {
                 </p>
               )}
             </div>
+            {role === "referrer" && (
+              <div style={{ marginBottom: "2rem" }}>
+                <div style={{
+                  padding: "1.5rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "0.75rem",
+                  backgroundColor: "#f9f9f9",
+                  marginBottom: "1rem"
+                }}>
+                  <label style={{
+                    display: "block",
+                    fontSize: "0.9rem",
+                    fontWeight: "600",
+                    marginBottom: "0.5rem",
+                    color: "#333"
+                  }}>
+                    Company Name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Google, Microsoft, Amazon"
+                    value={company}
+                    onChange={(e) => {
+                      setCompany(e.target.value);
+                      setErrors({ ...errors, company: "" });
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1rem",
+                      border: errors.company ? "2px solid #dc2626" : "1px solid #ddd",
+                      borderRadius: "0.5rem",
+                      fontSize: "1rem",
+                      boxSizing: "border-box",
+                      outline: "none"
+                    }}
+                    onFocus={(e) => {
+                      if (!errors.company) e.target.style.borderColor = "#000";
+                    }}
+                    onBlur={(e) => {
+                      if (!errors.company) e.target.style.borderColor = "#ddd";
+                    }}
+                  />
+                  {errors.company && (
+                    <p style={{ color: "#dc2626", fontSize: "0.85rem", marginTop: "0.5rem" }}>
+                      {errors.company}
+                    </p>
+                  )}
+                </div>
+
+                <div style={{
+                  padding: "1.5rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "0.75rem",
+                  backgroundColor: "#f9f9f9"
+                }}>
+                  <label style={{
+                    display: "block",
+                    fontSize: "0.9rem",
+                    fontWeight: "600",
+                    marginBottom: "0.5rem",
+                    color: "#333"
+                  }}>
+                    Years of Experience *
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="e.g., 5"
+                    min="0"
+                    max="50"
+                    value={experience}
+                    onChange={(e) => {
+                      setExperience(e.target.value);
+                      setErrors({ ...errors, experience: "" });
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1rem",
+                      border: errors.experience ? "2px solid #dc2626" : "1px solid #ddd",
+                      borderRadius: "0.5rem",
+                      fontSize: "1rem",
+                      boxSizing: "border-box",
+                      outline: "none"
+                    }}
+                    onFocus={(e) => {
+                      if (!errors.experience) e.target.style.borderColor = "#000";
+                    }}
+                    onBlur={(e) => {
+                      if (!errors.experience) e.target.style.borderColor = "#ddd";
+                    }}
+                  />
+                  {errors.experience && (
+                    <p style={{ color: "#dc2626", fontSize: "0.85rem", marginTop: "0.5rem" }}>
+                      {errors.experience}
+                    </p>
+                  )}
+                </div>
+                <div style={{
+                  padding: "1.5rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "0.75rem",
+                  backgroundColor: "#f9f9f9",
+                  marginTop: "1rem"
+                }}>
+                  <label style={{
+                    display: "block",
+                    fontSize: "0.9rem",
+                    fontWeight: "600",
+                    marginBottom: "0.5rem",
+                    color: "#333"
+                  }}>
+                    Mobile Number *
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="e.g., +919876543210"
+                    value={phone}
+                    onChange={(e) => {
+                      setPhone(e.target.value);
+                      setErrors({ ...errors, phone: "" });
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1rem",
+                      border: errors.phone ? "2px solid #dc2626" : "1px solid #ddd",
+                      borderRadius: "0.5rem",
+                      fontSize: "1rem",
+                      boxSizing: "border-box",
+                      outline: "none"
+                    }}
+                    onFocus={(e) => {
+                      if (!errors.phone) e.target.style.borderColor = "#000";
+                    }}
+                    onBlur={(e) => {
+                      if (!errors.phone) e.target.style.borderColor = "#ddd";
+                    }}
+                  />
+                  {errors.phone && (
+                    <p style={{ color: "#dc2626", fontSize: "0.85rem", marginTop: "0.5rem" }}>
+                      {errors.phone}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {role === "recruiter" && (
+              <div style={{ marginBottom: "2rem" }}>
+                <div style={{
+                  padding: "1.5rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "0.75rem",
+                  backgroundColor: "#f9f9f9",
+                  marginBottom: "1rem"
+                }}>
+                  <label style={{
+                    display: "block",
+                    fontSize: "0.9rem",
+                    fontWeight: "600",
+                    marginBottom: "0.5rem",
+                    color: "#333"
+                  }}>
+                    Company Name *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Tech Corp, Hiring Inc."
+                    value={companyName}
+                    onChange={(e) => {
+                      setCompanyName(e.target.value);
+                      setErrors({ ...errors, companyName: "" });
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1rem",
+                      border: errors.companyName ? "2px solid #dc2626" : "1px solid #ddd",
+                      borderRadius: "0.5rem",
+                      fontSize: "1rem",
+                      boxSizing: "border-box",
+                      outline: "none"
+                    }}
+                    onFocus={(e) => {
+                      if (!errors.companyName) e.target.style.borderColor = "#000";
+                    }}
+                    onBlur={(e) => {
+                      if (!errors.companyName) e.target.style.borderColor = "#ddd";
+                    }}
+                  />
+                  {errors.companyName && (
+                    <p style={{ color: "#dc2626", fontSize: "0.85rem", marginTop: "0.5rem" }}>
+                      {errors.companyName}
+                    </p>
+                  )}
+                </div>
+
+                <div style={{
+                  padding: "1.5rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "0.75rem",
+                  backgroundColor: "#f9f9f9",
+                  marginBottom: "1rem"
+                }}>
+                  <label style={{
+                    display: "block",
+                    fontSize: "0.9rem",
+                    fontWeight: "600",
+                    marginBottom: "0.5rem",
+                    color: "#333"
+                  }}>
+                    Company Website
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="e.g., https://techcorp.com"
+                    value={companyWebsite}
+                    onChange={(e) => {
+                      setCompanyWebsite(e.target.value);
+                      setErrors({ ...errors, companyWebsite: "" });
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1rem",
+                      border: "1px solid #ddd",
+                      borderRadius: "0.5rem",
+                      fontSize: "1rem",
+                      boxSizing: "border-box",
+                      outline: "none"
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = "#000"}
+                    onBlur={(e) => e.target.style.borderColor = "#ddd"}
+                  />
+                </div>
+
+                <div style={{
+                  padding: "1.5rem",
+                  border: "1px solid #ddd",
+                  borderRadius: "0.75rem",
+                  backgroundColor: "#f9f9f9",
+                  marginBottom: "1rem"
+                }}>
+                  <label style={{
+                    display: "block",
+                    fontSize: "0.9rem",
+                    fontWeight: "600",
+                    marginBottom: "0.5rem",
+                    color: "#333"
+                  }}>
+                    Phone Number *
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="e.g., +91 9999999999"
+                    value={phone}
+                    onChange={(e) => {
+                      setPhone(e.target.value);
+                      setErrors({ ...errors, phone: "" });
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1rem",
+                      border: errors.phone ? "2px solid #dc2626" : "1px solid #ddd",
+                      borderRadius: "0.5rem",
+                      fontSize: "1rem",
+                      boxSizing: "border-box",
+                      outline: "none"
+                    }}
+                    onFocus={(e) => {
+                      if (!errors.phone) e.target.style.borderColor = "#000";
+                    }}
+                    onBlur={(e) => {
+                      if (!errors.phone) e.target.style.borderColor = "#ddd";
+                    }}
+                  />
+                  {errors.phone && (
+                    <p style={{ color: "#dc2626", fontSize: "0.85rem", marginTop: "0.5rem" }}>
+                      {errors.phone}
+                    </p>
+                  )}
+                </div>
+
+                <div style={{
+                  padding: "1rem",
+                  backgroundColor: "#fef3c7",
+                  borderRadius: "0.5rem",
+                  border: "1px solid #fcd34d",
+                  color: "#92400e",
+                  fontSize: "0.9rem"
+                }}>
+                  Your profile is pending admin approval. You'll receive an email confirmation once approved.
+                </div>
+              </div>
+            )}
+
             <button
               onClick={submit}
               disabled={loading || !name || !role}

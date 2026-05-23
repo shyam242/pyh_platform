@@ -6,7 +6,7 @@ import { Users, Briefcase, User, Shield, ArrowRight } from "lucide-react";
 
 export default function RolePage() {
   const { data: session } = useSession();
-  if (!session) redirect("/login");
+  if (!session) redirect("/signin");
 
   const roles = [
     { id: "referrer", title: "Referrer", description: "Refer talented candidates", icon: Users, bgColor: "#f3f4f6" },
@@ -17,13 +17,27 @@ export default function RolePage() {
 
   const setRole = async (role) => {
     try {
-      await axios.post("http://localhost:5000/api/user/role", {
+      // For admin role, verify the email
+      if (role === "admin" && session.user.email !== "shyampickyourhire@gmail.com") {
+        alert("Admin account can only be created with the authorized email address");
+        return;
+      }
+
+      const response = await axios.post("http://localhost:5000/api/profile/create", {
+        name: session.user.name || "User",
         email: session.user.email,
-        role,
+        role: role
       });
+
+      // Store token
+      if (response.data.token) {
+        localStorage.setItem("token", response.data.token);
+      }
+
       redirect("/dashboard");
     } catch (error) {
       console.error("Error setting role:", error);
+      alert(error.response?.data?.error || "Failed to set role");
     }
   };
 

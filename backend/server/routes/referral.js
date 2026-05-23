@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import {
   createReferral,
   getMyReferrals,
+  getReferrerStats,
   acceptReferral,
   getReferralById,
 } from "../controllers/referralController.js";
@@ -58,6 +59,7 @@ const upload = multer({
 // Routes
 router.post("/create", protect, upload.single("cv"), createReferral);
 router.get("/my", protect, getMyReferrals);
+router.get("/stats", protect, getReferrerStats);
 router.get("/:referralId", getReferralById);
 router.post("/:referralId/accept", acceptReferral);
 

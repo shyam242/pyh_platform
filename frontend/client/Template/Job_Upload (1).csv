@@ -1,0 +1,176 @@
+Job Title,Department,Location,Job Type,Salary Range,Experience Required,Job Description
+Senior Embedded Linux Engineer,Engineering,"Noida, Sector 60",Full-time,Not specified,3+ years,"We are hiring a Camera/Vision Engineer to build high-performance embedded vision systems across a range of products. This role spans camera bring-up, video pipeline development, and AI-based analytics on embedded platforms such as NXP i.MX8M Plus and NVIDIA Jetson Xavier NX. Depending on experience, the candidate will either contribute as a strong individual contributor or take ownership of system architecture, performance optimization, and technical direction.
+
+Key Responsibilities:
+- Design, develop, and optimize camera and video pipelines on Embedded Linux systems.
+- Work extensively with GStreamer, V4L2, ISP pipelines, and hardware codecs (H.264/H.265).
+- Bring up camera sensors (MIPI-CSI), debug end-to-end pipelines (sensor -> ISP -> application).
+- Develop AI-driven video analytics using OpenCV, YOLO, TensorFlow, or similar frameworks.
+- Maintain and customize Yocto-based Linux distributions and BSP layers.
+- Perform deep debugging across kernel, drivers, and application layers.
+- Optimize performance for real-time video workloads on embedded SoCs.
+- Collaborate closely with hardware, AI, and product teams for system integration.
+(For Senior Candidates:)
+- Define system architecture for camera and video subsystems.
+- Lead performance tuning, pipeline design decisions, and technology selection.
+- Mentor junior engineers and drive best practices in development and debugging.
+
+Eligibility / Requirements:
+- B.E. / B.Tech / M.Tech in Electronics, Computer Science, or related field.
+- 3-12+ years of experience in embedded camera/video systems.
+- Strong experience in Embedded Linux, GStreamer, and multimedia frameworks.
+- Solid understanding of camera systems, ISP concepts, and video pipelines.
+- Proficiency in C/C++ (Python is a plus).
+- Experience with Yocto, BSP customization, and cross-compilation.
+- Strong debugging and problem-solving skills at system level.
+
+Good to Have:
+- Experience on platforms like NVIDIA Jetson Orin, NXP i.MX8M, or similar ARM SoCs.
+- Exposure to AI/ML deployment on edge devices.
+- Experience in drone, robotics, surveillance, or industrial vision systems.
+- Familiarity with streaming protocols (HLS/RTSP/WebRTC).
+
+Why Join Us:
+- Work on cutting-edge embedded vision and AI systems.
+- High ownership and fast-paced product development environment.
+- Opportunity to influence architecture and core technology decisions."
+Sr. Full-Stack Developer,Engineering,Noida,Full-time,Not specified,6-10 years,"We are looking for a Senior Full-Stack Developer who can independently design, build, and evolve application features across frontend and backend systems. In this role, you will take end-to-end ownership of complex features, make sound technical decisions, and help improve overall code quality and engineering practices in a team environment.
+
+Key Responsibilities:
+Frontend Development:
+- Design and develop scalable, user-friendly interfaces.
+- Implement complex user flows, interactions, and validations.
+- Improve frontend performance and maintainability.
+
+Review and improve frontend code written by others.
+Backend Development:
+- Design and implement robust APIs and backend services.
+- Handle complex business logic and workflows.
+- Design efficient and scalable data models.
+- Ensure security, reliability, and performance of backend systems.
+
+Technical Ownership & Leadership:
+- Own features from concept to deployment.
+- Make architectural and design trade-offs pragmatically.
+- Review code and mentor junior developers.
+- Identify and address technical debt.
+- Participate in technical planning and decision-making.
+
+Quality & Reliability:
+- Define and uphold coding and testing standards.
+- Write and review unit and integration tests.
+- Debug complex production issues.
+- Improve system stability and performance.
+
+Required Skills / Technical Skills:
+- Strong experience with at least one frontend technology (React, Angular, Android, or similar).
+- Strong experience building backend services using Java, .NET, Node.js, or similar.
+- Deep understanding of REST APIs and HTTP concepts.
+- Strong experience with relational databases like SQL.
+- Proficiency with Git and collaborative workflows.
+- Excellent debugging and problem-solving skills.
+
+Cloud & Systems (Advantage):
+- Familiarity with AWS services (EC2, S3, RDS, Lambda, API Gateway).
+- Understanding of deployment environments and basic security concepts.
+
+Working Style:
+- Comfortable working with minimal supervision.
+- Strong ownership mindset.
+- Able to handle ambiguity and make decisions.
+- Clear communicator and mentor."
+Senior Android Developer,Engineering,Delhi / NCR,Full-time,Competitive salary with performance bonuses,5-8 years (Senior Level),"Key Responsibilities:
+- Lead the design and development of native Android applications using Kotlin/Java.
+- Build offline-first mobile apps with synchronization logic for low-connectivity environments.
+- Integrate Android apps with backend APIs, databases, and healthcare standards (HL7/FHIR).
+- Optimize apps for performance, security, and accessibility across multiple Android versions and devices.
+- Collaborate with backend developers, UI/UX designers, QA, and DevOps to deliver seamless experiences.
+- Ensure compliance with data privacy and security regulations (HIPAA, NDHM, NABL).
+- Mentor junior Android developers and contribute to coding standards.
+- Continuously explore new tools and technologies to improve development workflows.
+
+Required Skills & Qualifications:
+- 5-8 years of hands-on experience in Android development.
+- Strong expertise in Kotlin and Java.
+- Solid understanding of Android SDK, Jetpack components, MVVM/MVI/MVC architectures.
+- Experience with local storage (Room, SQLite), data sync, and caching strategies.
+- Proven ability to integrate with RESTful APIs, GraphQL, and authentication (OAuth2, JWT).
+- Experience with push notifications, background services, and device hardware integration (camera, GPS, biometrics).
+- Familiarity with secure coding practices and compliance in healthcare/fintech is a plus.
+- Knowledge of CI/CD pipelines, Git, Docker (basic DevOps exposure preferred).
+- Strong problem-solving, debugging, and performance tuning skills.
+
+Nice to Have (Good Bonus):
+- Exposure to cross-platform frameworks (Flutter, React Native).
+- Experience in healthcare IT (LIS, HIS, EMR, telehealth apps).
+- Contributions to open-source projects or published apps on Google Play Store.
+
+What We Offer:
+- Competitive salary with performance bonuses.
+- Opportunity to work on impact-driven healthcare solutions used at scale.
+- Collaborative startup culture with high ownership.
+- Access to cutting-edge technologies and global healthcare projects.
+- Growth path towards Tech Lead / Mobile Lead role."
+Specification Consultant,Engineering,Pune,Full-time,Not specified,Not specified,"To create specifications for the business through a network of structural consultants, architects, PMCs & various stake holders in the construction industry for the products & services that the company deals in.
+
+Roles and Responsibilities / Functions:
+1. Coordinating with Architects, Builders, Industrial officials and real estate officials for exploring prospective business opportunities.
+2. Specify company brands & services in the BOQ/specification language for successful conversion into sales.
+3. Liaison with Project Managers & subcontractors to ensure completion of projects as per the technical specifications.
+4. Resolution & redresser of customer complaints.
+5. Positive reviews & customer satisfaction/ appreciation letters post completion & Conduct seminars, presentations of company products & services at regular intervals.
+7. Generate sales leads & co-ordinate with the Sales team for conversion.
+8. Submission of structural designs, application methodology etc to stakeholders.
+10. Coordinating with various departments and contractors in the organization in order to deliver the projects in time.
+11. Build and develop systems and processes that are based on best practices in the industry.
+12. Innovation and Knowledge Management as per agreed timelines.
+13. Innovating and implementing processes and systems so as to stay ahead of the curve.
+
+Capability:
+1. Should have demonstrated strong specification & networking capabilities.
+2. Should have strong management exposure.
+3. Goal orientation and ambitious.
+4. Capability of effectively interacting and working on a daily basis with consultants & architects of the western region of Maharashtra.
+5. Strong team building capabilities with the ability to work with and motivate large multiple teams of relatively young employees.
+6. Strong communication skills and a high degree of energy.
+7. Good analytical and planning skills.
+8. Ability to function effectively in a quality conscious, process driven and extremely productivity driven organization.
+9. Sound interpersonal skills.
+
+Key Metrics:
+1. Business Development (Inbound & outbound Revenue Generated).
+2. Specification & Billing Targets.
+3. Revenue per employee / Profit per employee.
+4. Customer Satisfaction."
+Junior Android Developer,Engineering,Delhi / NCR,Full-time,Competitive salary with performance bonuses,2-5 years (Junior Level),"Key Responsibilities:
+- Lead the design and development of native Android applications using Kotlin/Java.
+- Build offline-first mobile apps with synchronization logic for low-connectivity environments.
+- Integrate Android apps with backend APIs, databases, and healthcare standards (HL7/FHIR).
+- Optimize apps for performance, security, and accessibility across multiple Android versions and devices.
+- Collaborate with backend developers, UI/UX designers, QA, and DevOps to deliver seamless experiences.
+- Ensure compliance with data privacy and security regulations (HIPAA, NDHM, NABL).
+- Mentor junior Android developers and contribute to coding standards.
+- Continuously explore new tools and technologies to improve development workflows.
+
+Required Skills & Qualifications:
+- 2-5 years of hands-on experience in Android development.
+- Strong expertise in Kotlin and Java.
+- Solid understanding of Android SDK, Jetpack components, MVVM/MVI/MVC architectures.
+- Experience with local storage (Room, SQLite), data sync, and caching strategies.
+- Proven ability to integrate with RESTful APIs, GraphQL, and authentication (OAuth2, JWT).
+- Experience with push notifications, background services, and device hardware integration (camera, GPS, biometrics).
+- Familiarity with secure coding practices and compliance in healthcare/fintech is a plus.
+- Knowledge of CI/CD pipelines, Git, Docker (basic DevOps exposure preferred).
+- Strong problem-solving, debugging, and performance tuning skills.
+
+Nice to Have (Good Bonus):
+- Exposure to cross-platform frameworks (Flutter, React Native).
+- Experience in healthcare IT (LIS, HIS, EMR, telehealth apps).
+- Contributions to open-source projects or published apps on Google Play Store.
+
+What We Offer:
+- Competitive salary with performance bonuses.
+- Opportunity to work on impact-driven healthcare solutions used at scale.
+- Collaborative startup culture with high ownership.
+- Access to cutting-edge technologies and global healthcare projects.
+- Growth path towards Tech Lead / Mobile Lead role."

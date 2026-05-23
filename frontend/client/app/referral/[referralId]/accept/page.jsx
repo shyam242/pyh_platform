@@ -69,8 +69,12 @@ export default function AcceptReferral() {
       setAccepting(false);
       setEditMode(false);
       
+      // Clear old token to avoid JWT signature mismatch
+      localStorage.removeItem("token");
+      
       setTimeout(() => {
-        window.location.href = "/dashboard";
+        // Redirect to create profile (they need to set up their account first)
+        window.location.href = "/create-profile";
       }, 2000);
     } catch (err) {
       showError(err.message || "Failed to accept referral");

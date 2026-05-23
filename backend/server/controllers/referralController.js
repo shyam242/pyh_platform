@@ -9,14 +9,32 @@ export const createReferral = async (req, res) => {
       name,
       email,
       phone,
+      industry,
+      department,
+      skills,
       experience,
       company,
       linkedin,
     } = req.body;
 
     // Validate required fields
-    if (!name || !email || !phone || !experience || !company || !linkedin) {
-      return res.status(400).json({ message: "All fields are required" });
+    if (!name || !email || !phone || !skills || !experience || !company) {
+      return res.status(400).json({ message: "All required fields must be filled" });
+    }
+
+    // Get current referrer details so we can block self-referrals
+    const referrerRecord = await pool.query(
+      "SELECT name, email, phone FROM users WHERE id=$1",
+      [req.user.id]
+    );
+    const referrer = referrerRecord.rows[0] || {};
+
+    if (
+      referrer.name?.trim().toLowerCase() === name?.trim().toLowerCase() &&
+      referrer.email?.trim().toLowerCase() === email?.trim().toLowerCase() &&
+      referrer.phone?.replace(/\D/g, "") === phone?.replace(/\D/g, "")
+    ) {
+      return res.status(400).json({ message: "You cannot refer yourself" });
     }
 
     // Get CV filename if uploaded
@@ -33,17 +51,21 @@ export const createReferral = async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO referrals
-      (name,email,phone,experience,company,linkedin,referrer_id,status,cv_file,referral_status)
-      VALUES($1,$2,$3,$4,$5,$6,$7,'pending',$8,'pending_candidate_acceptance') RETURNING *`,
+      (name,email,phone,industry,department,skills,experience,company,linkedin,referrer_id,status,cv_file,referral_status,experience_type)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,'pending_candidate_acceptance',$12) RETURNING *`,
       [
         name,
         email,
         phone,
+        industry,
+        department,
+        JSON.stringify(Array.isArray(skills) ? skills : skills.split(',').map(s => s.trim())),
         experience,
         company,
         linkedin,
         req.user.id,
         cvFile,
+        experience === 'fresher' ? 'fresher' : 'experienced'
       ]
     );
 
@@ -75,6 +97,39 @@ export const getMyReferrals = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch referrals" });
+  }
+};
+
+// GET REFERRER STATS
+export const getReferrerStats = async (req, res) => {
+  try {
+    const referrerId = req.user.id;
+
+    // Total candidates referred
+    const totalReferred = await pool.query(
+      "SELECT COUNT(*) as count FROM referrals WHERE referrer_id=$1",
+      [referrerId]
+    );
+
+    // Successful joinings (assuming 'hired' status exists or we can use 'verified' as success)
+    const successfulJoinings = await pool.query(
+      "SELECT COUNT(*) as count FROM referrals WHERE referrer_id=$1 AND verified=true",
+      [referrerId]
+    );
+
+    // Total incentives (assuming we have an incentives field, otherwise calculate based on successful joinings)
+    // For now, let's assume $500 per successful joining
+    const incentivesPerJoining = 500;
+    const totalIncentives = successfulJoinings.rows[0].count * incentivesPerJoining;
+
+    res.json({
+      totalReferred: parseInt(totalReferred.rows[0].count),
+      successfulJoinings: parseInt(successfulJoinings.rows[0].count),
+      totalIncentives: totalIncentives
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch stats" });
   }
 };
 
