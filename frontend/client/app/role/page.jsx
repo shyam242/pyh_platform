@@ -34,7 +34,12 @@ export default function RolePage() {
         localStorage.setItem("token", response.data.token);
       }
 
-      redirect("/dashboard");
+      // If candidate role, redirect to candidate form, otherwise to dashboard
+      if (role === "candidate") {
+        window.location.href = "/candidate-form";
+      } else {
+        window.location.href = "/dashboard";
+      }
     } catch (error) {
       console.error("Error setting role:", error);
       alert(error.response?.data?.error || "Failed to set role");

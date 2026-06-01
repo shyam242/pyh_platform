@@ -311,3 +311,96 @@ export const getAdminJobs = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch jobs" });
   }
 };
+
+// APPLY FOR JOB
+export const applyForJob = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const candidateId = req.user.id;
+
+    // Verify job exists
+    const jobCheck = await pool.query(
+      "SELECT id FROM jobs WHERE id=$1 AND status='active'",
+      [jobId]
+    );
+
+    if (jobCheck.rows.length === 0) {
+      return res.status(404).json({ message: "Job not found or is inactive" });
+    }
+
+    // Check if already applied
+    const existingApplication = await pool.query(
+      "SELECT id FROM job_applications WHERE job_id=$1 AND candidate_id=$2",
+      [jobId, candidateId]
+    );
+
+    if (existingApplication.rows.length > 0) {
+      return res.status(400).json({ message: "You have already applied for this job" });
+    }
+
+    // Create application
+    const result = await pool.query(
+      `INSERT INTO job_applications (job_id, candidate_id)
+       VALUES($1, $2)
+       RETURNING id, job_id, candidate_id, applied_at, status`,
+      [jobId, candidateId]
+    );
+
+    res.status(201).json({
+      message: "Application submitted successfully",
+      application: result.rows[0]
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to submit application" });
+  }
+};
+
+// GET JOB APPLICATIONS (for admin to see who applied)
+export const getJobApplications = async (req, res) => {
+  try {
+    const { jobId } = req.params;
+
+    // Verify user is admin
+    const adminCheck = await pool.query(
+      "SELECT role FROM users WHERE id=$1",
+      [req.user.id]
+    );
+
+    if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin only." });
+    }
+
+    const result = await pool.query(
+      `SELECT ja.id, ja.job_id, ja.candidate_id, ja.applied_at, ja.status,
+              u.name, u.email, u.phone, u.image
+       FROM job_applications ja
+       JOIN users u ON ja.candidate_id = u.id
+       WHERE ja.job_id=$1
+       ORDER BY ja.applied_at DESC`,
+      [jobId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch applications" });
+  }
+};
+
+// GET CANDIDATE'S APPLIED JOBS COUNT
+export const getCandidateAppliedCount = async (req, res) => {
+  try {
+    const candidateId = req.user.id;
+
+    const result = await pool.query(
+      `SELECT COUNT(*) as count FROM job_applications WHERE candidate_id=$1`,
+      [candidateId]
+    );
+
+    res.json({ appliedCount: parseInt(result.rows[0].count) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch applied count" });
+  }
+};

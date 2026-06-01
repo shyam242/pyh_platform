@@ -7,7 +7,10 @@ import {
   updateJob,
   deleteJob,
   bulkDeleteJobs,
-  getAdminJobs
+  getAdminJobs,
+  applyForJob,
+  getJobApplications,
+  getCandidateAppliedCount
 } from "../controllers/jobController.js";
 
 const router = express.Router();
@@ -16,6 +19,9 @@ const router = express.Router();
 
 // PUBLIC - GET ALL ACTIVE JOBS
 router.get("/", getAllJobs);
+
+// CANDIDATE - GET APPLIED COUNT
+router.get("/applied/count", protect, getCandidateAppliedCount);
 
 // ADMIN - GET OWN JOBS  (must be before /:jobId)
 router.get("/admin/my-jobs", protect, getAdminJobs);
@@ -28,6 +34,12 @@ router.post("/", protect, createJob);
 
 // PUBLIC - GET JOB BY ID  (parameterized — always last among GETs)
 router.get("/:jobId", getJobById);
+
+// CANDIDATE - APPLY FOR JOB
+router.post("/:jobId/apply", protect, applyForJob);
+
+// ADMIN - GET JOB APPLICATIONS
+router.get("/:jobId/applications", protect, getJobApplications);
 
 // ADMIN - UPDATE JOB
 router.put("/:jobId", protect, updateJob);

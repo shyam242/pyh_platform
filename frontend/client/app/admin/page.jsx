@@ -716,7 +716,7 @@ export default function AdminDashboard() {
               {candidates.map(candidate => (
                 <div
                   key={candidate.id}
-                  onClick={() => window.location.href = `/candidate-details/${candidate.id}`}
+                  onClick={() => window.location.href = `/admin/candidates/${candidate.id}`}
                   style={{
                     padding: "1.25rem",
                     backgroundColor: "#f9f9f9",

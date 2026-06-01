@@ -313,3 +313,367 @@ export const updateBankDetails = async (req, res) => {
     res.status(500).json({ error: "Failed to update bank details" });
   }
 };
+
+// CREATE/UPDATE CANDIDATE PROFILE (After role selection)
+export const createCandidateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      job_role,
+      contact,
+      skills,
+      cctc,
+      ectc,
+      current_location,
+      preferred_location,
+      notice_period,
+      offer_in_hand,
+      reason_for_change,
+      current_company_name,
+      highest_qualification,
+      address_aadhaar,
+      technical_skills,
+      soft_skills,
+      linkedin_profile,
+      resume_file_path
+    } = req.body;
+
+    // Verify user is a candidate
+    const userCheck = await pool.query(
+      "SELECT role FROM users WHERE id=$1",
+      [userId]
+    );
+
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (userCheck.rows[0].role !== "candidate") {
+      return res.status(403).json({ error: "Only candidates can create candidate profiles" });
+    }
+
+    // Update candidate profile
+    const result = await pool.query(
+      `UPDATE users SET 
+        job_role=$1,
+        contact=$2,
+        skills=$3,
+        cctc=$4,
+        ectc=$5,
+        current_location=$6,
+        preferred_location=$7,
+        notice_period=$8,
+        offer_in_hand=$9,
+        reason_for_change=$10,
+        current_company_name=$11,
+        highest_qualification=$12,
+        address_aadhaar=$13,
+        technical_skills=$14,
+        soft_skills=$15,
+        linkedin_profile=$16,
+        resume_file_path=$17,
+        candidate_profile_completed=true
+      WHERE id=$18
+      RETURNING id, name, email, role, job_role, contact, skills, cctc, ectc, current_location, preferred_location, notice_period, offer_in_hand, reason_for_change, current_company_name, highest_qualification, address_aadhaar, technical_skills, soft_skills, linkedin_profile, resume_file_path, candidate_profile_completed`,
+      [
+        job_role,
+        contact,
+        skills,
+        cctc || null,
+        ectc || null,
+        current_location,
+        preferred_location,
+        notice_period,
+        offer_in_hand,
+        reason_for_change,
+        current_company_name,
+        highest_qualification,
+        address_aadhaar,
+        technical_skills,
+        soft_skills,
+        linkedin_profile,
+        resume_file_path,
+        userId
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({
+      message: "Candidate profile created successfully",
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Error creating candidate profile:", error);
+    res.status(500).json({ error: "Failed to create candidate profile" });
+  }
+};
+
+// GET CANDIDATE PROFILE
+export const getCandidateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await pool.query(
+      `SELECT 
+        id, name, email, role, job_role, contact, skills, cctc, ectc, 
+        current_location, preferred_location, notice_period, offer_in_hand, 
+        reason_for_change, current_company_name, highest_qualification, 
+        address_aadhaar, technical_skills, soft_skills, linkedin_profile, 
+        resume_file_path, candidate_profile_completed
+      FROM users WHERE id=$1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Error fetching candidate profile:", error);
+    res.status(500).json({ error: "Failed to fetch candidate profile" });
+  }
+};
+
+// UPDATE CANDIDATE PROFILE
+export const updateCandidateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      job_role,
+      contact,
+      skills,
+      cctc,
+      ectc,
+      current_location,
+      preferred_location,
+      notice_period,
+      offer_in_hand,
+      reason_for_change,
+      current_company_name,
+      highest_qualification,
+      address_aadhaar,
+      technical_skills,
+      soft_skills,
+      linkedin_profile,
+      resume_file_path
+    } = req.body;
+
+    // Verify user is a candidate
+    const userCheck = await pool.query(
+      "SELECT role FROM users WHERE id=$1",
+      [userId]
+    );
+
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Update only provided fields
+    let query = "UPDATE users SET ";
+    const params = [];
+    let paramCount = 1;
+
+    if (job_role !== undefined) {
+      query += `job_role=$${paramCount}, `;
+      params.push(job_role);
+      paramCount++;
+    }
+
+    if (contact !== undefined) {
+      query += `contact=$${paramCount}, `;
+      params.push(contact);
+      paramCount++;
+    }
+
+    if (skills !== undefined) {
+      query += `skills=$${paramCount}, `;
+      params.push(skills);
+      paramCount++;
+    }
+
+    if (cctc !== undefined) {
+      query += `cctc=$${paramCount}, `;
+      params.push(cctc || null);
+      paramCount++;
+    }
+
+    if (ectc !== undefined) {
+      query += `ectc=$${paramCount}, `;
+      params.push(ectc || null);
+      paramCount++;
+    }
+
+    if (current_location !== undefined) {
+      query += `current_location=$${paramCount}, `;
+      params.push(current_location);
+      paramCount++;
+    }
+
+    if (preferred_location !== undefined) {
+      query += `preferred_location=$${paramCount}, `;
+      params.push(preferred_location);
+      paramCount++;
+    }
+
+    if (notice_period !== undefined) {
+      query += `notice_period=$${paramCount}, `;
+      params.push(notice_period);
+      paramCount++;
+    }
+
+    if (offer_in_hand !== undefined) {
+      query += `offer_in_hand=$${paramCount}, `;
+      params.push(offer_in_hand);
+      paramCount++;
+    }
+
+    if (reason_for_change !== undefined) {
+      query += `reason_for_change=$${paramCount}, `;
+      params.push(reason_for_change);
+      paramCount++;
+    }
+
+    if (current_company_name !== undefined) {
+      query += `current_company_name=$${paramCount}, `;
+      params.push(current_company_name);
+      paramCount++;
+    }
+
+    if (highest_qualification !== undefined) {
+      query += `highest_qualification=$${paramCount}, `;
+      params.push(highest_qualification);
+      paramCount++;
+    }
+
+    if (address_aadhaar !== undefined) {
+      query += `address_aadhaar=$${paramCount}, `;
+      params.push(address_aadhaar);
+      paramCount++;
+    }
+
+    if (technical_skills !== undefined) {
+      query += `technical_skills=$${paramCount}, `;
+      params.push(technical_skills);
+      paramCount++;
+    }
+
+    if (soft_skills !== undefined) {
+      query += `soft_skills=$${paramCount}, `;
+      params.push(soft_skills);
+      paramCount++;
+    }
+
+    if (linkedin_profile !== undefined) {
+      query += `linkedin_profile=$${paramCount}, `;
+      params.push(linkedin_profile);
+      paramCount++;
+    }
+
+    if (resume_file_path !== undefined) {
+      query += `resume_file_path=$${paramCount}, `;
+      params.push(resume_file_path);
+      paramCount++;
+    }
+
+    // Remove trailing comma and space
+    query = query.slice(0, -2);
+    query += ` WHERE id=$${paramCount} RETURNING id, name, email, role, job_role, contact, skills, cctc, ectc, current_location, preferred_location, notice_period, offer_in_hand, reason_for_change, current_company_name, highest_qualification, address_aadhaar, technical_skills, soft_skills, linkedin_profile, resume_file_path, candidate_profile_completed`;
+    params.push(userId);
+
+    const result = await pool.query(query, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({
+      message: "Candidate profile updated successfully",
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Error updating candidate profile:", error);
+    res.status(500).json({ error: "Failed to update candidate profile" });
+  }
+};
+
+// VERIFY CANDIDATE PROFILE (Resume & Skills)
+export const verifyCandidateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // Get resume file path from multer
+    const resumeFilePath = req.file ? `/uploads/resumes/${req.file.filename}` : null;
+    const skills = req.body.skills ? JSON.parse(req.body.skills) : [];
+
+    // Verify user is a candidate
+    const userCheck = await pool.query(
+      "SELECT role FROM users WHERE id=$1",
+      [userId]
+    );
+
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (userCheck.rows[0].role !== "candidate") {
+      return res.status(403).json({ error: "Only candidates can verify profiles" });
+    }
+
+    // Update resume and skills
+    const result = await pool.query(
+      "UPDATE users SET resume_file_path=$1, skills=$2, verified=true WHERE id=$3 RETURNING id, name, email, role, resume_file_path, skills, verified",
+      [resumeFilePath, JSON.stringify(skills), userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({
+      message: "Profile verified successfully",
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error("Error verifying candidate profile:", error);
+    res.status(500).json({ error: "Failed to verify profile" });
+  }
+};
+
+// DELETE CANDIDATE PROFILE
+export const deleteCandidateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const userCheck = await pool.query(
+      "SELECT role FROM users WHERE id=$1",
+      [userId]
+    );
+
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (userCheck.rows[0].role !== "candidate") {
+      return res.status(403).json({ error: "Only candidates can delete their profile" });
+    }
+
+    await pool.query("DELETE FROM referrals WHERE id=$1", [userId]);
+    const result = await pool.query(
+      "DELETE FROM users WHERE id=$1 AND role='candidate' RETURNING *",
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Candidate profile not found" });
+    }
+
+    res.json({ message: "Candidate profile deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting candidate profile:", error);
+    res.status(500).json({ error: "Failed to delete candidate profile" });
+  }
+};
