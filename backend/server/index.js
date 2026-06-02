@@ -18,11 +18,16 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// CORS configuration for production
 const allowedOrigins = [
-  process.env.FRONTEND_URL || "http://localhost:3000",
-  "https://yourdomain.vercel.app", // Update with your Vercel domain
+  "http://localhost:3000",
+  "https://pyh-platform.vercel.app",
+  "https://your-actual-vercel-domain.vercel.app"
 ];
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true
+}));
 
 app.use(cors({
   origin: allowedOrigins,
