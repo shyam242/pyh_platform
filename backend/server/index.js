@@ -21,7 +21,7 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:3000",
   "https://pyh-platform.vercel.app",
-  "https://your-actual-vercel-domain.vercel.app"
+  "https://pyh-platform.vercel.app"
 ];
 
 app.use(cors({
