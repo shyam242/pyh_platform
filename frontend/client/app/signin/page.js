@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { Mail, ArrowRight, Shield, Zap, Users, CheckCircle, RefreshCw, HandCoins } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { validateEmail, validateOTP } from "@/utils/validation";
+import { API_BASE_URL } from "@/utils/api";
 
 const O = "#E87722";
 const O_LITE = "#FFF3E8";
@@ -30,7 +31,7 @@ export default function Signin() {
     if (!validateEmail(email)) { setErrors({ email: "Enter a valid email address" }); return; }
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/auth/send-otp", {
+      const res = await fetch(`${API_BASE_URL}/api/auth/send-otp`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
@@ -70,7 +71,7 @@ export default function Signin() {
     if (otpString.length !== 6) { setErrors({ otp: "Enter all 6 digits" }); return; }
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/auth/verify-otp", {
+      const res = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, otp: otpString }),
       });
