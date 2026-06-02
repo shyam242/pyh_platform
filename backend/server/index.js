@@ -18,9 +18,10 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
+// CORS configuration for production
 const allowedOrigins = [
   "http://localhost:3000",
-  "https://pyh-platform.vercel.app",
+  "https://pyh-platform.vercel.app"
 ];
 
 app.use(cors({
@@ -28,10 +29,6 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true,
-}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
