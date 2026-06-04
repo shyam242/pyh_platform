@@ -18,7 +18,7 @@ export default function Home() {
 
   // Animate counters
   useEffect(() => {
-    const targets = { jobs: 50, candidates: 1200, companies: 100 };
+    const targets = { jobs: 25, candidates: 1200, companies: 20};
     const duration = 1800;
     const start = performance.now();
     const step = (now) => {
