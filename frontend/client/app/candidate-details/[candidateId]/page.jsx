@@ -8,6 +8,7 @@ import {
   ExternalLink, FileText, User, AlertCircle, CheckCircle2, Upload
 } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function CandidateDetailsPage() {
   const router = useRouter();
