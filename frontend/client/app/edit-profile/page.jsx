@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Save, Upload } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function EditProfilePage() {
   const router = useRouter();
