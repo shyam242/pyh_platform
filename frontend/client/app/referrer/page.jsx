@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { showSuccess, showError } from "@/utils/toast";
 import { Upload, ArrowRight, User, Phone, Briefcase, Award } from "lucide-react";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function ReferralForm(){
   const [user, setUser] = useState(null);
@@ -27,7 +28,7 @@ export default function ReferralForm(){
   const fetchUserInfo = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:5000/api/profile", {
+      const response = await fetch(`${API_BASE_URL}/api/profile`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.ok) {
@@ -63,7 +64,7 @@ export default function ReferralForm(){
       formData.append("skills", form.skills);
       formData.append("cv", form.cv);
 
-      const response = await fetch("http://localhost:5000/api/referral/create", {
+      const response = await fetch(`${API_BASE_URL}/api/referral/create`, {
         method: "POST",
         headers: {
           Authorization: "Bearer " + token
