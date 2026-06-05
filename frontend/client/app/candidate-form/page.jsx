@@ -65,7 +65,7 @@ export default function CandidateFormPage() {
       const formDataFile = new FormData();
       formDataFile.append("file", file);
 
-      const response = await fetch("http://localhost:5000/api/profile/upload-resume", {
+      const response = await fetch(`${API_BASE_URL}/api/profile/upload-resume`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -103,7 +103,7 @@ export default function CandidateFormPage() {
         return;
       }
 
-      const response = await fetch("http://localhost:5000/api/profile/candidate", {
+      const response = await fetch(`${API_BASE_URL}/api/profile/candidate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
