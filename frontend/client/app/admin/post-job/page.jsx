@@ -3,6 +3,7 @@ import { useState, useRef } from "react";
 import axios from "axios";
 import { ArrowLeft } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function PostJobPage() {
   const [form, setForm] = useState({
