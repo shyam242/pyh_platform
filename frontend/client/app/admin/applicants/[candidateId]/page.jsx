@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft, Download, Mail, Phone, MapPin, Briefcase, DollarSign, Clock, BookOpen, Award, ExternalLink } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import axios from "axios";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function ApplicantProfilePage() {
   const router = useRouter();
