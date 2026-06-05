@@ -1,6 +1,7 @@
 import pool from "../config/db.js";
 import fs from "fs";
 import { parseCSVString, mapCandidateColumns } from "../services/csvParser.js";
+import { sendRecruiterApprovalEmail, sendRecruiterRejectionEmail } from "../services/brevoService.js";
 
 const ADMIN_EMAIL = "shyampickyourhire@gmail.com";
 
@@ -189,17 +190,28 @@ export const approveRecruiter = async (req, res) => {
       return res.status(403).json({ message: "Access denied. Admin only." });
     }
 
+    // Get recruiter details before updating
+    const recruiterCheck = await pool.query(
+      "SELECT * FROM users WHERE id=$1 AND role='recruiter'",
+      [recruiterId]
+    );
+
+    if (recruiterCheck.rows.length === 0) {
+      return res.status(404).json({ message: "Recruiter not found" });
+    }
+
+    const recruiter = recruiterCheck.rows[0];
+
     const result = await pool.query(
       "UPDATE users SET is_recruiter_approved=true, recruiter_approved_at=NOW() WHERE id=$1 AND role='recruiter' RETURNING *",
       [recruiterId]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Recruiter not found" });
-    }
+    // Send approval email to recruiter
+    await sendRecruiterApprovalEmail(recruiter.email, recruiter.name);
 
     res.json({
-      message: "Recruiter approved successfully",
+      message: "Recruiter approved successfully. Approval email sent.",
       recruiter: result.rows[0]
     });
   } catch (err) {
@@ -212,6 +224,7 @@ export const approveRecruiter = async (req, res) => {
 export const rejectRecruiter = async (req, res) => {
   try {
     const { recruiterId } = req.params;
+    const { reason } = req.body;
     const adminId = req.user.id;
 
     // Verify user is admin
@@ -224,18 +237,29 @@ export const rejectRecruiter = async (req, res) => {
       return res.status(403).json({ message: "Access denied. Admin only." });
     }
 
+    // Get recruiter details before deleting
+    const recruiterCheck = await pool.query(
+      "SELECT * FROM users WHERE id=$1 AND role='recruiter'",
+      [recruiterId]
+    );
+
+    if (recruiterCheck.rows.length === 0) {
+      return res.status(404).json({ message: "Recruiter not found" });
+    }
+
+    const recruiter = recruiterCheck.rows[0];
+
     // Delete the recruiter
     const result = await pool.query(
       "DELETE FROM users WHERE id=$1 AND role='recruiter' RETURNING *",
       [recruiterId]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: "Recruiter not found" });
-    }
+    // Send rejection email to recruiter
+    await sendRecruiterRejectionEmail(recruiter.email, recruiter.name, reason);
 
     res.json({
-      message: "Recruiter rejected and removed",
+      message: "Recruiter rejected and removed. Rejection email sent.",
       recruiter: result.rows[0]
     });
   } catch (err) {
