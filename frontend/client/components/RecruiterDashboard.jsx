@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Trash2, Check, Pause, XCircle, Users, TrendingUp, CheckCircle2, Eye, Clock } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function RecruiterDashboard() {
   const router = useRouter();
@@ -30,7 +31,7 @@ export default function RecruiterDashboard() {
   const fetchApprovalStatus = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/recruiter/approval-status", {
+      const res = await fetch(`${API_BASE_URL}/api/recruiter/approval-status`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await res.json();
@@ -44,7 +45,7 @@ export default function RecruiterDashboard() {
   const fetchData = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/recruiter/all", {
+      const res = await fetch(`${API_BASE_URL}/api/recruiter/all`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const result = await res.json();
@@ -64,7 +65,7 @@ export default function RecruiterDashboard() {
   const fetchBulkCandidates = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/admin/bulk-candidates", {
+      const res = await fetch(`${API_BASE_URL}/api/admin/bulk-candidates`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const result = await res.json();
@@ -79,7 +80,7 @@ export default function RecruiterDashboard() {
   const updateStatus = async (id, status) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/recruiter/update", {
+      const res = await fetch(`${API_BASE_URL}/api/recruiter/update`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -100,7 +101,7 @@ export default function RecruiterDashboard() {
   const downloadCV = async (referralId, candidateName) => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:5000/api/recruiter/${referralId}/cv/download`, {
+      const res = await fetch(`${API_BASE_URL}/api/recruiter/${referralId}/cv/download`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
