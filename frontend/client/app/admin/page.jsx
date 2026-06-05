@@ -192,7 +192,7 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem("token");
       const response = await axios.post(
-        "${API_BASE_URL}/api/jobs/admin/bulk-delete",
+        `${API_BASE_URL}/api/jobs/admin/bulk-delete`,
         { jobIds: Array.from(selectedJobs) },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -417,7 +417,7 @@ export default function AdminDashboard() {
       setUploadingJobs(true);
       const token = localStorage.getItem("token");
       const response = await axios.post(
-        "${API_BASE_URL}/api/admin/bulk-upload/jobs",
+        `${API_BASE_URL}/api/admin/bulk-upload/jobs`,
         { jobs },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -455,7 +455,7 @@ export default function AdminDashboard() {
       formData.append("csvFile", file);
 
       const response = await axios.post(
-        "${API_BASE_URL}/api/admin/bulk-upload/csv",
+        `${API_BASE_URL}/api/admin/bulk-upload/csv`,
         formData,
         { 
           headers: { 
