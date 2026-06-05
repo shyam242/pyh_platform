@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft, Mail, Phone, Building2, User } from "lucide-react";
 import { showError } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function RecruiterDetailsPage() {
   const router = useRouter();
