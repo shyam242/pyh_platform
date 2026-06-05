@@ -1,14 +1,12 @@
 import dotenv from "dotenv";
 dotenv.config({ path: "./server/.env" });
 
-import nodemailer from "nodemailer";
 import jwt from "jsonwebtoken";
 import otpGenerator from "otp-generator";
 import pool from "../config/db.js";
+import { sendOtpEmail } from "../services/brevoService.js";
 
 const otpStore = new Map();
-
-let transporter = null;
 
 // Get admin emails from env
 const getAdminEmails = () => {
@@ -18,28 +16,6 @@ const getAdminEmails = () => {
 
 const isAdminEmail = (email) => {
   return getAdminEmails().includes(email);
-};
-
-const getTransporter = () => {
-  if (!transporter) {
-    console.log("🔧 Initializing OTP email transporter...");
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-      console.error("❌ Email credentials missing (EMAIL_USER or EMAIL_PASSWORD)");
-      throw new Error("Email credentials not configured");
-    }
-    
-    transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD,
-      },
-    });
-    console.log("✓ OTP email transporter initialized");
-  }
-  return transporter;
 };
 
 export const sendOtp = async (req, res) => {
@@ -59,25 +35,12 @@ export const sendOtp = async (req, res) => {
     otpStore.set(email, otp);
     console.log(`📧 Generated OTP for ${email}: ${otp}`);
 
-    const transport = getTransporter();
+    // Send OTP via Brevo
+    const emailSent = await sendOtpEmail(email, otp);
 
-    await transport.sendMail({
-      to: email,
-      from: process.env.EMAIL_USER,
-      subject: "OTP Login - Recruiter Platform",
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">Your OTP Login Code</h2>
-          <p>Hi,</p>
-          <p>Use the OTP below to sign in to your account:</p>
-          <div style="background-color: #f0f0f0; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
-            <h1 style="color: #007bff; letter-spacing: 5px; font-family: monospace;">${otp}</h1>
-          </div>
-          <p style="color: #666; font-size: 14px;">This OTP will expire in 10 minutes.</p>
-          <p style="color: #666; font-size: 12px;">If you didn't request this code, please ignore this email.</p>
-        </div>
-      `,
-    });
+    if (!emailSent) {
+      return res.status(500).json({ message: "Failed to send OTP email" });
+    }
 
     console.log(`✓ OTP sent to ${email}`);
     res.json({ message: "OTP Sent Successfully" });
