@@ -28,7 +28,7 @@ export default function AcceptReferral() {
 
   const fetchReferralDetails = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/api/referral/${referralId}`);
+      const res = await fetch(`${API_BASE_URL}/api/referral/${referralId}`);
       if (!res.ok) throw new Error("Failed to fetch referral");
       
       const data = await res.json();
@@ -54,7 +54,7 @@ export default function AcceptReferral() {
   const handleAccept = async () => {
     setAccepting(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/referral/${referralId}/accept`, {
+      const res = await fetch(`${API_BASE_URL}/api/referral/${referralId}/accept`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
