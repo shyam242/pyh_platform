@@ -20,7 +20,7 @@ export default function BulkCandidatesPage() {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      const response = await axios.get("http://localhost:5000/api/admin/bulk-candidates", {
+      const response = await axios.get(`${API_BASE_URL}/api/admin/bulk-candidates`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setCandidates(response.data || []);
@@ -54,7 +54,7 @@ export default function BulkCandidatesPage() {
     if (!window.confirm("Delete this candidate?")) return;
     try {
       const token = localStorage.getItem("token");
-      await axios.delete(`http://localhost:5000/api/admin/bulk-candidates/${id}`, {
+      await axios.delete(`${API_BASE_URL}/api/admin/bulk-candidates/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setCandidates(prev => prev.filter(c => c.id !== id));
@@ -72,7 +72,7 @@ export default function BulkCandidatesPage() {
       setDeleting(true);
       const token = localStorage.getItem("token");
       for (const id of selectedCandidates) {
-        await axios.delete(`http://localhost:5000/api/admin/bulk-candidates/${id}`, {
+        await axios.delete(`${API_BASE_URL}/api/admin/bulk-candidates/${id}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
       }
