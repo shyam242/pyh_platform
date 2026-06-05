@@ -25,7 +25,7 @@ export default function JobDetailsPage() {
 
   const fetchJob = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/api/jobs/${jobId}`);
+      const res = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`);
       if (!res.ok) throw new Error("Failed to fetch job");
       setJob(await res.json());
     } catch (err) { showError(err.message); router.push("/dashboard"); }
@@ -37,7 +37,7 @@ export default function JobDetailsPage() {
     if (!token) { router.push("/signin"); return; }
     setApplying(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/jobs/${jobId}/apply`, {
+      const res = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/apply`, {
         method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({}),
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.message || "Failed to apply"); }
