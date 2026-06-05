@@ -23,7 +23,7 @@ export default function BulkCandidateDetailPage() {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      const response = await axios.get("http://localhost:5000/api/admin/bulk-candidates", {
+      const response = await axios.get(`${API_BASE_URL}/api/admin/bulk-candidates`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const found = response.data.find(c => c.id === parseInt(candidateId));
