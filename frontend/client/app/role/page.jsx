@@ -23,7 +23,7 @@ export default function RolePage() {
         return;
       }
 
-      const response = await axios.post("http://localhost:5000/api/profile/create", {
+      const response = await axios.post(`${API_BASE_URL}/api/profile/create`, {
         name: session.user.name || "User",
         email: session.user.email,
         role: role
