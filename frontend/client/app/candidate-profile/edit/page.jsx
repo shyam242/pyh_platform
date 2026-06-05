@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Save, User, Briefcase, MapPin, GraduationCap, Award, Sparkles, Check } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 const O       = "#E87722";
 const O_LITE  = "#FFF3E8";
