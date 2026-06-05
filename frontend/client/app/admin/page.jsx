@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { Users, DollarSign, UserCheck, Briefcase, LogOut, Trash2, Upload, ChevronDown } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -55,7 +56,7 @@ export default function AdminDashboard() {
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get("http://localhost:5000/api/admin/dashboard", {
+      const response = await axios.get(`${API_BASE_URL}/api/admin/dashboard`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -73,7 +74,7 @@ export default function AdminDashboard() {
   const fetchReferrers = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get("http://localhost:5000/api/admin/referrers", {
+      const response = await axios.get(`${API_BASE_URL}/api/admin/referrers`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setReferrers(response.data);
@@ -86,7 +87,7 @@ export default function AdminDashboard() {
   const fetchApprovedRecruiters = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get("http://localhost:5000/api/admin/users/recruiter", {
+      const response = await axios.get(`${API_BASE_URL}/api/admin/users/recruiter`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       // Normalize response to array and filter only approved recruiters
@@ -102,7 +103,7 @@ export default function AdminDashboard() {
   const fetchJobs = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get("http://localhost:5000/api/jobs/admin/my-jobs", {
+      const response = await axios.get(`${API_BASE_URL}/api/jobs/admin/my-jobs`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setJobs(Array.isArray(response.data) ? response.data : []);
@@ -115,7 +116,7 @@ export default function AdminDashboard() {
   const fetchBulkCandidates = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get("http://localhost:5000/api/admin/bulk-candidates", {
+      const response = await axios.get(`${API_BASE_URL}/api/admin/bulk-candidates`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setBulkCandidates(response.data);
@@ -128,7 +129,7 @@ export default function AdminDashboard() {
   const fetchCandidateStatusStats = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get("http://localhost:5000/api/admin/candidate-status-stats", {
+      const response = await axios.get(`${API_BASE_URL}/api/admin/candidate-status-stats`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCandidateStatusStats(response.data);
@@ -143,7 +144,7 @@ export default function AdminDashboard() {
       setUpdatingStatus(candidateId);
       const token = localStorage.getItem("token");
       await axios.put(
-        `http://localhost:5000/api/admin/bulk-candidates/${candidateId}/status`,
+        `${API_BASE_URL}/api/admin/bulk-candidates/${candidateId}/status`,
         { candidate_status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -191,7 +192,7 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem("token");
       const response = await axios.post(
-        "http://localhost:5000/api/jobs/admin/bulk-delete",
+        "${API_BASE_URL}/api/jobs/admin/bulk-delete",
         { jobIds: Array.from(selectedJobs) },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -214,7 +215,7 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `http://localhost:5000/api/jobs/${jobId}`,
+        `${API_BASE_URL}/api/jobs/${jobId}`,
         { status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -229,7 +230,7 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `http://localhost:5000/api/admin/recruiters/${recruiterId}/approve`,
+        `${API_BASE_URL}/api/admin/recruiters/${recruiterId}/approve`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -244,7 +245,7 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `http://localhost:5000/api/admin/recruiters/${recruiterId}/reject`,
+        `${API_BASE_URL}/api/admin/recruiters/${recruiterId}/reject`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -262,7 +263,7 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem("token");
       await axios.delete(
-        `http://localhost:5000/api/admin/candidates/${candidateId}`,
+        `${API_BASE_URL}/api/admin/candidates/${candidateId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       showSuccess("Candidate removed successfully");
@@ -277,7 +278,7 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `http://localhost:5000/api/admin/incentives/${incentiveForm.referrerId}`,
+        `${API_BASE_URL}/api/admin/incentives/${incentiveForm.referrerId}`,
         { incentive_value: incentiveForm.value },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -298,7 +299,7 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem("token");
       await axios.delete(
-        `http://localhost:5000/api/admin/incentives/${referrerId}`,
+        `${API_BASE_URL}/api/admin/incentives/${referrerId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       showSuccess("Incentive revoked successfully");
@@ -317,7 +318,7 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem("token");
       await axios.put(
-        `http://localhost:5000/api/admin/incentives/${referrerId}`,
+        `${API_BASE_URL}/api/admin/incentives/${referrerId}`,
         { incentive_value: editingIncentiveValue },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -416,7 +417,7 @@ export default function AdminDashboard() {
       setUploadingJobs(true);
       const token = localStorage.getItem("token");
       const response = await axios.post(
-        "http://localhost:5000/api/admin/bulk-upload/jobs",
+        "${API_BASE_URL}/api/admin/bulk-upload/jobs",
         { jobs },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -454,7 +455,7 @@ export default function AdminDashboard() {
       formData.append("csvFile", file);
 
       const response = await axios.post(
-        "http://localhost:5000/api/admin/bulk-upload/csv",
+        "${API_BASE_URL}/api/admin/bulk-upload/csv",
         formData,
         { 
           headers: { 
