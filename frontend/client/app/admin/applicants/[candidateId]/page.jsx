@@ -25,7 +25,7 @@ export default function ApplicantProfilePage() {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      const response = await axios.get(`http://localhost:5000/api/admin/candidates/${candidateId}`, {
+      const response = await axios.get(`${API_BASE_URL}/api/admin/candidates/${candidateId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCandidate(response.data.candidate);
@@ -49,7 +49,7 @@ export default function ApplicantProfilePage() {
       const resumePath = candidate?.resume_file_path || candidate?.resume_url || candidate?.resume;
       
       const link = document.createElement("a");
-      link.href = `http://localhost:5000${resumePath}`;
+      link.href = `${API_BASE_URL}${resumePath}`;
       link.setAttribute("download", `${candidate.name}_resume.pdf`);
       document.body.appendChild(link);
       link.click();
