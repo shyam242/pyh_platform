@@ -70,7 +70,7 @@ export default function CreateProfile() {
       if (!email) { showError("Email not found. Please sign in again."); window.location.href = "/signin"; return; }
       const payload = { name, role, email, company, experience, phone };
       if (role === "recruiter") { payload.company_name = companyName; payload.company_website = companyWebsite; }
-      const res = await fetch("http://localhost:5000/api/profile/create", {
+      const res = await fetch(`${API_BASE_URL}/api/profile/create`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Failed to create profile");
