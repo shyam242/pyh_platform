@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Upload, AlertCircle, CheckCircle2, Users, Trophy, DollarSign, Plus, Eye, EyeOff } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { validateReferralForm } from "@/utils/validation";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function ReferrerDashboard() {
   const [stats, setStats] = useState({
@@ -50,7 +51,7 @@ export default function ReferrerDashboard() {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/referral/stats", {
+      const res = await fetch(`${API_BASE_URL}/api/referral/stats`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -67,7 +68,7 @@ export default function ReferrerDashboard() {
   const fetchReferrals = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/referral/my", {
+      const res = await fetch(`${API_BASE_URL}/api/referral/my`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -130,7 +131,7 @@ export default function ReferrerDashboard() {
       formData.append("cv", cvFile);
 
       const res = await fetch(
-        "http://localhost:5000/api/referral/create",
+        `${API_BASE_URL}/api/referral/create`,
         {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
