@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { showSuccess, showError } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 /* ── design tokens ────────────────────────────────────────────── */
 const O      = "#E87722";
@@ -244,7 +245,7 @@ export default function CandidateDashboard() {
   const fetchJobs = async t => {
     setJobLoading(true);
     try {
-      const r = await fetch("http://localhost:5000/api/jobs", { headers: { Authorization: `Bearer ${t}` } });
+      const r = await fetch(`${API_BASE_URL}/api/jobs`, { headers: { Authorization: `Bearer ${t}` } });
       if (r.ok) {
         const list = (await r.json()) || [];
         const data = Array.isArray(list) ? list : [];
@@ -257,7 +258,7 @@ export default function CandidateDashboard() {
 
   const fetchJobsSilent = async t => {
     try {
-      const r = await fetch("http://localhost:5000/api/jobs", { headers: { Authorization: `Bearer ${t}` } });
+      const r = await fetch(`${API_BASE_URL}/api/jobs`, { headers: { Authorization: `Bearer ${t}` } });
       if (!r.ok) return;
       const data = Array.isArray(await r.json()) ? await r.json() : [];
       if (prevJobIds !== null) {
@@ -276,14 +277,14 @@ export default function CandidateDashboard() {
 
   const fetchProfile = async t => {
     try {
-      const r = await fetch("http://localhost:5000/api/profile/user", { headers: { Authorization: `Bearer ${t}` } });
+      const r = await fetch(`${API_BASE_URL}/api/profile/user`, { headers: { Authorization: `Bearer ${t}` } });
       if (r.ok) { const d = await r.json(); setProfile(d); setImagePreview(d.image_url || null); }
     } catch {}
   };
 
   const fetchApplied = async t => {
     try {
-      const r = await fetch("http://localhost:5000/api/jobs/applied/count", { headers: { Authorization: `Bearer ${t}` } });
+      const r = await fetch(`${API_BASE_URL}/api/jobs/applied/count`, { headers: { Authorization: `Bearer ${t}` } });
       if (r.ok) { const d = await r.json(); setAppliedCount(d.appliedCount || 0); }
     } catch {}
   };
@@ -307,7 +308,7 @@ export default function CandidateDashboard() {
   const deleteProfile = async () => {
     try {
       const t = localStorage.getItem("token");
-      const r = await fetch("http://localhost:5000/api/profile/candidate", { method: "DELETE", headers: { Authorization: `Bearer ${t}` } });
+      const r = await fetch(`${API_BASE_URL}/api/profile/candidate`, { method: "DELETE", headers: { Authorization: `Bearer ${t}` } });
       if (!r.ok) { const e = await r.json().catch(() => null); throw new Error(e?.error || "Failed to delete"); }
       localStorage.removeItem("token");
       showSuccess("Account deleted.");
