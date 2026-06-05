@@ -1,38 +1,40 @@
-import nodemailer from "nodemailer";
+import { verifyBrevoConfig } from "../services/brevoService.js";
 
 export const verifyEmailConfig = async (req, res) => {
   try {
     console.log("📋 Email Configuration Check:");
-    console.log("EMAIL_USER:", process.env.EMAIL_USER ? "✓ Configured" : "✗ Missing");
-    console.log("EMAIL_PASSWORD:", process.env.EMAIL_PASSWORD ? "✓ Configured" : "✗ Missing");
+    console.log("BREVO_API_KEY:", process.env.BREVO_API_KEY ? "✓ Configured" : "✗ Missing");
+    console.log("SENDER_EMAIL:", process.env.SENDER_EMAIL || "noreply@pyh-consultants.com");
+    console.log("SENDER_NAME:", process.env.SENDER_NAME || "PYH Consultants");
     console.log("FRONTEND_URL:", process.env.FRONTEND_URL || "Not set");
 
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
+    if (!process.env.BREVO_API_KEY) {
       return res.status(400).json({
         status: "error",
-        message: "Email credentials not configured",
+        message: "Email service not configured",
         issues: {
-          EMAIL_USER: !process.env.EMAIL_USER ? "Missing" : "Configured",
-          EMAIL_PASSWORD: !process.env.EMAIL_PASSWORD ? "Missing" : "Configured",
+          BREVO_API_KEY: "Missing",
         },
       });
     }
 
-    // Try to verify credentials
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD,
-      },
-    });
+    // Verify Brevo configuration
+    const isValid = await verifyBrevoConfig();
 
-    await transporter.verify();
+    if (!isValid) {
+      return res.status(400).json({
+        status: "error",
+        message: "Brevo API verification failed",
+        hint: "Please check your BREVO_API_KEY configuration",
+      });
+    }
 
     res.json({
       status: "success",
       message: "Email configuration is valid",
-      email: process.env.EMAIL_USER,
+      provider: "Brevo",
+      senderEmail: process.env.SENDER_EMAIL || "noreply@pyh-consultants.com",
+      senderName: process.env.SENDER_NAME || "PYH Consultants",
     });
   } catch (error) {
     console.error("Email verification failed:", error.message);
@@ -40,7 +42,7 @@ export const verifyEmailConfig = async (req, res) => {
       status: "error",
       message: "Email configuration test failed",
       error: error.message,
-      hint: "Make sure you're using a Gmail App Password, not your regular password. Visit: https://myaccount.google.com/apppasswords",
+      hint: "Please ensure your BREVO_API_KEY is correct. Visit: https://app.brevo.com/settings/keys",
     });
   }
 };
