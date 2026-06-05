@@ -9,6 +9,7 @@ import {
   Sparkles, ShieldCheck, AlertCircle
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 const AVAILABLE_SKILLS = ["React", "Node.js", "Python", "Java", "AWS", "UI/UX", "TypeScript", "MongoDB"];
 const O       = "#E87722";
@@ -67,7 +68,7 @@ export default function CandidateProfilePage() {
     try {
       const token = localStorage.getItem("token");
       if (!token) { router.push("/signin"); return; }
-      const res = await fetch("http://localhost:5000/api/profile/candidate", {
+      const res = await fetch(`${API_BASE_URL}/api/profile/candidate`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to fetch profile");
@@ -89,7 +90,7 @@ export default function CandidateProfilePage() {
       const fd = new FormData();
       fd.append("file", resume);
       fd.append("skills", JSON.stringify(skills));
-      const res = await fetch("http://localhost:5000/api/profile/verify", {
+      const res = await fetch(`${API_BASE_URL}/api/profile/verify`, {
         method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd,
       });
       if (!res.ok) { const t = await res.text(); let p; try { p = JSON.parse(t); } catch {} throw new Error(p?.message || p?.error || t); }
@@ -104,7 +105,7 @@ export default function CandidateProfilePage() {
     setDeleteLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/profile/candidate", {
+      const res = await fetch(`${API_BASE_URL}/api/profile/candidate`, {
         method: "DELETE", headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) { const e = await res.json().catch(() => null); throw new Error(e?.error || "Failed to delete"); }
@@ -270,7 +271,7 @@ export default function CandidateProfilePage() {
             <Section title="Uploaded resume" icon={<FileText size={16} />}>
               {profile.resume_file_path ? (
                 <a
-                  href={`http://localhost:5000${profile.resume_file_path}`}
+                  href={`${API_BASE_URL}${profile.resume_file_path}`}
                   download target="_blank" rel="noopener noreferrer"
                   style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", backgroundColor: "#EAF3DE", color: "#3B6D11", border: "0.5px solid #97C459", borderRadius: 8, textDecoration: "none", fontSize: 13, fontWeight: 500 }}
                 >
