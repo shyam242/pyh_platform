@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import axios from "axios";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function BulkCandidateDetailPage() {
   const router = useRouter();
