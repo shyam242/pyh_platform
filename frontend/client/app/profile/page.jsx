@@ -6,6 +6,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, Mail, Phone, Briefcase, Award, Users, FileText } from "lucide-react";
 import { showError } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -24,7 +25,7 @@ export default function ProfilePage() {
         return;
       }
 
-      const res = await fetch("http://localhost:5000/api/profile/user", {
+      const res = await fetch(`${API_BASE_URL}/api/profile/user`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
