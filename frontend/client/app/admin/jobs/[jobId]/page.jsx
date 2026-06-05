@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft, MapPin, Briefcase, DollarSign, Clock, Bookmark, Share2, CheckCircle, AlertCircle, Users, Calendar } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 const O = "#E87722"; const O_LITE = "#FFF3E8"; const O_MID = "#FBBF7A";
 
