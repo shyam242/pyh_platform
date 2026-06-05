@@ -20,7 +20,7 @@ export default function BulkCandidatesListPage() {
     try {
       const token = localStorage.getItem("token");
       const response = await axios.get(
-        "http://localhost:5000/api/profile/user",
+        "${API_BASE_URL}/api/profile/user",
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -36,7 +36,7 @@ export default function BulkCandidatesListPage() {
       setLoading(true);
       const token = localStorage.getItem("token");
       const response = await axios.get(
-        "http://localhost:5000/api/admin/bulk-candidates",
+        "${API_BASE_URL}/api/admin/bulk-candidates",
         {
           headers: { Authorization: `Bearer ${token}` },
         }
