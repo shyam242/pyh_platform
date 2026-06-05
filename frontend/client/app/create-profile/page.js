@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ArrowRight, Check, Users, User, Briefcase, ChevronRight } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { validateForm } from "@/utils/validation";
+import {API_BASE_URL} from "@/utils/api";
 
 const O = "#E87722"; const O_LITE = "#FFF3E8"; const O_MID = "#FBBF7A";
 
