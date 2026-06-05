@@ -115,7 +115,7 @@ export default function EditCandidateProfilePage() {
     try {
       const token = localStorage.getItem("token");
       if (!token) { router.push("/signin"); return; }
-      const res = await fetch("http://localhost:5000/api/profile/candidate", {
+      const res = await fetch(`${API_BASE_URL}/api/profile/candidate`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to fetch profile");
@@ -138,7 +138,7 @@ export default function EditCandidateProfilePage() {
     setSaving(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/profile/candidate", {
+      const res = await fetch(`${API_BASE_URL}/api/profile/candidate`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify(formData),
