@@ -20,7 +20,7 @@ export default function RecruiterDetailsPage() {
   const fetchRecruiter = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:5000/api/admin/users/recruiter/${recruiterId}`, {
+      const res = await fetch(`${API_BASE_URL}/api/admin/users/recruiter/${recruiterId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to fetch recruiter");
