@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import axios from "axios";
 import { Trash2, AlertCircle, Users, Search, SlidersHorizontal, ChevronDown, X, Upload } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function BulkCandidatesPage() {
   const router = useRouter();
