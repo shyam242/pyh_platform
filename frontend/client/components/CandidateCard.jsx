@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { showError, showSuccess } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function CandidateCard({ candidate, onStatusUpdate }) {
   const [isLoading, setIsLoading] = useState(false);
@@ -9,7 +10,7 @@ export default function CandidateCard({ candidate, onStatusUpdate }) {
   const handleStatusChange = async (newStatus) => {
     setIsLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/recruiter/update", {
+      const res = await fetch(`${API_BASE_URL}/api/recruiter/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: candidate.id, status: newStatus }),
@@ -29,7 +30,7 @@ export default function CandidateCard({ candidate, onStatusUpdate }) {
   const handleDownloadCv = async () => {
     try {
       const response = await fetch(
-        `http://localhost:5000/api/recruiter/${candidate.id}/cv/download`
+        `${API_BASE_URL}/api/recruiter/${candidate.id}/cv/download`
       );
       
       if (!response.ok) throw new Error("Failed to download CV");
