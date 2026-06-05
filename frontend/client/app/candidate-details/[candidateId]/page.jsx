@@ -23,7 +23,7 @@ export default function CandidateDetailsPage() {
   const fetchCandidateDetails = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:5000/api/recruiter/${candidateId}/details`, {
+      const res = await fetch(`${API_BASE_URL}/api/recruiter/${candidateId}/details`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to fetch candidate details");
@@ -41,7 +41,7 @@ export default function CandidateDetailsPage() {
     setDownloading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:5000/api/recruiter/${candidateId}/cv/download`, {
+      const res = await fetch(`${API_BASE_URL}/api/recruiter/${candidateId}/cv/download`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to download CV");
