@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function AcceptReferral() {
   const params = useParams();
