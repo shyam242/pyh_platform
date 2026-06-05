@@ -31,7 +31,7 @@ export default function EditProfilePage() {
         return;
       }
 
-      const res = await fetch("http://localhost:5000/api/profile/user", {
+      const res = await fetch(`${API_BASE_URL}/api/profile/user`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -83,7 +83,7 @@ export default function EditProfilePage() {
       const formDataImg = new FormData();
       formDataImg.append("image", file);
 
-      const res = await fetch("http://localhost:5000/api/profile/avatar", {
+      const res = await fetch(`${API_BASE_URL}/api/profile/avatar`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`
@@ -114,7 +114,7 @@ export default function EditProfilePage() {
 
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch("http://localhost:5000/api/profile/update", {
+      const res = await fetch(`${API_BASE_URL}/api/profile/update`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
