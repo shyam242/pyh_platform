@@ -1,11 +1,14 @@
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const dns = require("dns");
+dns.setDefaultResultOrder("ipv4first");
+
 import dotenv from "dotenv";
 dotenv.config({ path: "./server/.env" });
-
 import express from "express";
 import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
-
 import authRoutes from "./routes/auth.js";
 import profileRoutes from "./routes/profile.js";
 import referralRoutes from "./routes/referral.js";
@@ -15,10 +18,8 @@ import jobRoutes from "./routes/jobs.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const app = express();
 
-// CORS configuration for production
 const allowedOrigins = [
   "http://localhost:3000",
   "https://pyh-platform.vercel.app"
@@ -28,11 +29,9 @@ app.use(cors({
   origin: allowedOrigins,
   credentials: true
 }));
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
-
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/referral", referralRoutes);
