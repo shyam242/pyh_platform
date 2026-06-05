@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft, MapPin, Briefcase, DollarSign, Clock } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
+import { API_BASE_URL } from "@/utils/api";
 
 export default function JobDetailsPage() {
   const router = useRouter();
@@ -19,7 +20,7 @@ export default function JobDetailsPage() {
 
   const fetchJobDetails = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/api/jobs/${jobId}`);
+      const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`);
       if (!response.ok) throw new Error("Failed to fetch job details");
       const data = await response.json();
       setJob(data);
@@ -40,7 +41,7 @@ export default function JobDetailsPage() {
         return;
       }
 
-      const response = await fetch(`http://localhost:5000/api/jobs/${jobId}/apply`, {
+      const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/apply`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({})
