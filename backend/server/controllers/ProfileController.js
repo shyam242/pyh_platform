@@ -1,63 +1,58 @@
 import jwt from "jsonwebtoken";
-import nodemailer from "nodemailer";
 import pool from "../config/db.js";
+import { sendEmail } from "../services/brevoService.js";
 
-const ADMIN_EMAIL = "shyampickyourhire@gmail.com";
+const ADMIN_EMAILS = process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(",").map(e => e.trim()) : ["shyampickyourhire@gmail.com"];
 
 const sendAdminNotification = async (recruiter) => {
   try {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASSWORD) {
-      console.warn("⚠️ Email credentials not configured. Skipping admin notification.");
-      return;
-    }
+    const approvalLink = `${process.env.FRONTEND_URL || "https://pyh-platform.vercel.app"}/admin/recruiters`;
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD,
-      },
-    });
-
-    const approvalLink = `${process.env.ADMIN_DASHBOARD_URL || "http://localhost:3000"}/admin`;
-
-    await transporter.sendMail({
-      to: ADMIN_EMAIL,
-      from: process.env.EMAIL_USER,
-      subject: `New Recruiter Registration - ${recruiter.name}`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">New Recruiter Signup - Action Required</h2>
-          <p>Hi Admin,</p>
-          <p>A new recruiter has registered on the PickYourHire platform and requires your approval.</p>
-          
-          <div style="background-color: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="color: #000; margin-top: 0;">Recruiter Details:</h3>
-            <p><strong>Name:</strong> ${recruiter.name}</p>
-            <p><strong>Email:</strong> ${recruiter.email}</p>
-            <p><strong>Company:</strong> ${recruiter.company_name || "Not provided"}</p>
-            <p><strong>Website:</strong> ${recruiter.company_website || "Not provided"}</p>
-            <p><strong>Phone:</strong> ${recruiter.phone || "Not provided"}</p>
-            <p><strong>Registration Date:</strong> ${new Date().toLocaleString()}</p>
-          </div>
-          
-          <p style="color: #666; margin: 20px 0;">
-            Review and approve or reject this recruiter in your admin dashboard:
-          </p>
-          
-          <a href="${approvalLink}" 
-             style="display: inline-block; background-color: #10b981; color: #fff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">
-            Go to Admin Dashboard
-          </a>
-          
-          <p style="color: #999; font-size: 12px; margin-top: 30px;">
-            This is an automated notification from PickYourHire. Do not reply to this email.
-          </p>
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">New Recruiter Signup - Action Required</h2>
+        <p>Hi Admin,</p>
+        <p>A new recruiter has registered on the PickYourHire platform and requires your approval.</p>
+        
+        <div style="background-color: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h3 style="color: #000; margin-top: 0;">Recruiter Details:</h3>
+          <p><strong>Name:</strong> ${recruiter.name}</p>
+          <p><strong>Email:</strong> ${recruiter.email}</p>
+          <p><strong>Company:</strong> ${recruiter.company_name || "Not provided"}</p>
+          <p><strong>Website:</strong> ${recruiter.company_website || "Not provided"}</p>
+          <p><strong>Phone:</strong> ${recruiter.phone || "Not provided"}</p>
+          <p><strong>Registration Date:</strong> ${new Date().toLocaleString()}</p>
         </div>
-      `,
-    });
+        
+        <p style="color: #666; margin: 20px 0;">
+          Review and approve or reject this recruiter in your admin dashboard:
+        </p>
+        
+        <a href="${approvalLink}" 
+           style="display: inline-block; background-color: #10b981; color: #fff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">
+          Go to Admin Dashboard
+        </a>
+        
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+        <p style="color: #999; font-size: 12px; text-align: center;">PYH Consultants Recruiter Platform</p>
+      </div>
+    `;
 
-    console.log(`✓ Admin notification sent to ${ADMIN_EMAIL}`);
+    // Send to all admin emails
+    const results = await Promise.all(
+      ADMIN_EMAILS.map((email) =>
+        sendEmail(
+          email,
+          `New Recruiter Registration - ${recruiter.name}`,
+          htmlContent,
+          "Admin"
+        )
+      )
+    );
+
+    if (results.some(r => r === true)) {
+      console.log(`✓ Admin notification sent to ${ADMIN_EMAILS.join(", ")}`);
+    }
   } catch (error) {
     console.error("⚠️ Failed to send admin notification:", error.message);
   }
@@ -67,68 +62,48 @@ export const createProfile = async (req, res) => {
   const { name, role, email, company, experience, phone } = req.body;
 
   try {
-    if (!name || !role || !email) {
-      return res.status(400).json({ error: "Name, role and email are required" });
-    }
-
-    // ADMIN ROLE RESTRICTION: Only allow admin creation with specific email
-    if (role === "admin" && email !== ADMIN_EMAIL) {
-      return res.status(403).json({ error: "Admin account can only be created with the authorized email" });
-    }
-
-    // Check if user already exists
+    // Check if user with this email already exists
     const existingUser = await pool.query(
       "SELECT * FROM users WHERE email = $1",
       [email]
     );
 
-    // If user exists AND already has a role set, return their token (already registered)
-    if (existingUser.rows.length > 0 && existingUser.rows[0].role) {
-      const existingRole = existingUser.rows[0].role;
-      const token = jwt.sign(
-        { id: existingUser.rows[0].id, role: existingRole },
-        process.env.JWT_SECRET
-      );
-      return res.json({ token, user: existingUser.rows[0] });
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ error: "Email already in use" });
     }
 
-    // Insert or update user with role-specific fields
+    // ADMIN ROLE RESTRICTION: Only allow admin creation with specific email
+    if (role === "admin" && !ADMIN_EMAILS.includes(email)) {
+      return res.status(403).json({ error: "Admin account can only be created with the authorized email" });
+    }
+
+    // Insert user with role-specific fields
     let result;
     if (role === "referrer") {
       result = await pool.query(
-        `INSERT INTO users(name,email,role,company,experience,phone) VALUES($1,$2,$3,$4,$5,$6)
-         ON CONFLICT (email) DO UPDATE SET name=$1,role=$3,company=$4,experience=$5,phone=$6
-         RETURNING *`,
+        "INSERT INTO users(name,email,role,company,experience,phone) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
         [name, email, role, company, experience, phone]
       );
     } else if (role === "recruiter") {
       // Recruiters start with is_recruiter_approved = false
       const { company_name, company_website } = req.body;
       result = await pool.query(
-        `INSERT INTO users(name,email,role,company_name,company_website,phone,is_recruiter_approved) VALUES($1,$2,$3,$4,$5,$6,false)
-         ON CONFLICT (email) DO UPDATE SET name=$1,role=$3,company_name=$4,company_website=$5,phone=$6,is_recruiter_approved=false
-         RETURNING *`,
+        "INSERT INTO users(name,email,role,company_name,company_website,phone,is_recruiter_approved) VALUES($1,$2,$3,$4,$5,$6,false) RETURNING *",
         [name, email, role, company_name, company_website, phone]
       );
-
-      // Send admin notification only for truly new recruiters
-      if (existingUser.rows.length === 0) {
-        await sendAdminNotification(result.rows[0]);
-      }
+      
+      // Send admin notification for new recruiter
+      await sendAdminNotification(result.rows[0]);
     } else if (role === "admin") {
       result = await pool.query(
-        `INSERT INTO users(name,email,role) VALUES($1,$2,$3)
-         ON CONFLICT (email) DO UPDATE SET name=$1,role=$3
-         RETURNING *`,
+        "INSERT INTO users(name,email,role) VALUES($1,$2,$3) RETURNING *",
         [name, email, role]
       );
     } else {
       // Candidate or other roles
       result = await pool.query(
-        `INSERT INTO users(name,email,role,phone) VALUES($1,$2,$3,$4)
-         ON CONFLICT (email) DO UPDATE SET name=$1,role=$3,phone=$4
-         RETURNING *`,
-        [name, email, role, phone || null]
+        "INSERT INTO users(name,email,role) VALUES($1,$2,$3) RETURNING *",
+        [name, email, role]
       );
     }
 
