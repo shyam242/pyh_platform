@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowRight, Check, Users, User, Briefcase, ChevronRight } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { validateForm } from "@/utils/validation";
@@ -41,6 +41,23 @@ export default function CreateProfile() {
   const [loading, setLoading]         = useState(false);
   const [errors, setErrors]           = useState({});
   const [step, setStep]               = useState(1); // 1=role, 2=details
+
+  // Prefill from referral flow
+  useEffect(() => {
+    const referralRole  = localStorage.getItem("referral_role");
+    const referralName  = localStorage.getItem("referral_name");
+    const referralPhone = localStorage.getItem("referral_phone");
+    if (referralRole) {
+      setRole(referralRole);
+      setStep(2); // Skip role selection, go straight to details
+      if (referralName)  setName(referralName);
+      if (referralPhone) setPhone(referralPhone);
+      // Clean up referral flags
+      localStorage.removeItem("referral_role");
+      localStorage.removeItem("referral_name");
+      localStorage.removeItem("referral_phone");
+    }
+  }, []);
 
   const handleChange = (setter) => (e) => setter(e.target.value);
 
