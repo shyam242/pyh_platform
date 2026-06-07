@@ -70,11 +70,14 @@ export default function AcceptReferral() {
       setAccepting(false);
       setEditMode(false);
       
-      // Clear old token to avoid JWT signature mismatch
+      // Store email and referral role so create-profile can use them
       localStorage.removeItem("token");
+      localStorage.setItem("email", formData.email);
+      localStorage.setItem("referral_role", "candidate");
+      localStorage.setItem("referral_name", formData.name);
+      localStorage.setItem("referral_phone", formData.phone);
       
       setTimeout(() => {
-        // Redirect to create profile (they need to set up their account first)
         window.location.href = "/create-profile";
       }, 2000);
     } catch (err) {
