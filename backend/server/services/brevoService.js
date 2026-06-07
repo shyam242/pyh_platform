@@ -112,7 +112,7 @@ export const sendCandidateReferralEmail = async (
       
       <p>Hi ${candidateName},</p>
       
-      <p>Congratulations! Someone has referred you for an exciting job opportunity. Below are the details of your referral:</p>
+      <p>Congratulations! You have been referred by someone who believes in your potential. Below are the details of your referral:</p>
       
       <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
         <p><strong>What's Next?</strong></p>
