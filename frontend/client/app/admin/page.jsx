@@ -587,11 +587,13 @@ export default function AdminDashboard() {
                     { id: "jobs-list", label: "All Jobs" },
                     { id: "jobs", label: "Post Jobs" },
                     { id: "bulk-jobs", label: "Bulk Jobs" },
-                    { id: "bulk-candidates", label: "Bulk Candidates" }
+                    { id: "bulk-candidates", label: "Bulk Candidates" },
+                    { id: "resume-views", label: "📊 Resume Analytics", isLink: "/admin/resume-views" }
                   ].map(item => (
                     <button
                       key={item.id}
                       onClick={() => {
+                        if (item.isLink) { window.location.href = item.isLink; return; }
                         setActiveTab(item.id);
                         setDropdownOpen(false);
                         if (item.id === "incentives") fetchReferrers();
