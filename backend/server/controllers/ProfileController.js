@@ -426,7 +426,24 @@ export const getCandidateProfile = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    res.json(result.rows[0]);
+    const profile = result.rows[0];
+
+    // Attach referrer info if candidate was referred
+    const referralResult = await pool.query(
+      `SELECT r.id as referral_id, r.referral_status, r.created_at as referred_at,
+              u.name as referrer_name, u.email as referrer_email, u.phone as referrer_phone,
+              u.company as referrer_company, u.linkedin_profile as referrer_linkedin
+       FROM referrals r
+       JOIN users u ON u.id = r.referrer_id
+       WHERE r.email = $1
+       ORDER BY r.created_at DESC
+       LIMIT 1`,
+      [profile.email]
+    );
+
+    profile.referrer = referralResult.rows[0] || null;
+
+    res.json(profile);
   } catch (error) {
     console.error("Error fetching candidate profile:", error);
     res.status(500).json({ error: "Failed to fetch candidate profile" });
