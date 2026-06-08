@@ -10,7 +10,9 @@ import {
   downloadReferralCv,
   downloadCandidateResume,
   getReferralDetails,
-  getApprovalStatus
+  getApprovalStatus,
+  trackResumeView,
+  getResumeViewStats
 } from "../controllers/recruitercontroller.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { checkRecruiterApproved } from "../middleware/recruiterMiddleware.js";
@@ -50,5 +52,12 @@ router.post("/update", protect, checkRecruiterApproved, updateStatus);
 router.post("/verify", protect, checkRecruiterApproved, upload.single("resume"), verifyProfile);
 router.get("/:referralId/cv/download", protect, checkRecruiterApproved, downloadReferralCv);
 router.get("/candidate/:userId/resume/download", protect, checkRecruiterApproved, downloadCandidateResume);
+// Resume view tracking (recruiter tracks, admin reads)
+router.post("/track-view", protect, checkRecruiterApproved, trackResumeView);
+router.get("/resume-view-stats", protect, getResumeViewStats);
 
 export default router;
+
+// Resume view tracking
+import { trackResumeView, getResumeViewStats } from "../controllers/recruitercontroller.js";
+router.post("/track-view", protect, checkRecruiterApproved, trackResumeView);
