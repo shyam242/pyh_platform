@@ -205,3 +205,65 @@ export const getReferralDetails = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch referral" });
   }
 };
+
+// TRACK RESUME VIEW
+export const trackResumeView = async (req, res) => {
+  try {
+    const recruiterId = req.user.id;
+    const { candidateId, candidateName, viewType } = req.body; // viewType: 'referral_cv' | 'candidate_resume'
+
+    await pool.query(
+      `INSERT INTO resume_views (recruiter_id, candidate_id, candidate_name, view_type, viewed_at)
+       VALUES ($1, $2, $3, $4, NOW())`,
+      [recruiterId, candidateId, candidateName, viewType || 'resume']
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    // Don't fail the main request if tracking fails
+    console.error("Resume view tracking error:", error);
+    res.json({ success: false });
+  }
+};
+
+// GET RESUME VIEW STATS FOR ADMIN
+export const getResumeViewStats = async (req, res) => {
+  try {
+    const stats = await pool.query(`
+      SELECT 
+        u.id as recruiter_id,
+        u.name as recruiter_name,
+        u.email as recruiter_email,
+        u.company_name,
+        COUNT(rv.id) as total_views,
+        COUNT(DISTINCT rv.candidate_id) as unique_candidates,
+        MAX(rv.viewed_at) as last_viewed_at
+      FROM users u
+      LEFT JOIN resume_views rv ON rv.recruiter_id = u.id
+      WHERE u.role = 'recruiter' AND u.is_recruiter_approved = true
+      GROUP BY u.id, u.name, u.email, u.company_name
+      ORDER BY total_views DESC
+    `);
+
+    const detailed = await pool.query(`
+      SELECT 
+        rv.id,
+        rv.viewed_at,
+        rv.view_type,
+        rv.candidate_name,
+        rv.candidate_id,
+        u.name as recruiter_name,
+        u.email as recruiter_email,
+        u.company_name
+      FROM resume_views rv
+      JOIN users u ON u.id = rv.recruiter_id
+      ORDER BY rv.viewed_at DESC
+      LIMIT 200
+    `);
+
+    res.json({ stats: stats.rows, detailed: detailed.rows });
+  } catch (error) {
+    console.error("Error fetching resume view stats:", error);
+    res.status(500).json({ error: "Failed to fetch resume view stats" });
+  }
+};
