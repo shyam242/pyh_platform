@@ -6,7 +6,7 @@ import {
   ArrowLeft, Edit2, Upload, CheckCircle2, Plus, X,
   Download, User, Briefcase, MapPin, GraduationCap,
   Phone, Mail, Link2, FileText, Award, ChevronRight,
-  Sparkles, ShieldCheck, AlertCircle
+  Sparkles, ShieldCheck, AlertCircle, Users
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
@@ -261,6 +261,39 @@ export default function CandidateProfilePage() {
                 )}
               </div>
             </Section>
+
+            {/* Referred By section */}
+            {profile?.referrer && (
+              <Section title="Referred by" icon={<Users size={16} />}>
+                <div style={{ backgroundColor: O_LITE, border: `1px solid ${O_MID}`, borderRadius: 12, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: "50%", backgroundColor: O, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, flexShrink: 0 }}>
+                    {(profile.referrer.referrer_name || "R").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#0f172a", marginBottom: 2 }}>{profile.referrer.referrer_name}</div>
+                    <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>{profile.referrer.referrer_company || "Referrer"}</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                      <a href={`mailto:${profile.referrer.referrer_email}`} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#475569", textDecoration: "none", fontWeight: 500 }}>
+                        <Mail size={12} color={O} /> {profile.referrer.referrer_email}
+                      </a>
+                      {profile.referrer.referrer_phone && (
+                        <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#475569" }}>
+                          <Phone size={12} color={O} /> {profile.referrer.referrer_phone}
+                        </span>
+                      )}
+                      {profile.referrer.referrer_linkedin && (
+                        <a href={profile.referrer.referrer_linkedin} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "#1d4ed8", textDecoration: "none", fontWeight: 500 }}>
+                          <Link2 size={12} /> LinkedIn
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", flexShrink: 0 }}>
+                    {profile.referrer.referred_at ? new Date(profile.referrer.referred_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : ""}
+                  </div>
+                </div>
+              </Section>
+            )}
           </div>
         )}
 
