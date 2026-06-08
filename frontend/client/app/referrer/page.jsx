@@ -2,9 +2,9 @@
 import { useState, useEffect } from "react";
 import { showSuccess, showError } from "@/utils/toast";
 import {
-  Upload, ArrowRight, User, Phone, Briefcase, Award, Users,
-  TrendingUp, CheckCircle, Clock, Eye, Linkedin, Mail,
-  BarChart2, Plus, X, ChevronRight, LogOut
+  Upload, ArrowRight, Phone, Briefcase, Award, Users,
+  TrendingUp, CheckCircle, Clock, Eye, Mail,
+  BarChart2, Plus, X, ChevronRight, LogOut, ExternalLink
 } from "lucide-react";
 import { API_BASE_URL } from "@/utils/api";
 
@@ -274,7 +274,7 @@ export default function ReferrerDashboard() {
                         {r.linkedin && (
                           <a href={r.linkedin} target="_blank" rel="noreferrer"
                             style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 12, fontSize: 13, color: "#1d4ed8", textDecoration: "none", fontWeight: 500 }}>
-                            <Linkedin size={14} /> View LinkedIn
+                            <ExternalLink size={14} /> View LinkedIn
                           </a>
                         )}
                         <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 10 }}>Referred {timeAgo(r.created_at)}</div>
