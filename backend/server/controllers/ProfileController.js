@@ -62,48 +62,60 @@ export const createProfile = async (req, res) => {
   const { name, role, email, company, experience, phone } = req.body;
 
   try {
-    // Check if user with this email already exists
-    const existingUser = await pool.query(
-      "SELECT * FROM users WHERE email = $1",
-      [email]
-    );
-
-    if (existingUser.rows.length > 0) {
-      return res.status(400).json({ error: "Email already in use" });
+    if (!name || !role || !email) {
+      return res.status(400).json({ error: "Name, role and email are required" });
     }
 
-    // ADMIN ROLE RESTRICTION: Only allow admin creation with specific email
     if (role === "admin" && !ADMIN_EMAILS.includes(email)) {
       return res.status(403).json({ error: "Admin account can only be created with the authorized email" });
     }
 
-    // Insert user with role-specific fields
+    // Check if user already exists
+    const existingUser = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
+    const isNew = existingUser.rows.length === 0;
+
+    // If already fully registered, return existing token
+    if (!isNew && existingUser.rows[0].role) {
+      const token = jwt.sign(
+        { id: existingUser.rows[0].id, role: existingUser.rows[0].role },
+        process.env.JWT_SECRET
+      );
+      return res.json({ token, user: existingUser.rows[0] });
+    }
+
+    // Upsert user with role-specific fields
     let result;
     if (role === "referrer") {
       result = await pool.query(
-        "INSERT INTO users(name,email,role,company,experience,phone) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",
+        `INSERT INTO users(name,email,role,company,experience,phone) VALUES($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (email) DO UPDATE SET name=$1,role=$3,company=$4,experience=$5,phone=$6
+         RETURNING *`,
         [name, email, role, company, experience, phone]
       );
     } else if (role === "recruiter") {
-      // Recruiters start with is_recruiter_approved = false
       const { company_name, company_website } = req.body;
       result = await pool.query(
-        "INSERT INTO users(name,email,role,company_name,company_website,phone,is_recruiter_approved) VALUES($1,$2,$3,$4,$5,$6,false) RETURNING *",
+        `INSERT INTO users(name,email,role,company_name,company_website,phone,is_recruiter_approved)
+         VALUES($1,$2,$3,$4,$5,$6,false)
+         ON CONFLICT (email) DO UPDATE SET name=$1,role=$3,company_name=$4,company_website=$5,phone=$6,is_recruiter_approved=false
+         RETURNING *`,
         [name, email, role, company_name, company_website, phone]
       );
-      
-      // Send admin notification for new recruiter
-      await sendAdminNotification(result.rows[0]);
+      if (isNew) await sendAdminNotification(result.rows[0]);
     } else if (role === "admin") {
       result = await pool.query(
-        "INSERT INTO users(name,email,role) VALUES($1,$2,$3) RETURNING *",
+        `INSERT INTO users(name,email,role) VALUES($1,$2,$3)
+         ON CONFLICT (email) DO UPDATE SET name=$1,role=$3
+         RETURNING *`,
         [name, email, role]
       );
     } else {
-      // Candidate or other roles
+      // candidate
       result = await pool.query(
-        "INSERT INTO users(name,email,role) VALUES($1,$2,$3) RETURNING *",
-        [name, email, role]
+        `INSERT INTO users(name,email,role,phone) VALUES($1,$2,$3,$4)
+         ON CONFLICT (email) DO UPDATE SET name=$1,role=$3,phone=$4
+         RETURNING *`,
+        [name, email, role, phone || null]
       );
     }
 
