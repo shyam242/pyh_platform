@@ -1,739 +1,352 @@
 "use client";
-
-import { useState, useEffect, useRef } from "react";
-import { Upload, AlertCircle, CheckCircle2, Users, Trophy, DollarSign, Plus, Eye, EyeOff } from "lucide-react";
+import { useState, useEffect } from "react";
 import { showSuccess, showError } from "@/utils/toast";
-import { validateReferralForm } from "@/utils/validation";
+import {
+  Upload, ArrowRight, Phone, Briefcase, Award, Users,
+  TrendingUp, CheckCircle, Clock, Eye, Mail,
+  BarChart2, Plus, X, ChevronRight, LogOut, ExternalLink
+} from "lucide-react";
 import { API_BASE_URL } from "@/utils/api";
 
+const O = "#E87722", O_LITE = "#FFF3E8", O_MID = "#FBBF7A", BORDER = "#EBEBEB";
+
+const STATUS_COLORS = {
+  pending: { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" },
+  accepted: { bg: "#EAF3DE", color: "#3B6D11", border: "#97C459" },
+  rejected: { bg: "#FEF2F2", color: "#dc2626", border: "#FECACA" },
+  pending_candidate_acceptance: { bg: "#EFF6FF", color: "#1d4ed8", border: "#BFDBFE" },
+};
+
+const statusLabel = s => ({
+  pending: "Under Review", accepted: "Accepted", rejected: "Rejected",
+  pending_candidate_acceptance: "Awaiting Candidate",
+}[s] || s);
+
+const timeAgo = iso => {
+  if (!iso) return "";
+  const d = Math.floor((Date.now() - new Date(iso)) / 86400000);
+  if (d === 0) return "Today"; if (d === 1) return "Yesterday"; return `${d}d ago`;
+};
+
 export default function ReferrerDashboard() {
-  const [stats, setStats] = useState({
-    totalReferred: 0,
-    successfulJoinings: 0,
-    totalIncentives: 0
-  });
+  const [user, setUser] = useState(null);
   const [referrals, setReferrals] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    industry: "",
-    department: "",
-    skills: "",
-    experience: "",
-    company: "",
-    linkedin: "",
-  });
-  const [cvFile, setCvFile] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [submitted, setSubmitted] = useState(false);
-  const [loadingStats, setLoadingStats] = useState(true);
-
-  const fileInputRef = useRef(null);
-
-  // Skills suggestions for auto-complete
-  const skillSuggestions = [
-    "JavaScript", "Python", "Java", "C++", "C#", "PHP", "Ruby", "Go", "Rust", "TypeScript",
-    "React", "Vue.js", "Angular", "Node.js", "Express", "Django", "Flask", "Spring Boot",
-    "HTML", "CSS", "SASS", "Tailwind CSS", "Bootstrap", "Material UI",
-    "MySQL", "PostgreSQL", "MongoDB", "Redis", "Elasticsearch",
-    "AWS", "Azure", "GCP", "Docker", "Kubernetes", "Jenkins", "Git",
-    "Machine Learning", "Data Science", "AI", "DevOps", "Cybersecurity"
-  ];
+  const [tab, setTab] = useState("dashboard"); // dashboard | refer
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", phone: "", experience: "", company: "", industry: "", department: "", linkedin: "", skills: "", cv: null });
 
   useEffect(() => {
-    fetchStats();
-    fetchReferrals();
+    const token = localStorage.getItem("token");
+    if (!token) { window.location.href = "/signin"; return; }
+    Promise.all([fetchUser(token), fetchReferrals(token)]).finally(() => setLoading(false));
   }, []);
 
-  const fetchStats = async () => {
+  const fetchUser = async token => {
+    const r = await fetch(`${API_BASE_URL}/api/profile`, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.ok) setUser(await r.json());
+  };
+
+  const fetchReferrals = async token => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/api/referral/stats`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch stats:", err);
-    } finally {
-      setLoadingStats(false);
-    }
-  };
-
-  const fetchReferrals = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/api/referral/my`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setReferrals(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch referrals:", err);
-    }
-  };
-
-  const handleInputChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-    setErrors({ ...errors, [e.target.name]: "" });
-  };
-
-  const handleSkillsChange = (e) => {
-    const value = e.target.value;
-    setForm({ ...form, skills: value });
-    setErrors({ ...errors, skills: "" });
-  };
-
-  const addSkill = (skill) => {
-    const currentSkills = form.skills ? form.skills.split(',').map(s => s.trim()) : [];
-    if (!currentSkills.includes(skill)) {
-      const newSkills = [...currentSkills, skill].join(', ');
-      setForm({ ...form, skills: newSkills });
-    }
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      showError("File size must be < 5MB");
-      return;
-    }
-    setCvFile(file);
-    setErrors({ ...errors, cv: "" });
+      const r = await fetch(`${API_BASE_URL}/api/referral/my`, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) { const d = await r.json(); setReferrals(Array.isArray(d) ? d : d.referrals || []); }
+    } catch {}
   };
 
   const submit = async () => {
-    const validationErrors = validateReferralForm(form);
-
-    if (!cvFile) validationErrors.cv = "CV required";
-
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors);
-      return showError("Fill all required fields");
+    if (!form.name || !form.email || !form.phone || !form.experience || !form.company || !form.skills || !form.cv) {
+      showError("Please fill in all required fields"); return;
     }
-
-    setLoading(true);
-
+    setSubmitting(true);
     try {
       const token = localStorage.getItem("token");
-
-      const formData = new FormData();
-      Object.keys(form).forEach((k) => formData.append(k, form[k]));
-      formData.append("cv", cvFile);
-
-      const res = await fetch(
-        `${API_BASE_URL}/api/referral/create`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        }
-      );
-
-      if (!res.ok) throw new Error("Submission failed");
-
-      showSuccess("Referral submitted 🎉");
-
-      setSubmitted(true);
-      setForm({
-        name: "",
-        email: "",
-        phone: "",
-        industry: "",
-        department: "",
-        skills: "",
-        experience: "",
-        company: "",
-        linkedin: "",
-      });
-      setCvFile(null);
-      setShowForm(false);
-      fetchStats();
-      fetchReferrals();
-
-      setTimeout(() => setSubmitted(false), 3000);
-    } catch (err) {
-      showError(err.message);
-    } finally {
-      setLoading(false);
-    }
+      const fd = new FormData();
+      Object.entries(form).forEach(([k, v]) => { if (v) fd.append(k, v); });
+      const res = await fetch(`${API_BASE_URL}/api/referral/create`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to submit referral");
+      showSuccess("Referral submitted successfully!");
+      setForm({ name: "", email: "", phone: "", experience: "", company: "", industry: "", department: "", linkedin: "", skills: "", cv: null });
+      setTab("dashboard");
+      fetchReferrals(token);
+    } catch (err) { showError(err.message); }
+    finally { setSubmitting(false); }
   };
 
+  const stats = [
+    { label: "Total Referred", value: referrals.length, icon: Users, color: O, bg: O_LITE },
+    { label: "Accepted", value: referrals.filter(r => r.status === "accepted" || r.referral_status === "accepted").length, icon: CheckCircle, color: "#3B6D11", bg: "#EAF3DE" },
+    { label: "Under Review", value: referrals.filter(r => r.status === "pending").length, icon: Clock, color: "#1d4ed8", bg: "#EFF6FF" },
+    { label: "Awaiting Candidate", value: referrals.filter(r => r.referral_status === "pending_candidate_acceptance").length, icon: Eye, color: "#7c3aed", bg: "#F5F3FF" },
+  ];
+
+  const InputField = ({ label, name, value, onChange, placeholder, type = "text", required }) => (
+    <div>
+      <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
+        {label} {required && <span style={{ color: "#ef4444" }}>*</span>}
+      </label>
+      <input type={type} value={value} onChange={onChange} placeholder={placeholder}
+        style={{ width: "100%", padding: "11px 14px", fontSize: 14, border: "1.5px solid #E5E7EB", borderRadius: 9, outline: "none", backgroundColor: "#FAFAFA", color: "#0f172a", fontFamily: "inherit", boxSizing: "border-box" }}
+        onFocus={e => e.target.style.borderColor = O} onBlur={e => e.target.style.borderColor = "#E5E7EB"}
+      />
+    </div>
+  );
+
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#fff", color: "#000", padding: "2rem 1.5rem" }}>
-      <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
+    <div style={{ minHeight: "100vh", backgroundColor: "#F8FAFC", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: "#0f172a" }}>
 
-        {/* HEADER */}
-        <div style={{ marginBottom: "2.5rem", textAlign: "center" }}>
-          <h1 style={{ fontSize: "2.5rem", fontWeight: "bold", marginBottom: "0.5rem" }}>
-            Referrer Dashboard
-          </h1>
-          <p style={{ fontSize: "1rem", color: "#666", lineHeight: "1.6" }}>
-            Track your referrals and earn rewards for successful placements
-          </p>
-        </div>
-
-        {/* STATS CARDS */}
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-          gap: "1.5rem",
-          marginBottom: "2rem"
-        }}>
-          <div style={{
-            backgroundColor: "#f8f9fa",
-            borderRadius: "0.75rem",
-            padding: "1.5rem",
-            border: "1px solid #e9ecef",
-            textAlign: "center"
-          }}>
-            <Users style={{ width: "2rem", height: "2rem", margin: "0 auto 0.5rem", color: "#007bff" }} />
-            <h3 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "0.25rem" }}>
-              {loadingStats ? "..." : stats.totalReferred}
-            </h3>
-            <p style={{ color: "#666", fontSize: "0.9rem" }}>Total Candidates Referred</p>
-          </div>
-
-          <div style={{
-            backgroundColor: "#f8f9fa",
-            borderRadius: "0.75rem",
-            padding: "1.5rem",
-            border: "1px solid #e9ecef",
-            textAlign: "center"
-          }}>
-            <Trophy style={{ width: "2rem", height: "2rem", margin: "0 auto 0.5rem", color: "#28a745" }} />
-            <h3 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "0.25rem" }}>
-              {loadingStats ? "..." : stats.successfulJoinings}
-            </h3>
-            <p style={{ color: "#666", fontSize: "0.9rem" }}>Successful Joinings</p>
-          </div>
-
-          <div style={{
-            backgroundColor: "#f8f9fa",
-            borderRadius: "0.75rem",
-            padding: "1.5rem",
-            border: "1px solid #e9ecef",
-            textAlign: "center"
-          }}>
-            <DollarSign style={{ width: "2rem", height: "2rem", margin: "0 auto 0.5rem", color: "#ffc107" }} />
-            <h3 style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "0.25rem" }}>
-              ${loadingStats ? "..." : stats.totalIncentives}
-            </h3>
-            <p style={{ color: "#666", fontSize: "0.9rem" }}>Total Incentives Earned</p>
-          </div>
-        </div>
-
-        {/* REFER CANDIDATE BUTTON */}
-        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-          <button
-            onClick={() => setShowForm(!showForm)}
-            style={{
-              padding: "0.75rem 2rem",
-              backgroundColor: showForm ? "#dc3545" : "#007bff",
-              color: "#fff",
-              border: "none",
-              borderRadius: "0.5rem",
-              fontSize: "1rem",
-              fontWeight: "600",
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              transition: "all 0.3s"
-            }}
-          >
-            {showForm ? <EyeOff style={{ width: "1rem", height: "1rem" }} /> : <Plus style={{ width: "1rem", height: "1rem" }} />}
-            {showForm ? "Hide Form" : "Refer Candidate"}
+      {/* NAV */}
+      <nav style={{ backgroundColor: "#fff", borderBottom: `1.5px solid ${BORDER}`, padding: "0 48px", height: 68, display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 200 }}>
+        <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: "0.04em" }}>PICK<span style={{ color: O }}>YOUR</span>HIRE</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {user && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", backgroundColor: O_LITE, borderRadius: 999, border: `1px solid ${O_MID}` }}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: O, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>
+                {(user.name || "U").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+              </div>
+              <span style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{user.name}</span>
+            </div>
+          )}
+          <button onClick={() => { localStorage.removeItem("token"); window.location.href = "/signin"; }}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", border: `1.5px solid ${BORDER}`, borderRadius: 9, backgroundColor: "#fff", fontSize: 14, color: "#64748b", cursor: "pointer", fontFamily: "inherit" }}>
+            <LogOut size={15} /> Sign out
           </button>
         </div>
+      </nav>
 
-        {/* REFERRAL FORM */}
-        {showForm && (
-          <div style={{
-            backgroundColor: "#f9f9f9",
-            borderRadius: "0.75rem",
-            border: "1px solid #ddd",
-            padding: "2rem",
-            marginBottom: "2rem"
-          }}>
-            <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", marginBottom: "1.5rem", textAlign: "center" }}>
-              Refer a New Candidate
-            </h2>
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "36px 48px 64px", display: "grid", gridTemplateColumns: "240px 1fr", gap: 28 }}>
 
-            <form onSubmit={(e) => { e.preventDefault(); submit(); }} style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-
-              {/* Name & Email */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", marginBottom: "0.5rem", color: "#333" }}>
-                    Full Name <span style={{ color: "#dc2626" }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="name"
-                    value={form.name}
-                    onChange={handleInputChange}
-                    placeholder="John Doe"
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem 1rem",
-                      border: errors.name ? "2px solid #dc2626" : "1px solid #ddd",
-                      borderRadius: "0.5rem",
-                      fontSize: "1rem",
-                      outline: "none",
-                      boxSizing: "border-box",
-                      transition: "border 0.3s"
-                    }}
-                  />
-                  {errors.name && (
-                    <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                      <AlertCircle style={{ width: "1rem", height: "1rem" }} /> {errors.name}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", marginBottom: "0.5rem", color: "#333" }}>
-                    Email <span style={{ color: "#dc2626" }}>*</span>
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    value={form.email}
-                    onChange={handleInputChange}
-                    placeholder="john@example.com"
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem 1rem",
-                      border: errors.email ? "2px solid #dc2626" : "1px solid #ddd",
-                      borderRadius: "0.5rem",
-                      fontSize: "1rem",
-                      outline: "none",
-                      boxSizing: "border-box"
-                    }}
-                  />
-                  {errors.email && (
-                    <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                      <AlertCircle style={{ width: "1rem", height: "1rem" }} /> {errors.email}
-                    </p>
-                  )}
-                </div>
+        {/* SIDEBAR */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Profile card */}
+          {user && (
+            <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "24px 20px", textAlign: "center", marginBottom: 8 }}>
+              <div style={{ width: 64, height: 64, borderRadius: "50%", backgroundColor: O, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, margin: "0 auto 12px" }}>
+                {(user.name || "U").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
               </div>
-
-              {/* Phone & Industry */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", marginBottom: "0.5rem", color: "#333" }}>
-                    Phone <span style={{ color: "#dc2626" }}>*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={form.phone}
-                    onChange={handleInputChange}
-                    placeholder="9876543210"
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem 1rem",
-                      border: errors.phone ? "2px solid #dc2626" : "1px solid #ddd",
-                      borderRadius: "0.5rem",
-                      fontSize: "1rem",
-                      outline: "none",
-                      boxSizing: "border-box"
-                    }}
-                  />
-                  {errors.phone && (
-                    <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                      <AlertCircle style={{ width: "1rem", height: "1rem" }} /> {errors.phone}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", marginBottom: "0.5rem", color: "#333" }}>
-                    Industry
-                  </label>
-                  <select
-                    name="industry"
-                    value={form.industry}
-                    onChange={handleInputChange}
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem 1rem",
-                      border: "1px solid #ddd",
-                      borderRadius: "0.5rem",
-                      fontSize: "1rem",
-                      outline: "none",
-                      boxSizing: "border-box"
-                    }}
-                  >
-                    <option value="">Select Industry</option>
-                    <option value="Technology">Technology</option>
-                    <option value="Healthcare">Healthcare</option>
-                    <option value="Finance">Finance</option>
-                    <option value="Education">Education</option>
-                    <option value="Manufacturing">Manufacturing</option>
-                    <option value="Retail">Retail</option>
-                    <option value="Consulting">Consulting</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Department & Skills */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", marginBottom: "0.5rem", color: "#333" }}>
-                    Department/Function
-                  </label>
-                  <input
-                    type="text"
-                    name="department"
-                    value={form.department}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Engineering, Marketing, Sales"
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem 1rem",
-                      border: "1px solid #ddd",
-                      borderRadius: "0.5rem",
-                      fontSize: "1rem",
-                      outline: "none",
-                      boxSizing: "border-box"
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", marginBottom: "0.5rem", color: "#333" }}>
-                    Skills <span style={{ color: "#dc2626" }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="skills"
-                    value={form.skills}
-                    onChange={handleSkillsChange}
-                    placeholder="e.g., JavaScript, React, Python"
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem 1rem",
-                      border: errors.skills ? "2px solid #dc2626" : "1px solid #ddd",
-                      borderRadius: "0.5rem",
-                      fontSize: "1rem",
-                      outline: "none",
-                      boxSizing: "border-box"
-                    }}
-                  />
-                  {errors.skills && (
-                    <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                      <AlertCircle style={{ width: "1rem", height: "1rem" }} /> {errors.skills}
-                    </p>
-                  )}
-                  {/* Skills suggestions */}
-                  <div style={{ marginTop: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
-                    {skillSuggestions.slice(0, 8).map((skill) => (
-                      <button
-                        key={skill}
-                        type="button"
-                        onClick={() => addSkill(skill)}
-                        style={{
-                          padding: "0.25rem 0.5rem",
-                          backgroundColor: "#e9ecef",
-                          border: "1px solid #dee2e6",
-                          borderRadius: "0.25rem",
-                          fontSize: "0.75rem",
-                          cursor: "pointer",
-                          color: "#495057"
-                        }}
-                      >
-                        + {skill}
-                      </button>
-                    ))}
+              <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{user.name}</div>
+              <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>Referrer</div>
+              <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 14, display: "flex", flexDirection: "column", gap: 8, textAlign: "left" }}>
+                {[
+                  { icon: <Mail size={13} />, label: user.email },
+                  user.phone && { icon: <Phone size={13} />, label: user.phone },
+                  user.company && { icon: <Briefcase size={13} />, label: user.company },
+                  user.experience && { icon: <Award size={13} />, label: `${user.experience} yrs exp` },
+                ].filter(Boolean).map((item, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#475569" }}>
+                    <span style={{ color: O, flexShrink: 0 }}>{item.icon}</span>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.label}</span>
                   </div>
-                </div>
+                ))}
               </div>
-
-              {/* Experience & Company */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", marginBottom: "0.5rem", color: "#333" }}>
-                    Experience <span style={{ color: "#dc2626" }}>*</span>
-                  </label>
-                  <select
-                    name="experience"
-                    value={form.experience}
-                    onChange={handleInputChange}
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem 1rem",
-                      border: errors.experience ? "2px solid #dc2626" : "1px solid #ddd",
-                      borderRadius: "0.5rem",
-                      fontSize: "1rem",
-                      outline: "none",
-                      boxSizing: "border-box"
-                    }}
-                  >
-                    <option value="">Select Experience</option>
-                    <option value="fresher">Fresher (0-1 years)</option>
-                    <option value="1-3">1-3 years</option>
-                    <option value="3-5">3-5 years</option>
-                    <option value="5-8">5-8 years</option>
-                    <option value="8+">8+ years</option>
-                  </select>
-                  {errors.experience && (
-                    <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                      <AlertCircle style={{ width: "1rem", height: "1rem" }} /> {errors.experience}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", marginBottom: "0.5rem", color: "#333" }}>
-                    Current Company <span style={{ color: "#dc2626" }}>*</span>
-                  </label>
-                  <input
-                    type="text"
-                    name="company"
-                    value={form.company}
-                    onChange={handleInputChange}
-                    placeholder="Current company name"
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem 1rem",
-                      border: errors.company ? "2px solid #dc2626" : "1px solid #ddd",
-                      borderRadius: "0.5rem",
-                      fontSize: "1rem",
-                      outline: "none",
-                      boxSizing: "border-box"
-                    }}
-                  />
-                  {errors.company && (
-                    <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.25rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                      <AlertCircle style={{ width: "1rem", height: "1rem" }} /> {errors.company}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* LinkedIn URL */}
-              <div>
-                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", marginBottom: "0.5rem", color: "#333" }}>
-                  LinkedIn URL
-                </label>
-                <input
-                  type="url"
-                  name="linkedin"
-                  value={form.linkedin}
-                  onChange={handleInputChange}
-                  placeholder="https://linkedin.com/in/username"
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem 1rem",
-                    border: "1px solid #ddd",
-                    borderRadius: "0.5rem",
-                    fontSize: "1rem",
-                    outline: "none",
-                    boxSizing: "border-box"
-                  }}
-                />
-              </div>
-
-              {/* CV Upload */}
-              <div>
-                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", marginBottom: "0.5rem", color: "#333" }}>
-                  Upload CV/Resume <span style={{ color: "#dc2626" }}>*</span>
-                </label>
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  style={{
-                    border: errors.cv ? "2px solid #dc2626" : cvFile ? "2px solid #16a34a" : "2px dashed #ddd",
-                    borderRadius: "0.75rem",
-                    padding: "2rem",
-                    textAlign: "center",
-                    cursor: "pointer",
-                    backgroundColor: errors.cv ? "#fee2e2" : cvFile ? "#f0fdf4" : "#fafafa",
-                    transition: "all 0.3s"
-                  }}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  {cvFile ? (
-                    <div>
-                      <CheckCircle2 style={{ width: "2.5rem", height: "2.5rem", margin: "0 auto 0.5rem", color: "#16a34a" }} />
-                      <p style={{ color: "#16a34a", fontWeight: "600" }}>{cvFile.name}</p>
-                      <p style={{ fontSize: "0.875rem", color: "#666", marginTop: "0.25rem" }}>Click to change file</p>
-                    </div>
-                  ) : (
-                    <div>
-                      <Upload style={{ width: "2.5rem", height: "2.5rem", margin: "0 auto 0.5rem", color: "#999" }} />
-                      <p style={{ fontWeight: "600", color: "#333" }}>Click to upload CV</p>
-                      <p style={{ fontSize: "0.875rem", color: "#666", marginTop: "0.25rem" }}>PDF or DOC (max 5MB)</p>
-                    </div>
-                  )}
-                </div>
-                {errors.cv && (
-                  <p style={{ color: "#dc2626", fontSize: "0.875rem", marginTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.25rem" }}>
-                    <AlertCircle style={{ width: "1rem", height: "1rem" }} /> {errors.cv}
-                  </p>
-                )}
-              </div>
-
-              {/* Submit Button */}
-              <button
-                onClick={submit}
-                disabled={loading}
-                style={{
-                  width: "100%",
-                  padding: "1rem",
-                  backgroundColor: loading ? "#9ca3af" : "#f97316",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "0.5rem",
-                  fontSize: "1rem",
-                  fontWeight: "600",
-                  cursor: loading ? "not-allowed" : "pointer",
-                  transition: "all 0.3s",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "0.5rem"
-                }}
-                onMouseEnter={(e) => { if (!loading) e.target.style.backgroundColor = "#ea580c"; }}
-                onMouseLeave={(e) => { if (!loading) e.target.style.backgroundColor = "#f97316"; }}
-              >
-                <Upload style={{ width: "1rem", height: "1rem" }} />
-                {loading ? "Submitting..." : "Submit Referral"}
-              </button>
-            </form>
-          </div>
-        )}
-
-        {/* REFERRED CANDIDATES LIST */}
-        <div style={{ marginTop: "2rem" }}>
-          <h2 style={{ fontSize: "1.5rem", fontWeight: "bold", marginBottom: "1rem" }}>
-            Your Referred Candidates
-          </h2>
-
-          {referrals.length === 0 ? (
-            <div style={{
-              textAlign: "center",
-              padding: "3rem",
-              backgroundColor: "#f8f9fa",
-              borderRadius: "0.75rem",
-              border: "1px solid #e9ecef"
-            }}>
-              <Users style={{ width: "3rem", height: "3rem", margin: "0 auto 1rem", color: "#6c757d" }} />
-              <p style={{ color: "#6c757d", fontSize: "1.1rem" }}>No candidates referred yet</p>
-              <p style={{ color: "#6c757d", fontSize: "0.9rem", marginTop: "0.5rem" }}>
-                Click "Refer Candidate" to get started!
-              </p>
             </div>
-          ) : (
-            <div style={{ display: "grid", gap: "1rem" }}>
-              {referrals.map((referral) => (
-                <div key={referral.id} style={{
-                  backgroundColor: "#f8f9fa",
-                  borderRadius: "0.75rem",
-                  border: "1px solid #e9ecef",
-                  padding: "1.5rem",
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto",
-                  gap: "1rem",
-                  alignItems: "center"
-                }}>
-                  <div>
-                    <h3 style={{ fontSize: "1.1rem", fontWeight: "600", marginBottom: "0.5rem" }}>
-                      {referral.name}
-                    </h3>
-                    <p style={{ color: "#666", marginBottom: "0.25rem" }}>{referral.email}</p>
-                    <p style={{ color: "#666", marginBottom: "0.25rem" }}>{referral.phone}</p>
-                    <p style={{ color: "#666", fontSize: "0.9rem" }}>
-                      {referral.company} • {referral.experience} • {referral.status}
-                    </p>
-                    {referral.skills && (
-                      <div style={{ marginTop: "0.5rem" }}>
-                        <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "0.25rem" }}>Skills:</p>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
-                          {Array.isArray(referral.skills) ? referral.skills.map((skill, index) => (
-                            <span key={index} style={{
-                              backgroundColor: "#e9ecef",
-                              padding: "0.25rem 0.5rem",
-                              borderRadius: "0.25rem",
-                              fontSize: "0.8rem",
-                              color: "#495057"
-                            }}>
-                              {skill}
-                            </span>
-                          )) : (
-                            <span style={{
-                              backgroundColor: "#e9ecef",
-                              padding: "0.25rem 0.5rem",
-                              borderRadius: "0.25rem",
-                              fontSize: "0.8rem",
-                              color: "#495057"
-                            }}>
-                              {referral.skills}
-                            </span>
-                          )}
+          )}
+
+          {/* Nav links */}
+          {[
+            { id: "dashboard", label: "Dashboard", icon: BarChart2 },
+            { id: "refer", label: "Refer a Candidate", icon: Plus },
+            { id: "referrals", label: "My Referrals", icon: Users },
+          ].map(({ id, label, icon: Icon }) => (
+            <button key={id} onClick={() => setTab(id)}
+              style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderRadius: 10, border: "none", backgroundColor: tab === id ? O_LITE : "transparent", color: tab === id ? O : "#475569", fontSize: 14, fontWeight: tab === id ? 700 : 500, cursor: "pointer", fontFamily: "inherit", borderLeft: `3px solid ${tab === id ? O : "transparent"}` }}>
+              <Icon size={16} /> {label}
+            </button>
+          ))}
+        </div>
+
+        {/* MAIN CONTENT */}
+        <div>
+          {/* DASHBOARD TAB */}
+          {tab === "dashboard" && (
+            <div>
+              <div style={{ marginBottom: 28 }}>
+                <h1 style={{ fontSize: 26, fontWeight: 700, margin: "0 0 6px" }}>Welcome back, {user?.name?.split(" ")[0] || "Referrer"} 👋</h1>
+                <p style={{ fontSize: 15, color: "#64748b", margin: 0 }}>Here's an overview of your referral activity</p>
+              </div>
+
+              {/* Stat cards */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
+                {stats.map(({ label, value, icon: Icon, color, bg }) => (
+                  <div key={label} style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "20px 22px" }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 11, backgroundColor: bg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+                      <Icon size={20} color={color} />
+                    </div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: "#0f172a", lineHeight: 1, marginBottom: 6 }}>{loading ? "—" : value}</div>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 500 }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Recent referrals */}
+              <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, overflow: "hidden" }}>
+                <div style={{ padding: "18px 24px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <TrendingUp size={17} color={O} />
+                    <span style={{ fontSize: 16, fontWeight: 700 }}>Recent Referrals</span>
+                  </div>
+                  <button onClick={() => setTab("referrals")} style={{ fontSize: 13, color: O, background: "none", border: "none", cursor: "pointer", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+                    View all <ChevronRight size={14} />
+                  </button>
+                </div>
+                {loading ? (
+                  <div style={{ padding: "48px", textAlign: "center", color: "#94a3b8" }}>Loading...</div>
+                ) : referrals.length === 0 ? (
+                  <div style={{ padding: "48px", textAlign: "center" }}>
+                    <Users size={40} color="#E5E7EB" style={{ margin: "0 auto 12px", display: "block" }} />
+                    <p style={{ color: "#94a3b8", fontSize: 15, margin: "0 0 16px" }}>No referrals yet. Start by referring a candidate!</p>
+                    <button onClick={() => setTab("refer")} style={{ padding: "10px 24px", backgroundColor: O, color: "#fff", border: "none", borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                      Refer a Candidate
+                    </button>
+                  </div>
+                ) : referrals.slice(0, 5).map(r => {
+                  const sc = STATUS_COLORS[r.referral_status || r.status] || STATUS_COLORS.pending;
+                  return (
+                    <div key={r.id} style={{ padding: "16px 24px", borderBottom: `1px solid #F8FAFC`, display: "flex", alignItems: "center", gap: 16 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", backgroundColor: O_LITE, color: O, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
+                        {(r.name || "?").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{r.name}</div>
+                        <div style={{ fontSize: 12, color: "#94a3b8" }}>{r.company} · {r.experience} yrs</div>
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 999, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, whiteSpace: "nowrap" }}>
+                        {statusLabel(r.referral_status || r.status)}
+                      </span>
+                      <span style={{ fontSize: 12, color: "#94a3b8", whiteSpace: "nowrap" }}>{timeAgo(r.created_at)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* REFERRALS TAB */}
+          {tab === "referrals" && (
+            <div>
+              <div style={{ marginBottom: 24 }}>
+                <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 6px" }}>My Referrals</h2>
+                <p style={{ fontSize: 14, color: "#64748b", margin: 0 }}>All candidates you have referred</p>
+              </div>
+              {loading ? (
+                <div style={{ padding: "48px", textAlign: "center", color: "#94a3b8", backgroundColor: "#fff", borderRadius: 16, border: `1.5px solid ${BORDER}` }}>Loading...</div>
+              ) : referrals.length === 0 ? (
+                <div style={{ padding: "48px", textAlign: "center", backgroundColor: "#fff", borderRadius: 16, border: `1.5px solid ${BORDER}` }}>
+                  <p style={{ color: "#94a3b8", fontSize: 15, margin: "0 0 16px" }}>No referrals yet.</p>
+                  <button onClick={() => setTab("refer")} style={{ padding: "10px 24px", backgroundColor: O, color: "#fff", border: "none", borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Refer a Candidate</button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {referrals.map(r => {
+                    const sc = STATUS_COLORS[r.referral_status || r.status] || STATUS_COLORS.pending;
+                    return (
+                      <div key={r.id} style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderLeft: `4px solid ${O}`, borderRadius: 14, padding: "20px 24px" }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div style={{ width: 44, height: 44, borderRadius: "50%", backgroundColor: O_LITE, color: O, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700 }}>
+                              {(r.name || "?").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 16, fontWeight: 700 }}>{r.name}</div>
+                              <div style={{ fontSize: 13, color: "#64748b" }}>{r.email}</div>
+                            </div>
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 600, padding: "5px 14px", borderRadius: 999, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}` }}>
+                            {statusLabel(r.referral_status || r.status)}
+                          </span>
                         </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+                          {[
+                            { icon: <Phone size={13} />, label: "Phone", value: r.phone },
+                            { icon: <Briefcase size={13} />, label: "Company", value: r.company },
+                            { icon: <Award size={13} />, label: "Experience", value: r.experience ? `${r.experience} years` : null },
+                          ].filter(f => f.value).map((f, i) => (
+                            <div key={i} style={{ backgroundColor: "#F8FAFC", borderRadius: 9, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ color: O }}>{f.icon}</span>
+                              <div>
+                                <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase" }}>{f.label}</div>
+                                <div style={{ fontSize: 13, fontWeight: 600 }}>{f.value}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {r.linkedin && (
+                          <a href={r.linkedin} target="_blank" rel="noreferrer"
+                            style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 12, fontSize: 13, color: "#1d4ed8", textDecoration: "none", fontWeight: 500 }}>
+                            <ExternalLink size={14} /> View LinkedIn
+                          </a>
+                        )}
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 10 }}>Referred {timeAgo(r.created_at)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* REFER TAB */}
+          {tab === "refer" && (
+            <div>
+              <div style={{ marginBottom: 24 }}>
+                <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 6px" }}>Refer a Candidate</h2>
+                <p style={{ fontSize: 14, color: "#64748b", margin: 0 }}>Help us find the best talent for great opportunities</p>
+              </div>
+
+              <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 18, padding: "32px 36px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 18 }}>
+                  <InputField label="Candidate Name" name="name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Full name" required />
+                  <InputField label="Email Address" name="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="email@example.com" type="email" required />
+                  <InputField label="Phone" name="phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="10-digit number" required />
+                  <InputField label="Years of Experience" name="experience" value={form.experience} onChange={e => setForm({ ...form, experience: e.target.value })} placeholder="e.g. 5" type="number" required />
+                  <InputField label="Current Company" name="company" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} placeholder="Company name" required />
+                  <InputField label="Skills (comma separated)" name="skills" value={form.skills} onChange={e => setForm({ ...form, skills: e.target.value })} placeholder="React, Node.js, Python" required />
+                  <InputField label="Industry" name="industry" value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} placeholder="e.g. Technology" />
+                  <InputField label="Department" name="department" value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} placeholder="e.g. Engineering" />
+                </div>
+                <div style={{ marginBottom: 18 }}>
+                  <InputField label="LinkedIn Profile URL" name="linkedin" value={form.linkedin} onChange={e => setForm({ ...form, linkedin: e.target.value })} placeholder="https://linkedin.com/in/..." />
+                </div>
+
+                {/* CV Upload */}
+                <div style={{ marginBottom: 24 }}>
+                  <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                    Upload CV/Resume <span style={{ color: "#ef4444" }}>*</span>
+                  </label>
+                  <div
+                    style={{ border: `2px dashed ${form.cv ? O : "#E5E7EB"}`, borderRadius: 12, padding: "28px", textAlign: "center", cursor: "pointer", backgroundColor: form.cv ? O_LITE : "#FAFAFA", transition: "all 0.2s" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.backgroundColor = O_LITE; }}
+                    onMouseLeave={e => { if (!form.cv) { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.backgroundColor = "#FAFAFA"; } }}
+                    onClick={() => document.getElementById("cvInput").click()}
+                  >
+                    <Upload style={{ width: 28, height: 28, margin: "0 auto 8px", color: form.cv ? O : "#94a3b8" }} />
+                    {form.cv ? (
+                      <div>
+                        <p style={{ fontSize: 14, fontWeight: 600, color: O, margin: "0 0 4px" }}>✓ {form.cv.name}</p>
+                        <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>Click to change file</p>
+                      </div>
+                    ) : (
+                      <div>
+                        <p style={{ fontSize: 14, color: "#64748b", margin: "0 0 4px" }}>Click to upload CV</p>
+                        <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>PDF or DOC (max 5MB)</p>
                       </div>
                     )}
                   </div>
-                  <div style={{ textAlign: "right" }}>
-                    <span style={{
-                      padding: "0.25rem 0.75rem",
-                      borderRadius: "1rem",
-                      fontSize: "0.8rem",
-                      fontWeight: "600",
-                      backgroundColor: referral.verified ? "#d4edda" : "#fff3cd",
-                      color: referral.verified ? "#155724" : "#856404"
-                    }}>
-                      {referral.verified ? "Verified" : "Pending"}
-                    </span>
-                  </div>
+                  <input id="cvInput" type="file" accept=".pdf,.doc,.docx" onChange={e => setForm({ ...form, cv: e.target.files[0] })} style={{ display: "none" }} />
                 </div>
-              ))}
+
+                <div style={{ display: "flex", gap: 12 }}>
+                  <button onClick={() => setTab("dashboard")} style={{ padding: "12px 24px", border: `1.5px solid ${BORDER}`, borderRadius: 10, backgroundColor: "#fff", color: "#475569", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                  <button onClick={submit} disabled={submitting}
+                    style={{ flex: 1, padding: "12px 24px", backgroundColor: submitting ? O_LITE : O, color: submitting ? O : "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: submitting ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: submitting ? "none" : "0 4px 14px rgba(232,119,34,0.28)" }}>
+                    {submitting ? "Submitting..." : <><span>Submit Referral</span><ArrowRight size={16} /></>}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
-
-        {/* Success Message */}
-        {submitted && (
-          <div style={{
-            position: "fixed",
-            top: "20px",
-            right: "20px",
-            padding: "1.5rem",
-            backgroundColor: "#f0fdf4",
-            border: "1px solid #86efac",
-            borderRadius: "0.75rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.75rem",
-            color: "#16a34a",
-            zIndex: 1000,
-            boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)"
-          }}>
-            <CheckCircle2 style={{ width: "1.5rem", height: "1.5rem", flexShrink: 0 }} />
-            <div>
-              <p style={{ fontWeight: "600" }}>Referral Submitted!</p>
-              <p style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>We'll review the candidate soon.</p>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
