@@ -345,17 +345,19 @@ export default function CandidateDetailsPage() {
             </div>
           </div>
 
-          {/* Source badge */}
-          <div style={{ background: "#fafafa", border: "1px solid #e5e7eb", borderRadius: 14, padding: "16px 20px" }}>
-            <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em" }}>Source</p>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#f0f4ff", color: "#4338ca", padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 500 }}>
-              <Upload size={12} />
-              Bulk Upload
-            </span>
-            <p style={{ margin: "10px 0 0", fontSize: 12, color: "#9ca3af" }}>
-              This candidate was bulk uploaded and was not referred by anyone.
-            </p>
-          </div>
+          {/* Source badge - only show if NOT referred */}
+          {!candidateData.referrer_id && (
+            <div style={{ background: "#fafafa", border: "1px solid #e5e7eb", borderRadius: 14, padding: "16px 20px" }}>
+              <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 600, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em" }}>Source</p>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#f0f4ff", color: "#4338ca", padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 500 }}>
+                <Upload size={12} />
+                Bulk Upload
+              </span>
+              <p style={{ margin: "10px 0 0", fontSize: 12, color: "#9ca3af" }}>
+                This candidate was added via bulk upload and was not referred.
+              </p>
+            </div>
+          )}
 
           {/* Referrer */}
           {candidateData.referrer_id && (
