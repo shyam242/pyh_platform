@@ -226,6 +226,17 @@ export default function AdminDashboard() {
     }
   };
 
+  const fetchPendingRecruiters = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/admin/dashboard`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+      });
+      setPendingRecruiters(response.data.pendingRecruiters || []);
+    } catch (error) {
+      showError("Failed to load pending recruiters");
+    }
+  };
+
   const handleApproveRecruiter = async (recruiterId) => {
     try {
       const token = localStorage.getItem("token");
@@ -582,6 +593,7 @@ export default function AdminDashboard() {
                     { id: "overview", label: "Overview" },
                     { id: "candidates", label: "Candidates" },
                     { id: "manage-status", label: "Candidate Status" },
+                    { id: "pending-recruiters", label: "⏳ Pending Recruiters" },
                     { id: "recruiters", label: "Approved Recruiters" },
                     { id: "incentives", label: "Incentives" },
                     { id: "jobs-list", label: "All Jobs" },
@@ -598,6 +610,7 @@ export default function AdminDashboard() {
                         setDropdownOpen(false);
                         if (item.id === "incentives") fetchReferrers();
                         if (item.id === "recruiters") fetchApprovedRecruiters();
+                        if (item.id === "pending-recruiters") fetchPendingRecruiters();
                         if (item.id === "jobs-list") fetchJobs();
                         if (item.id === "manage-status") {
                           fetchBulkCandidates();
@@ -748,6 +761,45 @@ export default function AdminDashboard() {
         )}
 
         {/* RECRUITERS TAB */}
+        {activeTab === "pending-recruiters" && (
+          <div>
+            <div style={{ marginBottom: "1.5rem" }}>
+              <h2 style={{ fontSize: "1.5rem", fontWeight: "700", margin: "0 0 4px" }}>Pending Recruiter Approvals</h2>
+              <p style={{ fontSize: "0.9rem", color: "#64748b", margin: 0 }}>Review and approve or reject recruiter registrations</p>
+            </div>
+            {pendingRecruiters.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "3rem", backgroundColor: "#fff", borderRadius: "12px", border: "1px solid #e5e7eb" }}>
+                <p style={{ color: "#94a3b8", fontSize: "1rem", margin: 0 }}>No pending recruiter approvals 🎉</p>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {pendingRecruiters.map(recruiter => (
+                  <div key={recruiter.id} style={{ backgroundColor: "#fff", border: "1.5px solid #e5e7eb", borderLeft: "4px solid #f59e0b", borderRadius: "14px", padding: "20px 24px", display: "flex", alignItems: "center", gap: "16px" }}>
+                    <div style={{ width: 48, height: 48, borderRadius: "50%", backgroundColor: "#FFF7ED", color: "#E87722", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, flexShrink: 0 }}>
+                      {(recruiter.name || "R").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "15px", fontWeight: "700", marginBottom: "2px" }}>{recruiter.name}</div>
+                      <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "4px" }}>{recruiter.email} {recruiter.phone ? `· ${recruiter.phone}` : ""}</div>
+                      {recruiter.company_name && <div style={{ fontSize: "12px", color: "#94a3b8" }}>🏢 {recruiter.company_name}{recruiter.company_website ? ` · ${recruiter.company_website}` : ""}</div>}
+                    </div>
+                    <div style={{ display: "flex", gap: "10px", flexShrink: 0 }}>
+                      <button onClick={() => { handleApproveRecruiter(recruiter.id); setTimeout(() => fetchPendingRecruiters(), 800); }}
+                        style={{ padding: "8px 20px", backgroundColor: "#3B6D11", color: "#fff", border: "none", borderRadius: "9px", fontSize: "13px", fontWeight: "700", cursor: "pointer", fontFamily: "inherit" }}>
+                        ✓ Approve
+                      </button>
+                      <button onClick={() => { handleRejectRecruiter(recruiter.id); setTimeout(() => fetchPendingRecruiters(), 800); }}
+                        style={{ padding: "8px 20px", backgroundColor: "#fff", color: "#dc2626", border: "1.5px solid #dc2626", borderRadius: "9px", fontSize: "13px", fontWeight: "700", cursor: "pointer", fontFamily: "inherit" }}>
+                        ✕ Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {activeTab === "recruiters" && (
           <div style={{
             backgroundColor: "#ffffff",
