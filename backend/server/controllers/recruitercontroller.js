@@ -106,23 +106,26 @@ export const downloadReferralCv = async (req, res) => {
     const { cv_file, name } = result.rows[0];
 
     if (!cv_file) {
-      return res.status(404).json({ error: "CV file not found for this referral" });
+      return res.status(404).json({ error: "No CV uploaded for this candidate" });
+    }
+
+    // If cv_file is a URL (Supabase or external), redirect to it
+    if (cv_file.startsWith("http://") || cv_file.startsWith("https://")) {
+      return res.redirect(cv_file);
     }
 
     const filePath = path.join(__dirname, "../../uploads/cv", cv_file);
 
-    // Check if file exists
     if (!fs.existsSync(filePath)) {
       console.error("File not found at:", filePath);
-      return res.status(404).json({ error: "CV file not found on server" });
+      return res.status(404).json({ 
+        error: "CV file not available. This may have been uploaded before the server was redeployed. Please ask the referrer to re-upload the CV." 
+      });
     }
 
-    // Set headers and send file
     res.setHeader("Content-Disposition", `attachment; filename="${name}-CV.pdf"`);
     res.download(filePath, (err) => {
-      if (err) {
-        console.error("Error downloading file:", err);
-      }
+      if (err) console.error("Error downloading file:", err);
     });
   } catch (error) {
     console.error("Error downloading CV:", error);
