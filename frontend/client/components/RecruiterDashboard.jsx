@@ -279,7 +279,7 @@ export default function RecruiterDashboard() {
                         <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name}</div>
                         <div style={{ fontSize: 12, color: "#94a3b8" }}>{c.email}</div>
                       </div>
-                      {c.referrer_name && <span style={{ fontSize: 11, color: O, fontWeight: 500 }}>via {c.referrer_name}</span>}
+                      {c.referrer_name && <span style={{ fontSize: 11, color: O, fontWeight: 600, backgroundColor: O_LITE, padding: "2px 9px", borderRadius: 6, border: `1px solid ${O_MID}` }}>Referred</span>}
                       <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 999, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, whiteSpace: "nowrap" }}>{sc.label}</span>
                       <ChevronRight size={14} color="#94a3b8" />
                     </div>
