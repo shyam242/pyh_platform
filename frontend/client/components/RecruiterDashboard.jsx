@@ -149,6 +149,7 @@ export default function RecruiterDashboard() {
   };
 
 
+  const combined = [
     ...data.map(c => ({ ...c, is_bulk: false })),
     ...bulkCandidates.map(c => ({ ...c, is_bulk: true })),
   ];
