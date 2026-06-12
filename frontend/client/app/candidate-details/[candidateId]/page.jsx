@@ -21,6 +21,17 @@ export default function CandidateDetailsPage() {
 
   useEffect(() => { fetchCandidateDetails(); }, [candidateId]);
 
+  // Fire-and-forget — never blocks the UI
+  const trackView = (name, type = "profile_view") => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    fetch(`${API_BASE_URL}/api/recruiter/track-view`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ candidateId: Number(candidateId), candidateName: name, viewType: type }),
+    }).catch(() => {});
+  };
+
   const fetchCandidateDetails = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -28,7 +39,10 @@ export default function CandidateDetailsPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to fetch candidate details");
-      setCandidateData(await res.json());
+      const data = await res.json();
+      setCandidateData(data);
+      // Track profile view as soon as details load
+      trackView(data.name, "profile_view");
     } catch (err) {
       showError(err.message || "Failed to load candidate details");
       setTimeout(() => router.back(), 2000);
@@ -55,6 +69,8 @@ export default function CandidateDetailsPage() {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
+      // Track CV download
+      trackView(candidateData.name, "candidate_cv");
       showSuccess("CV downloaded!");
     } catch (err) {
       showError(err.message || "Download failed");
