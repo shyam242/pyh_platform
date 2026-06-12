@@ -54,6 +54,8 @@ export default function CandidateProfilePage() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [resume, setResume] = useState(null);
+  const [parsingProjects, setParsingProjects] = useState(false);
+  const [parsedProjects, setParsedProjects] = useState(null);
   const [skills, setSkills] = useState([]);
   const [customSkill, setCustomSkill] = useState("");
   const [verifyLoading, setVerifyLoading] = useState(false);
@@ -72,9 +74,30 @@ export default function CandidateProfilePage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to fetch profile");
-      setProfile(await res.json());
+      const data = await res.json();
+      setProfile(data);
+      if (data.parsed_projects) {
+        try { setParsedProjects(typeof data.parsed_projects === "string" ? JSON.parse(data.parsed_projects) : data.parsed_projects); }
+        catch {}
+      }
     } catch (err) { showError(err.message || "Failed to load profile"); }
     finally { setLoading(false); }
+  };
+
+  const parseProjects = async () => {
+    setParsingProjects(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/api/profile/parse-projects`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to parse projects");
+      setParsedProjects(data.projects || []);
+      showSuccess(`Found ${data.total_projects_found || data.projects?.length || 0} project(s) in your resume!`);
+    } catch (err) { showError(err.message); }
+    finally { setParsingProjects(false); }
   };
 
   const toggleSkill = s => setSkills(p => p.includes(s) ? p.filter(x => x !== s) : [...p, s]);
@@ -315,7 +338,43 @@ export default function CandidateProfilePage() {
               )}
             </Section>
 
-            {/* Update resume */}
+            {/* Project Parsing */}
+            <Section title="Parse my projects" icon={<Sparkles size={16} />}>
+              <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 14px", lineHeight: 1.6 }}>
+                Let AI extract the projects from your resume so recruiters can find you when searching by project/technology.
+              </p>
+              {!profile.resume_file_path ? (
+                <p style={{ fontSize: 13, color: "#94a3b8", fontStyle: "italic" }}>Upload a resume first to enable project parsing.</p>
+              ) : (
+                <button onClick={parseProjects} disabled={parsingProjects}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px", backgroundColor: parsingProjects ? O_LITE : O, color: parsingProjects ? O : "#fff", border: "none", borderRadius: 9, fontSize: 13, fontWeight: 700, cursor: parsingProjects ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+                  <Sparkles size={14} /> {parsingProjects ? "Parsing..." : parsedProjects ? "Re-parse Projects" : "Parse My Projects"}
+                </button>
+              )}
+
+              {parsedProjects && parsedProjects.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 18 }}>
+                  {parsedProjects.map((p, i) => (
+                    <div key={i} style={{ backgroundColor: "#F8FAFC", border: "0.5px solid #E5E7EB", borderRadius: 12, padding: "14px 16px" }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{p.title}</div>
+                      <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>{p.description}</div>
+                      {p.role && <div style={{ fontSize: 12, color: "#475569", marginBottom: 6 }}><b>Role:</b> {p.role}</div>}
+                      {p.impact && <div style={{ fontSize: 12, color: "#3B6D11", marginBottom: 6 }}><b>Impact:</b> {p.impact}</div>}
+                      {p.technologies?.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                          {p.technologies.map((t, j) => (
+                            <span key={j} style={{ fontSize: 11, backgroundColor: "#EFF6FF", color: "#1d4ed8", padding: "2px 9px", borderRadius: 6, fontWeight: 500 }}>{t}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {parsedProjects && parsedProjects.length === 0 && (
+                <p style={{ fontSize: 13, color: "#94a3b8", fontStyle: "italic", marginTop: 12 }}>No distinct projects found in your resume.</p>
+              )}
+            </Section>
             <Section title="Update resume and skills" icon={<Upload size={16} />}>
               {/* Resume upload */}
               <div
