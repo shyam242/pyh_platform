@@ -15,6 +15,8 @@ import {
   getResumeViewStats
 } from "../controllers/recruitercontroller.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { analyzeCandidate, matchJD } from "../controllers/aiController.js";
+import { jdUpload, uploadJD, filterCandidates, bulkAnalyze, parseProjects, searchByProjects } from "../controllers/jdMatchController.js";
 import { checkRecruiterApproved } from "../middleware/recruiterMiddleware.js";
 
 const router = express.Router();
@@ -45,5 +47,14 @@ router.get("/:referralId/cv/download", protect, checkRecruiterApproved, download
 router.get("/candidate/:userId/resume/download", protect, checkRecruiterApproved, downloadCandidateResume);
 router.post("/track-view", protect, checkRecruiterApproved, trackResumeView);
 router.get("/resume-view-stats", protect, getResumeViewStats);
+
+router.post("/ai/analyze/:referralId", protect, checkRecruiterApproved, analyzeCandidate);
+router.post("/ai/match-jd/:referralId", protect, checkRecruiterApproved, matchJD);
+
+// Bulk JD-CV match flow
+router.post("/jd/upload", protect, checkRecruiterApproved, jdUpload.single("jd_file"), uploadJD);
+router.post("/jd/filter-candidates", protect, checkRecruiterApproved, filterCandidates);
+router.post("/jd/bulk-analyze", protect, checkRecruiterApproved, bulkAnalyze);
+router.get("/projects/search", protect, checkRecruiterApproved, searchByProjects);
 
 export default router;
