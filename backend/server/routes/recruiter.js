@@ -45,7 +45,7 @@ router.post("/update", protect, checkRecruiterApproved, updateStatus);
 router.post("/verify", protect, checkRecruiterApproved, upload.single("resume"), verifyProfile);
 router.get("/:referralId/cv/download", protect, checkRecruiterApproved, downloadReferralCv);
 router.get("/candidate/:userId/resume/download", protect, checkRecruiterApproved, downloadCandidateResume);
-router.post("/track-view", protect, trackResumeView); // No approval gate — track all recruiters
+router.post("/track-view", protect, trackResumeView);
 router.get("/resume-view-stats", protect, getResumeViewStats);
 
 router.post("/ai/analyze/:referralId", protect, checkRecruiterApproved, analyzeCandidate);
