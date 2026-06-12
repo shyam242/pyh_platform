@@ -6,7 +6,7 @@ import {
   Download, Check, Pause, XCircle, Users, CheckCircle2,
   Search, Filter, X, LogOut, Building2, Briefcase,
   TrendingUp, Bell, ChevronRight, Eye, Clock,
-  UserCheck, Star, BarChart2, FileText, Mail, Phone
+  UserCheck, Star, BarChart2, FileText, Mail, Phone, Sparkles
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
@@ -45,6 +45,9 @@ export default function RecruiterDashboard() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [referredFilter, setReferredFilter] = useState("all");
   const [notifOpen, setNotifOpen] = useState(false);
+  const [projectQuery, setProjectQuery] = useState("");
+  const [projectResults, setProjectResults] = useState(null);
+  const [projectSearching, setProjectSearching] = useState(false);
   const notifRef = useRef(null);
 
   useEffect(() => {
@@ -130,7 +133,22 @@ export default function RecruiterDashboard() {
     } catch (err) { showError(err.message); }
   };
 
-  const combined = [
+  const searchProjects = async () => {
+    if (!projectQuery.trim()) return showError("Enter a project keyword or technology");
+    setProjectSearching(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/api/recruiter/projects/search?query=${encodeURIComponent(projectQuery)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Search failed");
+      setProjectResults(data.candidates);
+    } catch (err) { showError(err.message); }
+    finally { setProjectSearching(false); }
+  };
+
+
     ...data.map(c => ({ ...c, is_bulk: false })),
     ...bulkCandidates.map(c => ({ ...c, is_bulk: true })),
   ];
@@ -154,6 +172,7 @@ export default function RecruiterDashboard() {
     { id: "dashboard", label: "Dashboard", icon: BarChart2 },
     { id: "candidates", label: "Candidates", icon: Users },
     { id: "shortlisted", label: "Shortlisted", icon: Star },
+    { id: "project-search", label: "Search by Project", icon: Search },
   ];
 
   return (
@@ -213,6 +232,13 @@ export default function RecruiterDashboard() {
               )}
             </button>
           ))}
+
+          {/* JD-CV Match — link to dedicated page */}
+          <a href="/jd-match" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, textDecoration: "none", backgroundColor: "transparent", color: "#475569", fontSize: 13, fontWeight: 500, fontFamily: "inherit", borderLeft: "3px solid transparent", border: `1.5px dashed ${O_MID}`, marginTop: 4 }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = O_LITE; e.currentTarget.style.color = O; }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#475569"; }}>
+            <Sparkles size={15} /> JD ↔ CV Match <span style={{ marginLeft: "auto", fontSize: 9, backgroundColor: O, color: "#fff", borderRadius: 999, padding: "1px 6px", fontWeight: 700 }}>AI</span>
+          </a>
         </div>
 
         {/* MAIN */}
@@ -392,6 +418,72 @@ export default function RecruiterDashboard() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* PROJECT SEARCH TAB */}
+          {tab === "project-search" && (
+            <div>
+              <div style={{ marginBottom: 20 }}>
+                <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>Search Candidates by Project</h2>
+                <p style={{ fontSize: 13, color: "#64748b", margin: 0 }}>Find candidates based on AI-parsed projects from their resumes</p>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 10 }}>
+                  <Search size={16} color="#94a3b8" />
+                  <input value={projectQuery} onChange={e => setProjectQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && searchProjects()}
+                    placeholder="e.g. e-commerce, recommendation system, React Native, fintech..."
+                    style={{ flex: 1, border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", background: "transparent" }} />
+                </div>
+                <button onClick={searchProjects} disabled={projectSearching}
+                  style={{ padding: "12px 28px", backgroundColor: projectSearching ? O_LITE : O, color: projectSearching ? O : "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: projectSearching ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8 }}>
+                  <Sparkles size={15} /> {projectSearching ? "Searching..." : "Search"}
+                </button>
+              </div>
+
+              {projectResults === null && (
+                <div style={{ padding: "48px", textAlign: "center", backgroundColor: "#fff", borderRadius: 14, border: `1.5px solid ${BORDER}` }}>
+                  <Sparkles size={36} color="#E5E7EB" style={{ display: "block", margin: "0 auto 10px" }} />
+                  <p style={{ color: "#94a3b8", margin: 0 }}>Search candidates by what they've actually built — e.g. "payment gateway", "chatbot", "ML model"</p>
+                </div>
+              )}
+
+              {projectResults?.length === 0 && (
+                <div style={{ padding: "48px", textAlign: "center", backgroundColor: "#fff", borderRadius: 14, border: `1.5px solid ${BORDER}` }}>
+                  <p style={{ color: "#94a3b8", margin: 0 }}>No candidates found with projects matching "{projectQuery}"</p>
+                </div>
+              )}
+
+              {projectResults?.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {projectResults.map(c => (
+                    <div key={c.id} onClick={() => router.push(`/candidate-details/${c.id}`)}
+                      style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 14, padding: "16px 20px", cursor: "pointer" }}
+                      onMouseEnter={e => e.currentTarget.style.borderColor = O} onMouseLeave={e => e.currentTarget.style.borderColor = BORDER}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                        <div style={{ width: 38, height: 38, borderRadius: "50%", backgroundColor: O_LITE, color: O, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                          {getInitials(c.name)}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 700 }}>{c.name}</div>
+                          <div style={{ fontSize: 12, color: "#94a3b8" }}>{c.email} {c.experience ? `· ${c.experience} yrs` : ""}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {c.parsed_projects?.filter(p =>
+                          [p.title, p.description, ...(p.technologies || [])].join(" ").toLowerCase().includes(projectQuery.toLowerCase())
+                        ).map((p, i) => (
+                          <div key={i} style={{ backgroundColor: "#F8FAFC", borderRadius: 9, padding: "8px 12px" }}>
+                            <div style={{ fontSize: 13, fontWeight: 600 }}>{p.title}</div>
+                            <div style={{ fontSize: 12, color: "#64748b" }}>{p.description}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
