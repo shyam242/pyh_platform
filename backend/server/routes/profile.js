@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { createProfile, getUserProfile, updateUserProfile, uploadProfileImage, getBankDetails, updateBankDetails, createCandidateProfile, getCandidateProfile, updateCandidateProfile, verifyCandidateProfile, deleteCandidateProfile } from "../controllers/ProfileController.js";
+import { parseProjects } from "../controllers/jdMatchController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -113,5 +114,8 @@ router.post("/verify", protect, resumeUpload.single("file"), verifyCandidateProf
 
 // DELETE CANDIDATE PROFILE
 router.delete("/candidate", protect, deleteCandidateProfile);
+
+// PARSE PROJECTS FROM RESUME
+router.post("/parse-projects", protect, parseProjects);
 
 export default router;   // ⭐ VERY IMPORTANT
