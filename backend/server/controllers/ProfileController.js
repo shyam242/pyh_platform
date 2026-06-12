@@ -442,13 +442,13 @@ export const getCandidateProfile = async (req, res) => {
 
     // Attach referrer info if candidate was referred
     const referralResult = await pool.query(
-      `SELECT r.id as referral_id, r.referral_status, r.created_at as referred_at,
+      `SELECT r.id as referral_id, r.referral_status,
               u.name as referrer_name, u.email as referrer_email, u.phone as referrer_phone,
               u.company as referrer_company, u.linkedin_profile as referrer_linkedin
        FROM referrals r
        JOIN users u ON u.id = r.referrer_id
        WHERE r.email = $1
-       ORDER BY r.created_at DESC
+       ORDER BY r.id DESC
        LIMIT 1`,
       [profile.email]
     );
