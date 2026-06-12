@@ -15,6 +15,28 @@ import referralRoutes from "./routes/referral.js";
 import recruiterRoutes from "./routes/recruiter.js";
 import adminRoutes from "./routes/admin.js";
 import jobRoutes from "./routes/jobs.js";
+import pool from "./config/db.js";
+
+// Auto-create resume_views table if it doesn't exist
+const ensureResumeViewsTable = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS resume_views (
+        id SERIAL PRIMARY KEY,
+        recruiter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        candidate_id INTEGER,
+        candidate_name VARCHAR(255),
+        view_type VARCHAR(50) DEFAULT 'resume',
+        viewed_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_resume_views_recruiter ON resume_views(recruiter_id);
+      CREATE INDEX IF NOT EXISTS idx_resume_views_viewed_at ON resume_views(viewed_at);
+    `);
+    console.log("✓ resume_views table ready");
+  } catch (err) {
+    console.error("resume_views table setup error:", err.message);
+  }
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,4 +62,6 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/jobs", jobRoutes);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+ensureResumeViewsTable().then(() => {
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+});
