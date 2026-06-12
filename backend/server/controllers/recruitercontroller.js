@@ -243,7 +243,7 @@ export const getResumeViewStats = async (req, res) => {
         MAX(rv.viewed_at) as last_viewed_at
       FROM users u
       LEFT JOIN resume_views rv ON rv.recruiter_id = u.id
-      WHERE u.role = 'recruiter' AND u.is_recruiter_approved = true
+      WHERE u.role = 'recruiter'
       GROUP BY u.id, u.name, u.email, u.company_name
       ORDER BY total_views DESC
     `);
