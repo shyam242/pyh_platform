@@ -178,7 +178,25 @@ export const downloadCandidateResume = async (req, res) => {
 export const getReferralDetails = async (req, res) => {
   try {
     const { referralId } = req.params;
+    const sourceType = req.query.source_type || "referral";
 
+    // If coming from project-search, candidate is in users table not referrals
+    if (sourceType === "user") {
+      const result = await pool.query(
+        `SELECT id, name, email, phone, skills, experience, current_company_name,
+                current_location, preferred_location, notice_period,
+                current_ctc, expected_ctc, qualification, linkedin_profile as linkedin,
+                parsed_projects, role as current_role
+         FROM users WHERE id=$1 AND role='candidate'`,
+        [referralId]
+      );
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: "Candidate not found" });
+      }
+      return res.json({ ...result.rows[0], candidate_image_url: null, source_type: "user" });
+    }
+
+    // Default: look up in referrals table
     const result = await pool.query(
       `SELECT 
         r.*,
