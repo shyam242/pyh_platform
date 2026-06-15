@@ -50,6 +50,19 @@ export default function RecruiterDashboard() {
   const [projectSearching, setProjectSearching] = useState(false);
   const notifRef = useRef(null);
 
+  // Advanced filter state
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    location: "", preferredLocation: "", skills: "", experience: "",
+    position: "", noticePeriod: "", currentCompany: "", project: "",
+    education: "", degree: "", institute: "", gender: "",
+    candidateFreshness: "all", jobType: "", jobMode: "", industry: "",
+  });
+
+  const setFilter = (key, val) => setFilters(f => ({ ...f, [key]: val }));
+  const clearFilters = () => setFilters({ location: "", preferredLocation: "", skills: "", experience: "", position: "", noticePeriod: "", currentCompany: "", project: "", education: "", degree: "", institute: "", gender: "", candidateFreshness: "all", jobType: "", jobMode: "", industry: "" });
+  const activeFilterCount = Object.entries(filters).filter(([k, v]) => v && v !== "all").length;
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) { window.location.href = "/signin"; return; }
@@ -165,8 +178,39 @@ export default function RecruiterDashboard() {
     if (statusFilter !== "all" && c.status !== statusFilter) return false;
     if (referredFilter === "referred" && !c.referrer_name) return false;
     if (referredFilter === "not_referred" && c.referrer_name) return false;
-    if (!searchTerm) return true;
-    return [c.name, c.email, c.skills, c.company, c.referrer_name].filter(Boolean).join(" ").toLowerCase().includes(searchTerm.toLowerCase());
+    if (searchTerm && ![c.name, c.email, c.skills, c.company, c.referrer_name].filter(Boolean).join(" ").toLowerCase().includes(searchTerm.toLowerCase())) return false;
+    // Advanced filters
+    const f = filters;
+    const ilike = (field, val) => !val || (field || "").toLowerCase().includes(val.toLowerCase());
+    if (!ilike(c.current_location, f.location)) return false;
+    if (!ilike(c.preferred_location, f.preferredLocation)) return false;
+    if (!ilike(c.skills, f.skills)) return false;
+    if (!ilike(c.current_company_name || c.company, f.currentCompany)) return false;
+    if (!ilike(c.notice_period, f.noticePeriod)) return false;
+    if (!ilike(c.role || c.current_role, f.position)) return false;
+    if (!ilike(c.qualification || c.highest_qualification, f.education)) return false;
+    if (!ilike(c.qualification || c.highest_qualification, f.degree)) return false;
+    if (f.experience) {
+      const exp = parseFloat(c.experience);
+      const [min, max] = f.experience.split("-").map(Number);
+      if (!isNaN(exp) && !isNaN(min)) {
+        if (max ? (exp < min || exp > max) : exp < min) return false;
+      }
+    }
+    if (f.gender && c.gender && c.gender.toLowerCase() !== f.gender.toLowerCase()) return false;
+    if (f.institute && !ilike(c.institute || c.college, f.institute)) return false;
+    if (f.jobType && !ilike(c.job_type || c.employment_type, f.jobType)) return false;
+    if (f.jobMode && !ilike(c.work_mode || c.job_mode, f.jobMode)) return false;
+    if (f.industry && !ilike(c.industry, f.industry)) return false;
+    if (f.project) {
+      const projects = c.parsed_projects || [];
+      const pArr = typeof projects === "string" ? JSON.parse(projects) : projects;
+      const match = pArr.some(p =>
+        [p.title, p.description, ...(p.technologies || [])].join(" ").toLowerCase().includes(f.project.toLowerCase())
+      );
+      if (!match) return false;
+    }
+    return true;
   });
 
   const navItems = [
@@ -330,28 +374,124 @@ export default function RecruiterDashboard() {
                 <p style={{ fontSize: 13, color: "#64748b", margin: 0 }}>{filtered.length} candidates</p>
               </div>
 
-              {/* Filters */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 180px 180px", gap: 10, marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 10 }}>
+              {/* Search + Filter Bar */}
+              <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 10 }}>
                   <Search size={15} color="#94a3b8" />
                   <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search by name, skills, referrer..."
                     style={{ flex: 1, border: "none", outline: "none", fontSize: 13, fontFamily: "inherit", background: "transparent" }} />
                   {searchTerm && <button onClick={() => setSearchTerm("")} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}><X size={14} /></button>}
                 </div>
                 <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-                  style={{ padding: "10px 12px", border: `1.5px solid ${BORDER}`, borderRadius: 10, fontSize: 13, color: "#0f172a", fontFamily: "inherit", backgroundColor: "#fff", cursor: "pointer" }}>
+                  style={{ padding: "10px 12px", border: `1.5px solid ${BORDER}`, borderRadius: 10, fontSize: 13, color: "#0f172a", fontFamily: "inherit", backgroundColor: "#fff", cursor: "pointer", minWidth: 150 }}>
                   <option value="all">All statuses</option>
                   <option value="shortlist">Shortlisted</option>
                   <option value="hold">On Hold</option>
                   <option value="reject">Rejected</option>
                 </select>
                 <select value={referredFilter} onChange={e => setReferredFilter(e.target.value)}
-                  style={{ padding: "10px 12px", border: `1.5px solid ${BORDER}`, borderRadius: 10, fontSize: 13, color: "#0f172a", fontFamily: "inherit", backgroundColor: "#fff", cursor: "pointer" }}>
+                  style={{ padding: "10px 12px", border: `1.5px solid ${BORDER}`, borderRadius: 10, fontSize: 13, color: "#0f172a", fontFamily: "inherit", backgroundColor: "#fff", cursor: "pointer", minWidth: 150 }}>
                   <option value="all">All candidates</option>
                   <option value="referred">Referred only</option>
                   <option value="not_referred">Not referred</option>
                 </select>
+                <button onClick={() => setShowFilters(v => !v)}
+                  style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 16px", border: `1.5px solid ${showFilters ? O : BORDER}`, borderRadius: 10, backgroundColor: showFilters ? O_LITE : "#fff", color: showFilters ? O : "#475569", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", position: "relative" }}>
+                  <Filter size={15} /> Filters
+                  {activeFilterCount > 0 && <span style={{ backgroundColor: O, color: "#fff", borderRadius: 999, fontSize: 10, fontWeight: 700, padding: "1px 6px", marginLeft: 2 }}>{activeFilterCount}</span>}
+                </button>
               </div>
+
+              {/* Advanced Filter Panel */}
+              {showFilters && (() => {
+                const Sel = ({ label, val, onChange, opts }) => (
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 5 }}>{label}</label>
+                    <select value={val} onChange={e => onChange(e.target.value)}
+                      style={{ width: "100%", padding: "8px 10px", border: `1.5px solid ${BORDER}`, borderRadius: 8, fontSize: 12, color: "#0f172a", fontFamily: "inherit", backgroundColor: "#fff", cursor: "pointer" }}>
+                      <option value="">All</option>
+                      {opts.map(o => <option key={o.v || o} value={o.v || o}>{o.l || o}</option>)}
+                    </select>
+                  </div>
+                );
+                const Inp = ({ label, val, onChange, ph }) => (
+                  <div>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 5 }}>{label}</label>
+                    <input value={val} onChange={e => onChange(e.target.value)} placeholder={ph || ""}
+                      style={{ width: "100%", padding: "8px 10px", border: `1.5px solid ${BORDER}`, borderRadius: 8, fontSize: 12, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+                  </div>
+                );
+                return (
+                  <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 14, padding: "20px 24px", marginBottom: 16, boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>Advanced Filters</span>
+                      {activeFilterCount > 0 && <button onClick={clearFilters} style={{ fontSize: 12, color: O, background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Clear all ({activeFilterCount})</button>}
+                    </div>
+
+                    {/* Row 1: Location */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 16 }}>
+                      <Inp label="Current Location" val={filters.location} onChange={v => setFilter("location", v)} ph="e.g. Delhi, Mumbai..." />
+                      <Inp label="Preferred Location" val={filters.preferredLocation} onChange={v => setFilter("preferredLocation", v)} ph="e.g. Bangalore..." />
+                      <Inp label="Skills" val={filters.skills} onChange={v => setFilter("skills", v)} ph="e.g. React, Python..." />
+                    </div>
+
+                    {/* Row 2: Experience, Position, Notice */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 16 }}>
+                      <Sel label="Experience" val={filters.experience} onChange={v => setFilter("experience", v)}
+                        opts={[{v:"0-1",l:"0–1 yr (Fresher)"},{v:"1-3",l:"1–3 yrs"},{v:"3-5",l:"3–5 yrs"},{v:"5-8",l:"5–8 yrs"},{v:"8-12",l:"8–12 yrs"},{v:"12",l:"12+ yrs"}]} />
+                      <Inp label="Position / Role" val={filters.position} onChange={v => setFilter("position", v)} ph="e.g. Software Engineer..." />
+                      <Sel label="Notice Period" val={filters.noticePeriod} onChange={v => setFilter("noticePeriod", v)}
+                        opts={["Immediate","15 days","1 month","2 months","3 months","More than 3 months"]} />
+                    </div>
+
+                    {/* Row 3: Company, Project, Gender */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 16 }}>
+                      <Inp label="Current Company" val={filters.currentCompany} onChange={v => setFilter("currentCompany", v)} ph="e.g. Infosys, TCS..." />
+                      <Inp label="Project / Technology" val={filters.project} onChange={v => setFilter("project", v)} ph="e.g. React Native, ML..." />
+                      <Sel label="Gender" val={filters.gender} onChange={v => setFilter("gender", v)} opts={["Male","Female","Other"]} />
+                    </div>
+
+                    {/* Row 4: Education */}
+                    <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 16, marginBottom: 16 }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 12px" }}>Highest Education</p>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+                        <Sel label="Level" val={filters.education} onChange={v => setFilter("education", v)}
+                          opts={["Graduation","Post Graduation","Diploma","10th","12th","PhD","Certificate"]} />
+                        <Sel label="Degree" val={filters.degree} onChange={v => setFilter("degree", v)}
+                          opts={["BBA","BCom","BTech","BE","MBA","BA","MA","MTech","MSc","BSc","MCA","BCA","LLB","BPharm","MBBS","BDS","CA","CS","CFA"]} />
+                        <Sel label="Institute" val={filters.institute} onChange={v => setFilter("institute", v)}
+                          opts={["University of Lucknow","Delhi University","SRCC","BIT Mesra","AKTU","IIM Ahmedabad","IIM Bangalore","IIM Calcutta","IIT Bombay","IIT Delhi","IIT Kanpur","IIT Kharagpur","NMIMS","SIBM","Jaypee Institute of Information Technology","Calcutta University","MAKAUT West Bengal","Jadavpur University","SRM University","Shri Ram Swaroop Memorial University","BBD University","NIT Trichy","NIT Warangal","VIT Vellore","Amity University","BITS Pilani","Symbiosis","Christ University"]} />
+                      </div>
+                    </div>
+
+                    {/* Row 5: Job Preferences */}
+                    <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 16, marginBottom: 16 }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 12px" }}>Job Preferences</p>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+                        <Sel label="Job Type" val={filters.jobType} onChange={v => setFilter("jobType", v)}
+                          opts={["Full Time","Part Time","Temporary","Contract","Internship","Freelance","Other"]} />
+                        <Sel label="Work Mode" val={filters.jobMode} onChange={v => setFilter("jobMode", v)}
+                          opts={["On-site","Remote","Hybrid"]} />
+                        <Sel label="Industry" val={filters.industry} onChange={v => setFilter("industry", v)}
+                          opts={["IT Services & IT Consulting","Software Development","Human Resource Services","Banking & Finance","E-commerce","Healthcare","EdTech","Manufacturing","Marketing & Advertising","Legal Services","Real Estate","Logistics","Retail","Media & Entertainment","Telecom","Automotive","Government / PSU"]} />
+                      </div>
+                    </div>
+
+                    {/* Row 6: Candidates Freshness */}
+                    <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 16 }}>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 12px" }}>Candidate Freshness</p>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {[{v:"all",l:"All"},{v:"new",l:"New"},{v:"week",l:"This week"},{v:"month",l:"This month"}].map(opt => (
+                          <button key={opt.v} onClick={() => setFilter("candidateFreshness", opt.v)}
+                            style={{ padding: "6px 14px", borderRadius: 8, border: `1.5px solid ${filters.candidateFreshness === opt.v ? O : BORDER}`, backgroundColor: filters.candidateFreshness === opt.v ? O_LITE : "#fff", color: filters.candidateFreshness === opt.v ? O : "#475569", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                            {opt.l}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* List */}
               {loading ? (
@@ -461,7 +601,7 @@ export default function RecruiterDashboard() {
               {projectResults?.length > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                   {projectResults.map(c => (
-                    <div key={c.id} onClick={() => router.push(`/candidate-details/${c.id}`)}
+                    <div key={c.id} onClick={() => router.push(c.source_type === 'user' ? `/candidate-details/${c.id}?source_type=user` : `/candidate-details/${c.id}`)}
                       style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 14, padding: "16px 20px", cursor: "pointer" }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = O} onMouseLeave={e => e.currentTarget.style.borderColor = BORDER}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
