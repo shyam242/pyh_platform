@@ -14,6 +14,8 @@ export default function CandidateDetailsPage() {
   const router = useRouter();
   const params = useParams();
   const candidateId = params.candidateId;
+  const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const sourceType = searchParams ? (searchParams.get("source_type") || "referral") : "referral";
 
   const [candidateData, setCandidateData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -35,7 +37,7 @@ export default function CandidateDetailsPage() {
   const fetchCandidateDetails = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/api/recruiter/${candidateId}/details`, {
+      const res = await fetch(`${API_BASE_URL}/api/recruiter/${candidateId}/details?source_type=${sourceType}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error("Failed to fetch candidate details");
