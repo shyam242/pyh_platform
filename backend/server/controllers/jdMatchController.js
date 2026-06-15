@@ -423,6 +423,7 @@ export const searchByProjects = async (req, res) => {
       } catch { return false; }
     }).map(u => ({
       ...u,
+      source_type: "user",
       parsed_projects: typeof u.parsed_projects === "string" ? JSON.parse(u.parsed_projects) : u.parsed_projects,
     }));
 
