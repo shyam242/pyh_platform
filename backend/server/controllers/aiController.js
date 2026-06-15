@@ -2,7 +2,7 @@ import pool from "../config/db.js";
 import fetch from "node-fetch";
 
 const CLAUDE_API = "https://api.anthropic.com/v1/messages";
-const CLAUDE_MODEL = "claude-sonnet-4-20250514";
+const CLAUDE_MODEL = "claude-sonnet-4-5";
 
 const callClaude = async (prompt) => {
   const res = await fetch(CLAUDE_API, {
