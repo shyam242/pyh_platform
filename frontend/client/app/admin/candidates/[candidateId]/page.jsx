@@ -15,6 +15,8 @@ export default function AdminCandidateDetailsPage() {
   const [candidate, setCandidate] = useState(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [parsingProjects, setParsingProjects] = useState(false);
+  const [parsedProjects, setParsedProjects] = useState(null);
 
   useEffect(() => {
     if (candidateId) {
@@ -30,11 +32,35 @@ export default function AdminCandidateDetailsPage() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCandidate(response.data.candidate);
+      if (response.data.candidate?.parsed_projects) {
+        try {
+          const pp = response.data.candidate.parsed_projects;
+          setParsedProjects(typeof pp === "string" ? JSON.parse(pp) : pp);
+        } catch {}
+      }
     } catch (error) {
       showError("Failed to load candidate details");
       console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const parseProjects = async () => {
+    setParsingProjects(true);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.post(
+        `${API_BASE_URL}/api/admin/candidates/${candidateId}/parse-projects`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setParsedProjects(response.data.projects || []);
+      showSuccess(`Found ${response.data.total_projects_found || response.data.projects?.length || 0} project(s)!`);
+    } catch (error) {
+      showError(error.response?.data?.error || "Failed to parse projects");
+    } finally {
+      setParsingProjects(false);
     }
   };
 
@@ -388,6 +414,51 @@ export default function AdminCandidateDetailsPage() {
                 </button>
               </div>
             )}
+
+            {/* Parsed Projects Card */}
+            <div style={{ backgroundColor: "white", borderRadius: "1rem", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
+                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "700", color: "#0f172a" }}>Parsed Projects</h3>
+                <span style={{ fontSize: 10, backgroundColor: "#E87722", color: "#fff", borderRadius: 999, padding: "2px 8px", fontWeight: 700 }}>AI</span>
+              </div>
+
+              {!(candidate.resume_file_path || candidate.resume_url || candidate.resume) ? (
+                <p style={{ fontSize: 13, color: "#94a3b8", fontStyle: "italic", margin: 0 }}>No resume uploaded — candidate must upload a resume before projects can be parsed.</p>
+              ) : (
+                <button
+                  onClick={parseProjects}
+                  disabled={parsingProjects}
+                  style={{
+                    width: "100%", padding: "0.75rem", backgroundColor: parsingProjects ? "#fcd9b8" : "#E87722",
+                    color: "#fff", border: "none", borderRadius: "0.5rem", fontSize: "0.9rem", fontWeight: "600",
+                    cursor: parsingProjects ? "not-allowed" : "pointer", marginBottom: parsedProjects ? "1rem" : 0,
+                  }}
+                >
+                  {parsingProjects ? "Parsing..." : parsedProjects ? "Re-parse Projects" : "Parse Projects"}
+                </button>
+              )}
+
+              {parsedProjects && parsedProjects.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {parsedProjects.map((p, i) => (
+                    <div key={i} style={{ backgroundColor: "#F8FAFC", border: "1px solid #E5E7EB", borderRadius: 10, padding: "10px 12px" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 3 }}>{p.title}</div>
+                      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>{p.description}</div>
+                      {p.technologies?.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                          {p.technologies.map((t, j) => (
+                            <span key={j} style={{ fontSize: 10, backgroundColor: "#EFF6FF", color: "#1d4ed8", padding: "2px 7px", borderRadius: 5 }}>{t}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {parsedProjects && parsedProjects.length === 0 && (
+                <p style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic", margin: 0 }}>No projects found in resume.</p>
+              )}
+            </div>
 
             <div style={{ backgroundColor: "white", borderRadius: "1rem", padding: "1.5rem", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", position: "sticky", top: "2rem" }}>
               <h3 style={{ margin: "0 0 1rem", fontSize: "1.1rem", fontWeight: "700", color: "#0f172a" }}>Admin Actions</h3>
