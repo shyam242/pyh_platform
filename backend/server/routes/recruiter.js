@@ -16,7 +16,7 @@ import {
 } from "../controllers/recruitercontroller.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { analyzeCandidate, matchJD } from "../controllers/aiController.js";
-import { jdUpload, uploadJD, filterCandidates, bulkAnalyze, parseProjects, searchByProjects } from "../controllers/jdMatchController.js";
+import { jdUpload, uploadJD, filterCandidates, bulkAnalyze, parseProjects, searchByProjects, getMatchHistory, getCandidateMatchResult } from "../controllers/jdMatchController.js";
 import { checkRecruiterApproved } from "../middleware/recruiterMiddleware.js";
 
 const router = express.Router();
@@ -56,5 +56,7 @@ router.post("/jd/upload", protect, checkRecruiterApproved, jdUpload.single("jd_f
 router.post("/jd/filter-candidates", protect, checkRecruiterApproved, filterCandidates);
 router.post("/jd/bulk-analyze", protect, checkRecruiterApproved, bulkAnalyze);
 router.get("/projects/search", protect, checkRecruiterApproved, searchByProjects);
+router.get("/jd/match-history", protect, checkRecruiterApproved, getMatchHistory);
+router.get("/jd/match-result/:candidateId", protect, checkRecruiterApproved, getCandidateMatchResult);
 
 export default router;
