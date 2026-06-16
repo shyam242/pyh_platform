@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import {
   ArrowLeft, Mail, Phone, Briefcase, Award, Users, Building2,
   Download, MapPin, DollarSign, Clock, BookOpen, TrendingUp,
-  ExternalLink, FileText, User, AlertCircle, CheckCircle2, Upload
+  ExternalLink, FileText, User, AlertCircle, CheckCircle2, Upload, Sparkles
 } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
@@ -20,8 +20,22 @@ export default function CandidateDetailsPage() {
   const [candidateData, setCandidateData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [jdMatch, setJdMatch] = useState(null);
+  const [jdMatchLoading, setJdMatchLoading] = useState(true);
 
-  useEffect(() => { fetchCandidateDetails(); }, [candidateId]);
+  useEffect(() => { fetchCandidateDetails(); fetchCachedMatch(); }, [candidateId]);
+
+  const fetchCachedMatch = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/api/recruiter/jd/match-result/${candidateId}?source_type=${sourceType}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok && data.has_match) setJdMatch(data);
+    } catch {}
+    finally { setJdMatchLoading(false); }
+  };
 
   // Fire-and-forget — never blocks the UI
   const trackView = (name, type = "profile_view") => {
@@ -323,6 +337,29 @@ export default function CandidateDetailsPage() {
 
         {/* Right sidebar */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* Cached JD Match Score */}
+          {jdMatch && (
+            <div style={{ background: "#FFF3E8", border: "1.5px solid #FBBF7A", borderRadius: 14, padding: "18px 20px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+                <Sparkles size={14} color="#E87722" />
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: "#C2410C", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  JD Match Score{jdMatch.jd_match_data?.job_title ? ` — ${jdMatch.jd_match_data.job_title}` : ""}
+                </p>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ fontSize: 36, fontWeight: 700, color: "#E87722", lineHeight: 1 }}>{jdMatch.jd_match_score}</div>
+                <div>
+                  <div style={{ fontSize: 12, color: "#92400e" }}>
+                    Analyzed {jdMatch.jd_match_at ? new Date(jdMatch.jd_match_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : ""}
+                  </div>
+                  {jdMatch.jd_match_data?.why_shortlist?.length > 0 && (
+                    <div style={{ fontSize: 11, color: "#7c2d12", marginTop: 4 }}>{jdMatch.jd_match_data.why_shortlist[0]}</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Quick Links */}
           <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 14, padding: "20px" }}>
