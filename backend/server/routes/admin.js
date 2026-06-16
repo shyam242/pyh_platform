@@ -23,6 +23,7 @@ import {
   updateBulkCandidateStatus,
   getCandidateStatusStats
 } from "../controllers/adminController.js";
+import { adminParseProjects } from "../controllers/jdMatchController.js";
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -79,5 +80,8 @@ router.delete("/bulk-candidates/:candidateId", protect, deleteBulkCandidate);
 // CANDIDATE STATUS MANAGEMENT
 router.put("/bulk-candidates/:candidateId/status", protect, updateBulkCandidateStatus);
 router.get("/candidate-status-stats", protect, getCandidateStatusStats);
+
+// PROJECT PARSING (admin can trigger for any candidate)
+router.post("/candidates/:userId/parse-projects", protect, adminParseProjects);
 
 export default router;
