@@ -34,6 +34,10 @@ const scoreColor = score => {
 export default function JDMatchPage() {
   const router = useRouter();
   const [step, setStep] = useState(1); // 1: upload JD, 2: filters, 3: candidate list, 4: results
+  const [viewMode, setViewMode] = useState("new"); // new | history
+  const [history, setHistory] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyExpandedId, setHistoryExpandedId] = useState(null);
 
   // Step 1 - JD
   const [jdMode, setJdMode] = useState("text"); // text | file
@@ -157,6 +161,20 @@ export default function JDMatchPage() {
     .filter(r => r.weighted_score >= minScoreFilter)
     .sort((a, b) => sortBy === "score" ? b.weighted_score - a.weighted_score : a.name.localeCompare(b.name));
 
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/api/recruiter/jd/match-history`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load history");
+      setHistory(data);
+    } catch (err) { showError(err.message); }
+    finally { setHistoryLoading(false); }
+  };
+
   const Stepper = () => (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 28 }}>
       {[
@@ -195,11 +213,106 @@ export default function JDMatchPage() {
             <Sparkles size={18} color="#fff" />
           </div>
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>JD ↔ CV Match</h1>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <button onClick={() => setViewMode("new")}
+              style={{ padding: "8px 18px", borderRadius: 9, border: `1.5px solid ${viewMode === "new" ? O : BORDER}`, backgroundColor: viewMode === "new" ? O_LITE : "#fff", color: viewMode === "new" ? O : "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+              New Match
+            </button>
+            <button onClick={() => { setViewMode("history"); fetchHistory(); }}
+              style={{ padding: "8px 18px", borderRadius: 9, border: `1.5px solid ${viewMode === "history" ? O : BORDER}`, backgroundColor: viewMode === "history" ? O_LITE : "#fff", color: viewMode === "history" ? O : "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
+              <Clock size={14} /> Past Results
+            </button>
+          </div>
         </div>
         <p style={{ fontSize: 14, color: "#64748b", margin: "0 0 24px" }}>Upload a job description, filter candidates, then run AI-powered matching with weighted scoring</p>
 
-        <Stepper />
+        {viewMode === "new" && <Stepper />}
 
+        {viewMode === "history" && (
+          <div>
+            {historyLoading && (
+              <div style={{ textAlign: "center", padding: "64px 0", backgroundColor: "#fff", borderRadius: 16, border: `1.5px solid ${BORDER}` }}>
+                <div style={{ width: 48, height: 48, border: "3px solid #FFF3E8", borderTop: `3px solid ${O}`, borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 12px" }} />
+                <p style={{ color: "#94a3b8", fontSize: 14, margin: 0 }}>Loading past results...</p>
+                <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+              </div>
+            )}
+
+            {!historyLoading && history && history.total === 0 && (
+              <div style={{ padding: "48px", textAlign: "center", backgroundColor: "#fff", borderRadius: 14, border: `1.5px solid ${BORDER}` }}>
+                <Clock size={36} color="#E5E7EB" style={{ display: "block", margin: "0 auto 10px" }} />
+                <p style={{ color: "#94a3b8", margin: 0 }}>No past JD match results yet. Run a new match to see results here.</p>
+              </div>
+            )}
+
+            {!historyLoading && history && history.total > 0 && (
+              <div>
+                {Object.entries(history.grouped).map(([jobTitle, candidatesList]) => (
+                  <div key={jobTitle} style={{ marginBottom: 24 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                      <Briefcase size={15} color={O} />
+                      <span style={{ fontSize: 16, fontWeight: 700 }}>{jobTitle}</span>
+                      <span style={{ fontSize: 12, color: "#94a3b8", backgroundColor: "#F1F5F9", padding: "2px 10px", borderRadius: 999 }}>{candidatesList.length} candidate{candidatesList.length !== 1 ? "s" : ""}</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {candidatesList.map(r => {
+                        const sc = scoreColor(r.jd_match_score);
+                        const histKey = `${r.source_type}-${r.id}`;
+                        const isExp = historyExpandedId === histKey;
+                        return (
+                          <div key={histKey} style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderLeft: `4px solid ${sc.color}`, borderRadius: 14, overflow: "hidden" }}>
+                            <div onClick={() => setHistoryExpandedId(isExp ? null : histKey)}
+                              style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }}>
+                              <div style={{ width: 36, height: 36, borderRadius: "50%", backgroundColor: O_LITE, color: O, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                                {getInitials(r.name)}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 14, fontWeight: 700 }}>{r.name}</div>
+                                <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                                  {r.source_type === "bulk" ? "Bulk uploaded" : "Referral"} · Analyzed {new Date(r.jd_match_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                </div>
+                              </div>
+                              <div style={{ textAlign: "center" }}>
+                                <div style={{ fontSize: 20, fontWeight: 700, color: sc.color, lineHeight: 1 }}>{r.jd_match_score}</div>
+                                <div style={{ fontSize: 9, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase" }}>Score</div>
+                              </div>
+                              <ChevronRight size={16} color="#94a3b8" style={{ transform: isExp ? "rotate(90deg)" : "none", transition: "transform 0.2s" }} />
+                            </div>
+                            {isExp && r.jd_match_data && (
+                              <div style={{ padding: "0 18px 18px", borderTop: "1px solid #F8FAFC" }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, margin: "14px 0" }}>
+                                  {Object.entries(r.jd_match_data.subscores || {}).map(([key, val]) => (
+                                    <div key={key} style={{ backgroundColor: "#F8FAFC", borderRadius: 9, padding: "8px 10px" }}>
+                                      <div style={{ fontSize: 9, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", marginBottom: 3 }}>{WEIGHT_LABELS[key]}</div>
+                                      <div style={{ fontSize: 14, fontWeight: 700 }}>{val}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                                {r.jd_match_data.why_shortlist?.length > 0 && (
+                                  <div style={{ marginBottom: 10 }}>
+                                    <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 6 }}>Why Shortlist</div>
+                                    {r.jd_match_data.why_shortlist.map((w, i) => <div key={i} style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}>✓ {w}</div>)}
+                                  </div>
+                                )}
+                                <button onClick={() => router.push(r.source_type === "bulk" ? `/bulk-candidates/${r.id}` : `/candidate-details/${r.id}`)}
+                                  style={{ padding: "7px 18px", backgroundColor: O, color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                                  View Full Profile
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {viewMode === "new" && (
+        <>
         {/* ─── STEP 1: Upload JD ─── */}
         {step === 1 && (
           <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "28px 32px" }}>
@@ -490,6 +603,8 @@ export default function JDMatchPage() {
               </div>
             )}
           </div>
+        )}
+        </>
         )}
       </div>
     </div>
