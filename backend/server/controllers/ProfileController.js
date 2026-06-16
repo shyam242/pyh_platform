@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import pool from "../config/db.js";
 import { sendEmail } from "../services/brevoService.js";
+import { parseProjectsForUser } from "./jdMatchController.js";
 
 const ADMIN_EMAILS = process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(",").map(e => e.trim()) : ["shyampickyourhire@gmail.com"];
 
@@ -412,6 +413,13 @@ export const createCandidateProfile = async (req, res) => {
       message: "Candidate profile created successfully",
       user: result.rows[0]
     });
+
+    // Auto-parse projects from resume in the background (don't block response)
+    if (resume_file_path) {
+      parseProjectsForUser(userId).catch(err =>
+        console.error(`Background project parsing failed for user ${userId}:`, err.message)
+      );
+    }
   } catch (error) {
     console.error("Error creating candidate profile:", error);
     res.status(500).json({ error: "Failed to create candidate profile" });
@@ -618,6 +626,13 @@ export const updateCandidateProfile = async (req, res) => {
       message: "Candidate profile updated successfully",
       user: result.rows[0]
     });
+
+    // Re-parse projects if resume was part of this update
+    if (resume_file_path) {
+      parseProjectsForUser(userId).catch(err =>
+        console.error(`Background project re-parsing failed for user ${userId}:`, err.message)
+      );
+    }
   } catch (error) {
     console.error("Error updating candidate profile:", error);
     res.status(500).json({ error: "Failed to update candidate profile" });
