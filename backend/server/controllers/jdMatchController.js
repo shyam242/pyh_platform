@@ -125,6 +125,7 @@ export const filterCandidates = async (req, res) => {
       const r = await pool.query(`
         SELECT r.id, r.name, r.email, r.skills, r.experience, r.company, r.department,
                r.industry, r.experience_type, r.cv_file, r.linkedin, r.status,
+               r.jd_match_score, r.jd_match_at,
                u.name as referrer_name, u.company as referrer_company,
                'referral' as source_type
         FROM referrals r
@@ -139,6 +140,7 @@ export const filterCandidates = async (req, res) => {
         SELECT id, name, email, skills, experience, current_company_name as company,
                NULL as department, NULL as industry, NULL as experience_type,
                resume_link as cv_file, linkedin, status,
+               jd_match_score, jd_match_at,
                NULL as referrer_name, NULL as referrer_company,
                'bulk' as source_type
         FROM bulk_candidates
@@ -309,12 +311,18 @@ Return this exact JSON:
 
         results.push(resultObj);
 
-        // Cache result on referrals table if applicable
-        if (cand.source_type !== "bulk") {
+        // Cache result persistently so recruiters can revisit it later
+        const cacheData = JSON.stringify({ ...resultObj, job_title: job_title || null, analyzed_by: req.user.id });
+        if (cand.source_type === "bulk") {
+          await pool.query(
+            `UPDATE bulk_candidates SET jd_match_score = $1, jd_match_data = $2, jd_match_at = NOW() WHERE id = $3`,
+            [weighted_score, cacheData, c.id]
+          ).catch(err => console.error("Cache write failed (bulk_candidates):", err.message));
+        } else {
           await pool.query(
             `UPDATE referrals SET jd_match_score = $1, jd_match_data = $2, jd_match_at = NOW() WHERE id = $3`,
-            [weighted_score, JSON.stringify(resultObj), c.id]
-          ).catch(() => {});
+            [weighted_score, cacheData, c.id]
+          ).catch(err => console.error("Cache write failed (referrals):", err.message));
         }
       } catch (innerErr) {
         console.error(`Error analyzing candidate ${cand.id}:`, innerErr.message);
@@ -331,37 +339,34 @@ Return this exact JSON:
   }
 };
 
-// ─── 4. PARSE CANDIDATE PROJECTS FROM RESUME ─────────────────────────────────
-export const parseProjects = async (req, res) => {
-  try {
-    const userId = req.user.id;
+// ─── INTERNAL: PARSE PROJECTS FOR ANY USER ID (reusable) ────────────────────
+export const parseProjectsForUser = async (userId) => {
+  const result = await pool.query(
+    "SELECT resume_file_path, skills, technical_skills FROM users WHERE id=$1",
+    [userId]
+  );
 
-    const result = await pool.query(
-      "SELECT resume_file_path, skills, technical_skills FROM users WHERE id=$1",
-      [userId]
-    );
+  if (result.rows.length === 0) throw new Error("User not found");
 
-    if (result.rows.length === 0) return res.status(404).json({ error: "User not found" });
+  const { resume_file_path, skills, technical_skills } = result.rows[0];
 
-    const { resume_file_path, skills, technical_skills } = result.rows[0];
-
-    let resumeText = "";
-    if (resume_file_path) {
-      let filePath = resume_file_path;
-      if (!filePath.startsWith("http")) {
-        filePath = path.join(__dirname, "../../uploads/resumes", path.basename(resume_file_path));
-        if (fs.existsSync(filePath)) {
-          const mime = filePath.endsWith(".pdf") ? "application/pdf" : "application/msword";
-          resumeText = await extractTextFromFile(filePath, mime);
-        }
+  let resumeText = "";
+  if (resume_file_path) {
+    let filePath = resume_file_path;
+    if (!filePath.startsWith("http")) {
+      filePath = path.join(__dirname, "../../uploads/resumes", path.basename(resume_file_path));
+      if (fs.existsSync(filePath)) {
+        const mime = filePath.endsWith(".pdf") ? "application/pdf" : "application/msword";
+        resumeText = await extractTextFromFile(filePath, mime);
       }
     }
+  }
 
-    if (!resumeText.trim()) {
-      return res.status(400).json({ error: "No resume found to parse. Please upload your resume first." });
-    }
+  if (!resumeText.trim()) {
+    throw new Error("No resume found to parse. Please upload a resume first.");
+  }
 
-    const prompt = `Extract all projects mentioned in this resume. Return ONLY valid JSON (no markdown).
+  const prompt = `Extract all projects mentioned in this resume. Return ONLY valid JSON (no markdown).
 
 RESUME TEXT:
 ${resumeText.slice(0, 8000)}
@@ -382,20 +387,39 @@ Return this exact JSON:
   "total_projects_found": <number>
 }`;
 
-    const raw = await callClaude(prompt, 1500);
-    const parsed = safeJSON(raw);
+  const raw = await callClaude(prompt, 1500);
+  const parsed = safeJSON(raw);
 
-    if (!parsed) return res.status(500).json({ error: "Failed to parse projects" });
+  if (!parsed) throw new Error("Failed to parse projects from resume");
 
-    await pool.query(
-      "UPDATE users SET parsed_projects = $1, projects_parsed_at = NOW() WHERE id = $2",
-      [JSON.stringify(parsed.projects || []), userId]
-    ).catch(() => {});
+  await pool.query(
+    "UPDATE users SET parsed_projects = $1, projects_parsed_at = NOW() WHERE id = $2",
+    [JSON.stringify(parsed.projects || []), userId]
+  );
 
+  return parsed;
+};
+
+// ─── CANDIDATE: PARSE MY OWN PROJECTS ────────────────────────────────────────
+export const parseProjects = async (req, res) => {
+  try {
+    const parsed = await parseProjectsForUser(req.user.id);
     res.json({ success: true, ...parsed });
   } catch (err) {
     console.error("parseProjects error:", err);
-    res.status(500).json({ error: err.message || "Failed to parse projects" });
+    res.status(400).json({ error: err.message || "Failed to parse projects" });
+  }
+};
+
+// ─── ADMIN: PARSE PROJECTS FOR ANY CANDIDATE BY ID ───────────────────────────
+export const adminParseProjects = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const parsed = await parseProjectsForUser(userId);
+    res.json({ success: true, ...parsed });
+  } catch (err) {
+    console.error("adminParseProjects error:", err);
+    res.status(400).json({ error: err.message || "Failed to parse projects" });
   }
 };
 
@@ -431,5 +455,74 @@ export const searchByProjects = async (req, res) => {
   } catch (err) {
     console.error("searchByProjects error:", err);
     res.status(500).json({ error: err.message || "Search failed" });
+  }
+};
+
+// ─── 6. GET PAST JD MATCH RESULTS (history view for recruiters) ─────────────
+export const getMatchHistory = async (req, res) => {
+  try {
+    const referrals = await pool.query(`
+      SELECT id, name, email, jd_match_score, jd_match_data, jd_match_at, 'referral' as source_type
+      FROM referrals
+      WHERE jd_match_score IS NOT NULL
+      ORDER BY jd_match_at DESC
+    `);
+
+    const bulk = await pool.query(`
+      SELECT id, name, email, jd_match_score, jd_match_data, jd_match_at, 'bulk' as source_type
+      FROM bulk_candidates
+      WHERE jd_match_score IS NOT NULL
+      ORDER BY jd_match_at DESC
+    `);
+
+    const all = [...referrals.rows, ...bulk.rows]
+      .map(r => ({
+        ...r,
+        jd_match_data: typeof r.jd_match_data === "string" ? JSON.parse(r.jd_match_data) : r.jd_match_data,
+      }))
+      .sort((a, b) => new Date(b.jd_match_at) - new Date(a.jd_match_at));
+
+    // Group by job_title for easier browsing
+    const grouped = {};
+    all.forEach(r => {
+      const title = r.jd_match_data?.job_title || "Untitled JD";
+      if (!grouped[title]) grouped[title] = [];
+      grouped[title].push(r);
+    });
+
+    res.json({ success: true, total: all.length, results: all, grouped });
+  } catch (err) {
+    console.error("getMatchHistory error:", err);
+    res.status(500).json({ error: err.message || "Failed to fetch match history" });
+  }
+};
+
+// ─── 7. GET SINGLE CANDIDATE'S MATCH RESULT (for candidate detail page) ─────
+export const getCandidateMatchResult = async (req, res) => {
+  try {
+    const { candidateId } = req.params;
+    const { source_type } = req.query; // "referral" | "bulk"
+
+    const table = source_type === "bulk" ? "bulk_candidates" : "referrals";
+    const result = await pool.query(
+      `SELECT jd_match_score, jd_match_data, jd_match_at FROM ${table} WHERE id = $1`,
+      [candidateId]
+    );
+
+    if (result.rows.length === 0 || result.rows[0].jd_match_score === null) {
+      return res.json({ success: true, has_match: false });
+    }
+
+    const row = result.rows[0];
+    res.json({
+      success: true,
+      has_match: true,
+      jd_match_score: row.jd_match_score,
+      jd_match_data: typeof row.jd_match_data === "string" ? JSON.parse(row.jd_match_data) : row.jd_match_data,
+      jd_match_at: row.jd_match_at,
+    });
+  } catch (err) {
+    console.error("getCandidateMatchResult error:", err);
+    res.status(500).json({ error: err.message || "Failed to fetch match result" });
   }
 };
