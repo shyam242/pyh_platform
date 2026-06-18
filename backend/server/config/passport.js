@@ -21,7 +21,7 @@ passport.use(
       clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
 
       callbackURL:
-        "http://localhost:5000/api/auth/linkedin/callback",
+        process.env.BACKEND_URL + "/api/auth/linkedin/callback" || "https://api.pickyourhire.com/api/auth/linkedin/callback",
     },
 
     // 🔥 VERIFY CALLBACK
