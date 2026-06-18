@@ -93,7 +93,7 @@ export const sendOtpEmail = async (email, otp) => {
     </div>
   `;
 
-  return sendEmail(email, "OTP Login - Recruiter Platform", htmlContent);
+  return sendEmail(email, "OTP Login - PICKYOURHIRE", htmlContent);
 };
 
 /**
@@ -203,7 +203,7 @@ export const sendAdminRecruiterApprovalEmail = async (
  * Send recruiter approval confirmation email
  */
 export const sendRecruiterApprovalEmail = async (recruiterEmail, recruiterName) => {
-  const loginLink = `${process.env.FRONTEND_URL}/login`;
+  const loginLink = `${process.env.FRONTEND_URL}/signin`;
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
