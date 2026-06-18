@@ -7,7 +7,7 @@ const ADMIN_EMAILS = process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split("
 
 const sendAdminNotification = async (recruiter) => {
   try {
-    const approvalLink = `${process.env.FRONTEND_URL || "https://pyh-platform.vercel.app"}/admin/recruiters`;
+    const approvalLink = `${process.env.FRONTEND_URL || "https://portal.pickyourhire.com"}/admin/recruiters`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -246,7 +246,7 @@ export const uploadProfileImage = async (req, res) => {
     }
 
     const user = result.rows[0];
-    const imageUrl = req.file ? `${process.env.BACKEND_URL || "http://localhost:5000"}/uploads/profile_images/${req.file.filename}` : null;
+    const imageUrl = req.file ? `${process.env.BACKEND_URL || "https://api.pickyourhire.com"}/uploads/profile_images/${req.file.filename}` : null;
     
     res.json({
       message: "Profile image uploaded successfully",
