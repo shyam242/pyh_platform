@@ -203,7 +203,7 @@ export default function Signin() {
                   onKeyDown={e => e.key === "Enter" && sendOtp()}
                   onFocus={() => setEmailFocused(true)}
                   onBlur={() => setEmailFocused(false)}
-                  placeholder="you@company.com"
+                  placeholder="you@gmail.com"
                   style={{
                     width: "100%", padding: "13px 14px 13px 42px",
                     fontSize: 15, border: `1.5px solid ${errors.email ? "#ef4444" : emailFocused ? O : "#E5E7EB"}`,
