@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { Mail, ArrowRight, Shield, Zap, Users, CheckCircle, RefreshCw, HandCoins } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { validateEmail, validateOTP } from "@/utils/validation";
@@ -8,7 +9,7 @@ import { API_BASE_URL } from "@/utils/api";
 const O = "#E87722";
 const O_LITE = "#FFF3E8";
 
-export default function Signin() {
+function SigninInner() {
   const [email, setEmail]     = useState("");
   const [otp, setOtp]         = useState(["","","","","",""]);
   const [otpSent, setOtpSent] = useState(false);
@@ -17,6 +18,8 @@ export default function Signin() {
   const [resendTimer, setResendTimer] = useState(0);
   const [emailFocused, setEmailFocused] = useState(false);
   const otpRefs = useRef([]);
+  const searchParams = useSearchParams();
+  const magicToken = searchParams?.get("invite") || (typeof window !== "undefined" ? sessionStorage.getItem("magic_token") : null);
 
   // countdown timer for resend
   useEffect(() => {
@@ -73,21 +76,37 @@ export default function Signin() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp: otpString }),
+        body: JSON.stringify({ email, otp: otpString, magic_token: magicToken || undefined }),
       });
       const rawText = await res.text();
       let data = null;
       try { data = JSON.parse(rawText); } catch {}
       if (!res.ok) throw new Error(data?.message || data?.error || rawText || `Error ${res.status}`);
+      if (data.newReferrer) {
+        // Came via magic link — skip role page, go straight to referrer create-profile
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("referral_role", "referrer");
+        sessionStorage.removeItem("magic_token");
+        showSuccess("Welcome! Complete your referrer profile.");
+        window.location.href = "/create-profile";
+        return;
+      }
       if (data.newUser) {
         localStorage.setItem("email", email);
+        sessionStorage.removeItem("magic_token");
         showSuccess("Account created! Complete your profile.");
         window.location.href = "/create-profile";
         return;
       }
       localStorage.setItem("token", data.token);
+      sessionStorage.removeItem("magic_token");
       showSuccess("Signed in successfully!");
-      window.location.href = data.isAdmin ? "/admin" : "/dashboard";
+      const role = data.user?.role;
+      if (data.isAdmin || role === "admin") window.location.href = "/admin";
+      else if (role === "referrer") window.location.href = "/referrer";
+      else if (role === "recruiter") window.location.href = "/recruiter";
+      else if (role === "candidate") window.location.href = "/candidate-profile";
+      else window.location.href = "/dashboard";
     } catch (err) { showError(err.message || "Verification failed"); }
     finally { setLoading(false); }
   };
@@ -161,9 +180,14 @@ export default function Signin() {
             &larr; Back to home
           </a>
 
+          {magicToken && !otpSent && (
+            <div style={{ backgroundColor: "#FFF3E8", border: "1.5px solid #FBBF7A", borderRadius: 12, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#C2410C", fontWeight: 500, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 16 }}>🎉</span> You're joining as a <strong>Referrer</strong> — no role selection needed!
+            </div>
+          )}
           <div style={{ marginBottom: 36 }}>
             <h1 style={{ fontSize: 30, fontWeight: 700, color: "#0f172a", margin: "0 0 8px" }}>
-              {otpSent ? "Check your inbox" : "Welcome back"}
+              {otpSent ? "Check your inbox" : magicToken ? "Create your account" : "Welcome back"}
             </h1>
             <p style={{ fontSize: 15, color: "#64748b", margin: 0 }}>
               {otpSent
@@ -293,5 +317,13 @@ export default function Signin() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function Signin() {
+  return (
+    <Suspense fallback={null}>
+      <SigninInner />
+    </Suspense>
   );
 }
