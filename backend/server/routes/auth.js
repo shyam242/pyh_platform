@@ -1,16 +1,20 @@
 import express from "express";
 import { sendOtp, verifyOtp } from "../controllers/authControllers.js";
 import { verifyEmailConfig } from "../controllers/emailController.js";
+import { generateMagicLink, validateMagicLink } from "../controllers/magicLinkController.js";
+import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-// 📩 Send OTP
+// OTP auth
 router.post("/send-otp", sendOtp);
-
-// 🔐 Verify OTP
 router.post("/verify-otp", verifyOtp);
 
-// 🧪 Test email configuration (debug endpoint)
+// Magic link — generate (requires logged-in referrer) & validate (public)
+router.post("/magic-link/generate", protect, generateMagicLink);
+router.get("/magic-link/:token", validateMagicLink);
+
+// Debug
 router.get("/test-email", verifyEmailConfig);
 
 export default router;
