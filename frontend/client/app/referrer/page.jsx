@@ -1,11 +1,10 @@
-
 "use client";
 import { useState, useEffect } from "react";
 import { showSuccess, showError } from "@/utils/toast";
 import {
   Upload, ArrowRight, Phone, Briefcase, Award, Users,
   TrendingUp, CheckCircle, Clock, Eye, Mail,
-  BarChart2, Plus, X, ChevronRight, LogOut, ExternalLink
+  BarChart2, Plus, X, ChevronRight, LogOut, ExternalLink, Link2, Copy, Check
 } from "lucide-react";
 import { API_BASE_URL } from "@/utils/api";
 
@@ -32,7 +31,31 @@ const timeAgo = iso => {
 export default function ReferrerDashboard() {
   const [user, setUser] = useState(null);
   const [referrals, setReferrals] = useState([]);
-  const [tab, setTab] = useState("dashboard"); // dashboard | refer
+  const [tab, setTab] = useState("dashboard"); // dashboard | refer | invite
+  const [magicLink, setMagicLink] = useState("");
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const generateLink = async () => {
+    setGeneratingLink(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/api/auth/magic-link/generate`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate link");
+      setMagicLink(data.link);
+    } catch (err) { showError(err.message); }
+    finally { setGeneratingLink(false); }
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(magicLink);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", experience: "", company: "", industry: "", department: "", linkedin: "", skills: "", cv: null });
@@ -149,6 +172,7 @@ export default function ReferrerDashboard() {
             { id: "dashboard", label: "Dashboard", icon: BarChart2 },
             { id: "refer", label: "Refer a Candidate", icon: Plus },
             { id: "referrals", label: "My Referrals", icon: Users },
+            { id: "invite", label: "Share Your Link", icon: Link2 },
           ].map(({ id, label, icon: Icon }) => (
             <button key={id} onClick={() => setTab(id)}
               style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderRadius: 10, border: "none", backgroundColor: tab === id ? O_LITE : "transparent", color: tab === id ? O : "#475569", fontSize: 14, fontWeight: tab === id ? 700 : 500, cursor: "pointer", fontFamily: "inherit", borderLeft: `3px solid ${tab === id ? O : "transparent"}` }}>
@@ -344,6 +368,72 @@ export default function ReferrerDashboard() {
                     {submitting ? "Submitting..." : <><span>Submit Referral</span><ArrowRight size={16} /></>}
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* INVITE TAB */}
+          {tab === "invite" && (
+            <div>
+              <div style={{ marginBottom: 24 }}>
+                <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 6px" }}>Share Your Referrer Link</h2>
+                <p style={{ fontSize: 14, color: "#64748b", margin: 0 }}>Invite others to join as referrers using your personal magic link. They'll skip role selection and join directly.</p>
+              </div>
+
+              <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 18, padding: "32px 36px" }}>
+                {/* How it works */}
+                <div style={{ backgroundColor: "#F8FAFC", borderRadius: 12, padding: "20px 22px", marginBottom: 28 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 16 }}>How it works</div>
+                  {[
+                    { n: "1", t: "Generate your unique invite link below" },
+                    { n: "2", t: "Share it via WhatsApp, email, or copy the link" },
+                    { n: "3", t: "When someone clicks it, they land on a branded invite page" },
+                    { n: "4", t: "They verify their email via OTP and join directly as a referrer — no role selection" },
+                  ].map(({ n, t }) => (
+                    <div key={n} style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+                      <div style={{ width: 24, height: 24, borderRadius: "50%", backgroundColor: O, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>{n}</div>
+                      <span style={{ fontSize: 14, color: "#475569", paddingTop: 3 }}>{t}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {!magicLink ? (
+                  <button onClick={generateLink} disabled={generatingLink}
+                    style={{ width: "100%", padding: "13px", backgroundColor: generatingLink ? O_LITE : O, color: generatingLink ? O : "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: generatingLink ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: generatingLink ? "none" : "0 4px 14px rgba(232,119,34,0.28)" }}>
+                    <Link2 size={16} /> {generatingLink ? "Generating..." : "Generate My Invite Link"}
+                  </button>
+                ) : (
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 10 }}>Your invite link</div>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", backgroundColor: "#F8FAFC", border: `1.5px solid ${BORDER}`, borderRadius: 10, padding: "12px 16px", marginBottom: 16 }}>
+                      <div style={{ flex: 1, fontSize: 13, color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{magicLink}</div>
+                      <button onClick={copyLink}
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 16px", backgroundColor: linkCopied ? "#EAF3DE" : O_LITE, color: linkCopied ? "#3B6D11" : O, border: `1px solid ${linkCopied ? "#97C459" : O_MID}`, borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+                        {linkCopied ? <><Check size={13} /> Copied!</> : <><Copy size={13} /> Copy</>}
+                      </button>
+                    </div>
+
+                    {/* Share buttons */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                      <a href={`https://wa.me/?text=${encodeURIComponent("Join me on PickYourHire as a referrer! " + magicLink)}`} target="_blank" rel="noreferrer"
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px", backgroundColor: "#EAF3DE", color: "#3B6D11", border: "1px solid #97C459", borderRadius: 10, fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
+                        📱 Share on WhatsApp
+                      </a>
+                      <a href={`mailto:?subject=Join me on PickYourHire&body=${encodeURIComponent("Hey! I'd like to invite you to join PickYourHire as a referrer. Click the link to get started: " + magicLink)}`}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px", backgroundColor: "#EFF6FF", color: "#1d4ed8", border: "1px solid #BFDBFE", borderRadius: 10, fontSize: 13, fontWeight: 700, textDecoration: "none" }}>
+                        <Mail size={14} /> Send via Email
+                      </a>
+                    </div>
+
+                    <div style={{ marginTop: 16, fontSize: 12, color: "#94a3b8", display: "flex", alignItems: "center", gap: 6 }}>
+                      <Clock size={12} /> Link is valid for 30 days. You can regenerate it anytime.
+                    </div>
+
+                    <button onClick={() => setMagicLink("")} style={{ marginTop: 12, fontSize: 13, color: "#94a3b8", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                      Regenerate link
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
