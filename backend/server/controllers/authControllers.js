@@ -52,7 +52,7 @@ export const sendOtp = async (req, res) => {
 
 export const verifyOtp = async (req, res) => {
   try {
-    const { email, otp } = req.body;
+    const { email, otp, magic_token } = req.body;
 
     if (!email || !otp) {
       return res.status(400).json({ message: "Email and OTP are required" });
@@ -65,61 +65,73 @@ export const verifyOtp = async (req, res) => {
 
     otpStore.delete(email);
 
-    const user = await pool.query(
-      "SELECT * FROM users WHERE email=$1",
-      [email]
-    );
+    // Validate magic token if provided
+    let magicReferrerId = null;
+    if (magic_token) {
+      const mlResult = await pool.query(
+        `SELECT referrer_id, expires_at FROM referrer_magic_links WHERE token=$1`,
+        [magic_token]
+      );
+      if (mlResult.rows.length && new Date(mlResult.rows[0].expires_at) >= new Date()) {
+        magicReferrerId = mlResult.rows[0].referrer_id;
+      }
+    }
 
-    // Check if this is an admin email
+    const user = await pool.query("SELECT * FROM users WHERE email=$1", [email]);
     const adminEmail = isAdminEmail(email);
 
     if (user.rows.length === 0) {
-      // New user
+      // ── NEW USER ──────────────────────────────────────────────────────────
       if (adminEmail) {
-        // Create admin user automatically
         const newUser = await pool.query(
           "INSERT INTO users(name,email,role) VALUES($1,$2,$3) RETURNING *",
           [email.split("@")[0], email, "admin"]
         );
-
         const token = jwt.sign(
           { id: newUser.rows[0].id, role: "admin" },
           process.env.JWT_SECRET
         );
+        return res.json({ token, user: newUser.rows[0], isAdmin: true });
+      }
 
-        console.log(`✓ Admin user created: ${email}`);
-        return res.json({ 
-          token, 
+      // Came via magic link → auto-create as referrer, skip role selection
+      if (magicReferrerId) {
+        const newUser = await pool.query(
+          "INSERT INTO users(name,email,role) VALUES($1,$2,$3) RETURNING *",
+          [email.split("@")[0], email, "referrer"]
+        );
+        const token = jwt.sign(
+          { id: newUser.rows[0].id, role: "referrer" },
+          process.env.JWT_SECRET
+        );
+        return res.json({
+          token,
           user: newUser.rows[0],
-          isAdmin: true 
+          newReferrer: true,  // signal frontend to go to create-profile with role locked
         });
       }
 
-      // Regular new user - show role selection
+      // Regular new user → role selection
       return res.json({ newUser: true, email });
     }
 
-    // Existing user
-    const userRole = user.rows[0].role;
+    // ── EXISTING USER ─────────────────────────────────────────────────────
+    let userRole = user.rows[0].role;
 
-    // If this email should be admin but isn't, update role
     if (adminEmail && userRole !== "admin") {
-      await pool.query(
-        "UPDATE users SET role=$1 WHERE email=$2",
-        ["admin", email]
-      );
+      await pool.query("UPDATE users SET role=$1 WHERE email=$2", ["admin", email]);
       userRole = "admin";
     }
 
     const token = jwt.sign(
-      { id: user.rows[0].id, role: userRole || user.rows[0].role },
+      { id: user.rows[0].id, role: userRole },
       process.env.JWT_SECRET
     );
 
-    res.json({ 
-      token, 
-      user: { ...user.rows[0], role: userRole || user.rows[0].role },
-      isAdmin: adminEmail
+    res.json({
+      token,
+      user: { ...user.rows[0], role: userRole },
+      isAdmin: adminEmail,
     });
   } catch (error) {
     console.error("❌ Error verifying OTP:", error.message);
