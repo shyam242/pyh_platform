@@ -182,7 +182,7 @@ function SigninInner() {
 
           {magicToken && !otpSent && (
             <div style={{ backgroundColor: "#FFF3E8", border: "1.5px solid #FBBF7A", borderRadius: 12, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#C2410C", fontWeight: 500, display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 16 }}>🎉</span> You're joining as a <strong>Referrer</strong> — no role selection needed!
+              <span style={{ fontSize: 16 }}>🎉</span> You're joining as a <strong>Referrer</strong>
             </div>
           )}
           <div style={{ marginBottom: 36 }}>
