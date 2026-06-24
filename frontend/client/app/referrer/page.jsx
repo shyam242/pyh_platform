@@ -47,6 +47,7 @@ export default function ReferrerDashboard() {
   const [magicLink, setMagicLink] = useState("");
   const [generatingLink, setGeneratingLink] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [invitedReferrers, setInvitedReferrers] = useState([]);
 
   const generateLink = async () => {
     setGeneratingLink(true);
@@ -68,6 +69,14 @@ export default function ReferrerDashboard() {
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
   };
+
+  const fetchInvitedReferrers = async token => {
+    try {
+      const r = await fetch(`${API_BASE_URL}/api/auth/magic-link/invitees/me`, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) { const d = await r.json(); setInvitedReferrers(d.invitees || []); }
+    } catch {}
+  };
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", experience: "", company: "", industry: "", department: "", linkedin: "", skills: "", cv: null });
@@ -75,7 +84,7 @@ export default function ReferrerDashboard() {
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) { window.location.href = "/signin"; return; }
-    Promise.all([fetchUser(token), fetchReferrals(token)]).finally(() => setLoading(false));
+    Promise.all([fetchUser(token), fetchReferrals(token), fetchInvitedReferrers(token)]).finally(() => setLoading(false));
   }, []);
 
   const fetchUser = async token => {
@@ -379,6 +388,38 @@ export default function ReferrerDashboard() {
                 <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 6px" }}>Share Your Referrer Link</h2>
                 <p style={{ fontSize: 14, color: "#64748b", margin: 0 }}>Invite others to join as referrers using your personal magic link. They'll skip role selection and join directly.</p>
               </div>
+
+              {/* Joined-via-my-link count */}
+              <div style={{ display: "flex", alignItems: "center", gap: 16, backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "20px 24px", marginBottom: 24 }}>
+                <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: O_LITE, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Users size={22} color={O} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{invitedReferrers.length}</div>
+                  <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+                    {invitedReferrers.length === 1 ? "Referrer joined" : "Referrers joined"} through your invite link
+                  </div>
+                </div>
+              </div>
+
+              {invitedReferrers.length > 0 && (
+                <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "8px 0", marginBottom: 24, overflow: "hidden" }}>
+                  {invitedReferrers.map((r, i) => (
+                    <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 24px", borderTop: i === 0 ? "none" : `1px solid ${BORDER}` }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: "50%", backgroundColor: O_LITE, color: O, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+                          {(r.name || "R").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{r.name}</div>
+                          <div style={{ fontSize: 12, color: "#94a3b8" }}>{r.email}</div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 12, color: "#94a3b8" }}>{timeAgo(r.created_at)}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 18, padding: "32px 36px" }}>
                 {/* How it works */}
