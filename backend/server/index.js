@@ -49,7 +49,16 @@ const ensureInvitedByColumn = async () => {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_users_invited_by ON users(invited_by_referrer_id);
     `);
-    console.log("✓ users.invited_by_referrer_id ready");
+    // joined_at tracks signup time for this feature — added explicitly rather
+    // than assuming a created_at/timestamp column already exists on users.
+    await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS joined_at TIMESTAMPTZ DEFAULT NOW();
+    `);
+    await pool.query(`
+      UPDATE users SET joined_at = NOW() WHERE joined_at IS NULL;
+    `);
+    console.log("✓ users.invited_by_referrer_id / joined_at ready");
   } catch (err) {
     console.error("invited_by_referrer_id column setup error:", err.message);
   }
