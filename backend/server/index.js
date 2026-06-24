@@ -38,6 +38,23 @@ const ensureResumeViewsTable = async () => {
   }
 };
 
+// Track which referrer's invite link a user signed up through, so a referrer
+// can see how many other referrers joined via their link
+const ensureInvitedByColumn = async () => {
+  try {
+    await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS invited_by_referrer_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_users_invited_by ON users(invited_by_referrer_id);
+    `);
+    console.log("✓ users.invited_by_referrer_id ready");
+  } catch (err) {
+    console.error("invited_by_referrer_id column setup error:", err.message);
+  }
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -63,6 +80,6 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/jobs", jobRoutes);
 
 const PORT = process.env.PORT || 5000;
-ensureResumeViewsTable().then(() => {
+Promise.all([ensureResumeViewsTable(), ensureInvitedByColumn()]).then(() => {
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 });
