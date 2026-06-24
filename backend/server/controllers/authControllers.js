@@ -6,7 +6,24 @@ import otpGenerator from "otp-generator";
 import pool from "../config/db.js";
 import { sendOtpEmail } from "../services/brevoService.js";
 
-const otpStore = new Map();
+const OTP_TTL_MINUTES = 10;
+let otpTableReady = null;
+
+// OTPs must be persisted in the DB (not an in-memory Map) so verification
+// works regardless of which server instance/process handles the request,
+// and survives restarts/redeploys between "send" and "verify".
+const ensureOtpTable = async () => {
+  if (!otpTableReady) {
+    otpTableReady = pool.query(`
+      CREATE TABLE IF NOT EXISTS otps (
+        email TEXT PRIMARY KEY,
+        otp TEXT NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL
+      )
+    `);
+  }
+  return otpTableReady;
+};
 
 // Get admin emails from env
 const getAdminEmails = () => {
@@ -32,7 +49,13 @@ export const sendOtp = async (req, res) => {
       specialChars: false,
     });
 
-    otpStore.set(email, otp);
+    await ensureOtpTable();
+    const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
+    await pool.query(
+      `INSERT INTO otps (email, otp, expires_at) VALUES ($1, $2, $3)
+       ON CONFLICT (email) DO UPDATE SET otp=$2, expires_at=$3`,
+      [email, otp, expiresAt]
+    );
     console.log(`📧 Generated OTP for ${email}: ${otp}`);
 
     // Send OTP via Brevo
@@ -58,12 +81,27 @@ export const verifyOtp = async (req, res) => {
       return res.status(400).json({ message: "Email and OTP are required" });
     }
 
-    const storedOtp = otpStore.get(email);
-    if (!storedOtp || storedOtp !== otp) {
+    await ensureOtpTable();
+    const otpResult = await pool.query(
+      `SELECT otp, expires_at FROM otps WHERE email=$1`,
+      [email]
+    );
+
+    if (!otpResult.rows.length) {
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
-    otpStore.delete(email);
+    const { otp: storedOtp, expires_at } = otpResult.rows[0];
+    if (new Date(expires_at) < new Date()) {
+      await pool.query(`DELETE FROM otps WHERE email=$1`, [email]);
+      return res.status(400).json({ message: "OTP has expired. Please request a new one." });
+    }
+
+    if (storedOtp !== otp) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    await pool.query(`DELETE FROM otps WHERE email=$1`, [email]);
 
     // Validate magic token if provided
     let magicReferrerId = null;
@@ -97,8 +135,8 @@ export const verifyOtp = async (req, res) => {
       // Came via magic link → auto-create as referrer, skip role selection
       if (magicReferrerId) {
         const newUser = await pool.query(
-          "INSERT INTO users(name,email,role) VALUES($1,$2,$3) RETURNING *",
-          [email.split("@")[0], email, "referrer"]
+          "INSERT INTO users(name,email,role,invited_by_referrer_id) VALUES($1,$2,$3,$4) RETURNING *",
+          [email.split("@")[0], email, "referrer", magicReferrerId]
         );
         const token = jwt.sign(
           { id: newUser.rows[0].id, role: "referrer" },
