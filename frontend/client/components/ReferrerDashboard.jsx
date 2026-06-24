@@ -433,7 +433,7 @@ export default function ReferrerDashboard() {
                           <div style={{ fontSize: 12, color: "#94a3b8" }}>{r.email}</div>
                         </div>
                       </div>
-                      <div style={{ fontSize: 12, color: "#94a3b8" }}>{timeAgo(r.created_at)}</div>
+                      <div style={{ fontSize: 12, color: "#94a3b8" }}>{timeAgo(r.joined_at)}</div>
                     </div>
                   ))}
                 </div>
