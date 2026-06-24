@@ -40,10 +40,10 @@ export const getInvitedReferrers = async (req, res) => {
     const referrerId = req.user.id;
 
     const result = await pool.query(
-      `SELECT id, name, email, created_at
+      `SELECT id, name, email, joined_at
        FROM users
        WHERE invited_by_referrer_id = $1
-       ORDER BY created_at DESC`,
+       ORDER BY joined_at DESC`,
       [referrerId]
     );
 
