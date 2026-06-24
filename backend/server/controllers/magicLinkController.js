@@ -34,6 +34,28 @@ export const generateMagicLink = async (req, res) => {
   }
 };
 
+// ─── GET MY INVITED REFERRERS (called by logged-in referrer) ─────────────────
+export const getInvitedReferrers = async (req, res) => {
+  try {
+    const referrerId = req.user.id;
+
+    const result = await pool.query(
+      `SELECT id, name, email, created_at
+       FROM users
+       WHERE invited_by_referrer_id = $1
+       ORDER BY created_at DESC`,
+      [referrerId]
+    );
+
+    res.json({
+      count: result.rows.length,
+      invitees: result.rows,
+    });
+  } catch (err) {
+    console.error("getInvitedReferrers error:", err);
+    res.status(500).json({ error: err.message || "Failed to fetch invited referrers" });
+  }
+};
 // ─── VALIDATE MAGIC LINK (called when someone opens /join/:token) ─────────────
 export const validateMagicLink = async (req, res) => {
   try {
