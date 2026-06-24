@@ -28,6 +28,18 @@ const timeAgo = iso => {
   if (d === 0) return "Today"; if (d === 1) return "Yesterday"; return `${d}d ago`;
 };
 
+const InputField = ({ label, name, value, onChange, placeholder, type = "text", required }) => (
+  <div>
+    <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
+      {label} {required && <span style={{ color: "#ef4444" }}>*</span>}
+    </label>
+    <input type={type} name={name} value={value} onChange={onChange} placeholder={placeholder}
+      style={{ width: "100%", padding: "11px 14px", fontSize: 14, border: "1.5px solid #E5E7EB", borderRadius: 9, outline: "none", backgroundColor: "#FAFAFA", color: "#0f172a", fontFamily: "inherit", boxSizing: "border-box" }}
+      onFocus={e => e.target.style.borderColor = O} onBlur={e => e.target.style.borderColor = "#E5E7EB"}
+    />
+  </div>
+);
+
 export default function ReferrerDashboard() {
   const [user, setUser] = useState(null);
   const [referrals, setReferrals] = useState([]);
@@ -106,18 +118,6 @@ export default function ReferrerDashboard() {
     { label: "Under Review", value: referrals.filter(r => r.status === "pending").length, icon: Clock, color: "#1d4ed8", bg: "#EFF6FF" },
     { label: "Awaiting Candidate", value: referrals.filter(r => r.referral_status === "pending_candidate_acceptance").length, icon: Eye, color: "#7c3aed", bg: "#F5F3FF" },
   ];
-
-  const InputField = ({ label, name, value, onChange, placeholder, type = "text", required }) => (
-    <div>
-      <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>
-        {label} {required && <span style={{ color: "#ef4444" }}>*</span>}
-      </label>
-      <input type={type} value={value} onChange={onChange} placeholder={placeholder}
-        style={{ width: "100%", padding: "11px 14px", fontSize: 14, border: "1.5px solid #E5E7EB", borderRadius: 9, outline: "none", backgroundColor: "#FAFAFA", color: "#0f172a", fontFamily: "inherit", boxSizing: "border-box" }}
-        onFocus={e => e.target.style.borderColor = O} onBlur={e => e.target.style.borderColor = "#E5E7EB"}
-      />
-    </div>
-  );
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#F8FAFC", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: "#0f172a" }}>
@@ -214,7 +214,7 @@ export default function ReferrerDashboard() {
                   </div>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginBottom: 2 }}>Grow your referrer network</div>
-                    <div style={{ fontSize: 13, color: "#64748b" }}>Share your invite link — anyone who joins via your link becomes a referrer instantly, no role selection needed.</div>
+                    <div style={{ fontSize: 13, color: "#64748b" }}>Share your invite link — anyone who joins via your link becomes a referrer instantly.</div>
                   </div>
                 </div>
                 <button onClick={() => setTab("invite")}
