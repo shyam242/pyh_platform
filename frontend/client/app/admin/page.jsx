@@ -29,6 +29,11 @@ export default function AdminDashboard() {
   const [updatingStatus, setUpdatingStatus] = useState(null);
   const [filterStatus, setFilterStatus] = useState("all");
 
+  // Resume link parser state
+  const [resumeLinks, setResumeLinks] = useState("");
+  const [parsingResumes, setParsingResumes] = useState(false);
+  const [parseResults, setParseResults] = useState(null); // { parsedCount, errorCount, candidates, errors }
+
   useEffect(() => {
     fetchDashboardData();
     fetchJobs();
@@ -491,6 +496,42 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleBulkParseResumes = async () => {
+    const links = resumeLinks
+      .split("\n")
+      .map(l => l.trim())
+      .filter(l => l.startsWith("http"));
+    if (links.length === 0) {
+      showError("Please enter at least one valid URL (one per line)");
+      return;
+    }
+    if (links.length > 50) {
+      showError("Maximum 50 resume links per batch");
+      return;
+    }
+    try {
+      setParsingResumes(true);
+      setParseResults(null);
+      const token = localStorage.getItem("token");
+      const response = await axios.post(
+        `${API_BASE_URL}/api/admin/bulk-upload/resume-links`,
+        { resume_links: links },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setParseResults(response.data);
+      if (response.data.parsedCount > 0) {
+        showSuccess(`${response.data.parsedCount} resume(s) parsed and added successfully`);
+      }
+      if (response.data.errorCount > 0) {
+        showError(`${response.data.errorCount} resume(s) failed — see details below`);
+      }
+    } catch (error) {
+      showError(error.response?.data?.message || "Failed to parse resumes");
+    } finally {
+      setParsingResumes(false);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem("token");
      window.location.href = "/signin";
@@ -600,6 +641,7 @@ export default function AdminDashboard() {
                     { id: "jobs", label: "Post Jobs" },
                     { id: "bulk-jobs", label: "Bulk Jobs" },
                     { id: "bulk-candidates", label: "Bulk Candidates" },
+                    { id: "resume-parse", label: "🤖 AI Resume Parser" },
                     { id: "resume-views", label: "📊 Resume Analytics", isLink: "/admin/resume-views" }
                   ].map(item => (
                     <button
@@ -1562,6 +1604,145 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+        {/* AI RESUME PARSER TAB */}
+        {activeTab === "resume-parse" && (
+          <div>
+            <div style={{ marginBottom: 24, padding: "1.5rem", backgroundColor: "#fff", borderRadius: "0.75rem", border: "1px solid #e5e7eb", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+              <h2 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#1f2937", margin: "0 0 4px" }}>AI Resume Parser</h2>
+              <p style={{ color: "#6b7280", fontSize: "0.9rem", margin: 0 }}>Paste resume PDF links — Claude AI will parse name, email, phone, skills, experience & more automatically</p>
+            </div>
+
+            <div style={{ backgroundColor: "#fff", borderRadius: "0.75rem", border: "1px solid #e5e7eb", padding: "2rem", boxShadow: "0 4px 20px rgba(0,0,0,0.05)", marginBottom: 24 }}>
+
+              {/* How it works */}
+              <div style={{ backgroundColor: "#fef3e2", border: "1px solid #fed7aa", borderRadius: 10, padding: "14px 18px", marginBottom: 24, display: "flex", gap: 14, alignItems: "flex-start" }}>
+                <span style={{ fontSize: 22, flexShrink: 0 }}>🤖</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#92400e", marginBottom: 4 }}>How it works</div>
+                  <div style={{ fontSize: 13, color: "#92400e", lineHeight: 1.6 }}>
+                    1. Paste one resume PDF URL per line below &nbsp;·&nbsp; 2. Click Parse &nbsp;·&nbsp; Claude AI downloads each PDF, reads the text, and extracts: <strong>Name, Email, Phone, Location, Qualification, Experience, Company, Skills</strong> &nbsp;·&nbsp; 3. Candidates are auto-added to the Bulk Candidates pool with a unique <strong>RES-YYYY-NNNNN</strong> ID.
+                  </div>
+                </div>
+              </div>
+
+              {/* URL input */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                  Resume PDF URLs &nbsp;<span style={{ fontWeight: 400, color: "#9ca3af" }}>(one per line, max 50)</span>
+                </label>
+                <textarea
+                  value={resumeLinks}
+                  onChange={e => setResumeLinks(e.target.value)}
+                  placeholder={"https://example.com/resume1.pdf\nhttps://drive.google.com/uc?id=...\nhttps://dropbox.com/s/.../resume.pdf"}
+                  rows={8}
+                  style={{ width: "100%", padding: "12px 14px", fontSize: 13, fontFamily: "monospace", border: "1.5px solid #e5e7eb", borderRadius: 10, outline: "none", resize: "vertical", color: "#0f172a", backgroundColor: "#fafafa", boxSizing: "border-box", lineHeight: 1.7 }}
+                  onFocus={e => e.target.style.borderColor = "#f97316"}
+                  onBlur={e => e.target.style.borderColor = "#e5e7eb"}
+                />
+                <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 6 }}>
+                  {resumeLinks.split("\n").filter(l => l.trim().startsWith("http")).length} valid URL(s) detected
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  onClick={handleBulkParseResumes}
+                  disabled={parsingResumes}
+                  style={{ padding: "12px 28px", backgroundColor: parsingResumes ? "#fef3e2" : "#f97316", color: parsingResumes ? "#c2410c" : "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: parsingResumes ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8, boxShadow: parsingResumes ? "none" : "0 4px 14px rgba(249,115,22,0.28)", transition: "all 0.15s" }}>
+                  {parsingResumes ? (
+                    <><span style={{ display: "inline-block", width: 16, height: 16, border: "2px solid #c2410c", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} /> Parsing resumes...</>
+                  ) : (
+                    <>🤖 Parse Resumes</>
+                  )}
+                </button>
+                {!parsingResumes && (
+                  <button onClick={() => { setResumeLinks(""); setParseResults(null); }} style={{ padding: "12px 20px", backgroundColor: "#fff", color: "#6b7280", border: "1.5px solid #e5e7eb", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {parsingResumes && (
+                <div style={{ marginTop: 20, padding: "14px 18px", backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, fontSize: 13, color: "#166534" }}>
+                  ⏳ Downloading and parsing PDFs... this may take 30–60 seconds depending on the number of links. Please wait.
+                </div>
+              )}
+            </div>
+
+            {/* Parse results */}
+            {parseResults && (
+              <div style={{ backgroundColor: "#fff", borderRadius: "0.75rem", border: "1px solid #e5e7eb", padding: "2rem", boxShadow: "0 4px 20px rgba(0,0,0,0.05)" }}>
+                {/* Summary row */}
+                <div style={{ display: "flex", gap: 14, marginBottom: 24, flexWrap: "wrap" }}>
+                  {[
+                    { label: "Total Links", value: parseResults.totalLinks, bg: "#f3f4f6", color: "#374151" },
+                    { label: "✅ Parsed", value: parseResults.parsedCount, bg: "#f0fdf4", color: "#166534" },
+                    { label: "❌ Failed", value: parseResults.errorCount, bg: "#fef2f2", color: "#dc2626" },
+                  ].map(({ label, value, bg, color }) => (
+                    <div key={label} style={{ flex: "1 1 120px", backgroundColor: bg, borderRadius: 10, padding: "14px 18px", textAlign: "center" }}>
+                      <div style={{ fontSize: 26, fontWeight: 700, color, marginBottom: 2 }}>{value}</div>
+                      <div style={{ fontSize: 12, color, fontWeight: 600 }}>{label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Successfully parsed candidates */}
+                {parseResults.candidates && parseResults.candidates.length > 0 && (
+                  <div style={{ marginBottom: 24 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#1f2937", marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
+                      ✅ Successfully Parsed Candidates
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {parseResults.candidates.map((c, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", backgroundColor: "#f8fafc", border: "1px solid #e5e7eb", borderLeft: "4px solid #f97316", borderRadius: 10 }}>
+                          <div style={{ width: 40, height: 40, borderRadius: "50%", backgroundColor: "#fef3e2", color: "#f97316", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                            {(c.name || "?").split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase()}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{c.name}</div>
+                            <div style={{ fontSize: 12, color: "#6b7280" }}>{c.email} · {c.contact}</div>
+                          </div>
+                          <div style={{ fontSize: 11, color: "#6b7280", textAlign: "right", flexShrink: 0 }}>
+                            <div style={{ fontWeight: 700, color: "#f97316", marginBottom: 2 }}>{c.candidate_id}</div>
+                            <div>{c.current_location || "—"} · {c.experience ? `${c.experience} yrs` : "—"}</div>
+                          </div>
+                          <button
+                            onClick={() => window.open(`/admin/bulk-candidates/${c.id}`, "_blank")}
+                            style={{ padding: "6px 14px", backgroundColor: "#f97316", color: "#fff", border: "none", borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                            View
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Errors */}
+                {parseResults.errors && parseResults.errors.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: "#dc2626", marginBottom: 14 }}>❌ Failed</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {parseResults.errors.map((e, i) => (
+                        <div key={i} style={{ padding: "10px 14px", backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, fontSize: 13 }}>
+                          <span style={{ fontWeight: 600, color: "#dc2626" }}>#{e.index}</span>
+                          <span style={{ color: "#374151", marginLeft: 8, wordBreak: "break-all" }}>{e.url}</span>
+                          <span style={{ color: "#dc2626", marginLeft: 8 }}>— {e.error}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => window.location.href = "/admin/bulk-candidates"}
+                  style={{ marginTop: 20, padding: "11px 24px", backgroundColor: "#f97316", color: "#fff", border: "none", borderRadius: 9, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                  View All Bulk Candidates →
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );
