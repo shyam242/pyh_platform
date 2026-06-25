@@ -1,11 +1,9 @@
 // backend/server/services/resumeParserService.js
+// Pure Node.js resume parser — no AI API needed, uses pdf-parse + regex
 import fetch from "node-fetch";
 import pdfParse from "pdf-parse";
-import Anthropic from "@anthropic-ai/sdk";
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-// Download PDF from a URL into a Buffer
+// ─── PDF DOWNLOAD ─────────────────────────────────────────────────────────────
 export const downloadPDF = async (url) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
@@ -22,56 +20,180 @@ export const downloadPDF = async (url) => {
   }
 };
 
-// Extract plain text from a PDF buffer
+// ─── PDF TEXT EXTRACTION ──────────────────────────────────────────────────────
 export const extractTextFromPDF = async (buffer) => {
   const data = await pdfParse(buffer);
   return data.text || "";
 };
 
-// Call Claude to parse structured candidate data from resume text
-export const parseResumeWithAI = async (resumeText) => {
-  const prompt = `You are a resume parser. Extract the following fields from the resume text below.
-Respond ONLY with a valid JSON object. No markdown fences, no explanation, no preamble.
+// ─── REGEX-BASED PARSERS ──────────────────────────────────────────────────────
 
-Fields:
-- name: Full candidate name (string)
-- email: Email address (string)
-- contact: Phone number (string)
-- location: Current city or location (string)
-- highest_qualification: Highest education degree, e.g. "B.Tech", "MBA", "MCA" (string)
-- experience: Total years of work experience as a plain number string, e.g. "3" or "0" for fresher (string)
-- current_company_name: Most recent employer (string)
-- skills: All skills comma-separated (string)
-- technical_skills: Only programming languages, tools, frameworks comma-separated (string)
-- soft_skills: Only soft skills like leadership, communication comma-separated (string)
-- linkedin: LinkedIn profile URL if present, else empty string (string)
-
-Resume text:
-${resumeText.slice(0, 6000)}`;
-
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1000,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const raw = response.content[0].text.trim();
-  const cleaned = raw.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
-
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    throw new Error("AI parser returned invalid JSON: " + cleaned.slice(0, 200));
-  }
+const extractEmail = (text) => {
+  const match = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+  return match ? match[0].toLowerCase() : "";
 };
 
-// Full pipeline: URL → download → extract text → AI parse → structured object
+const extractPhone = (text) => {
+  // Matches Indian and international formats
+  const match = text.match(
+    /(?:\+91[\s\-]?)?(?:\(?\d{3,5}\)?[\s\-]?)?\d{3,5}[\s\-]?\d{4,5}/
+  );
+  if (!match) return "";
+  return match[0].replace(/\s+/g, "").replace(/[-()]/g, "").trim();
+};
+
+const extractLinkedIn = (text) => {
+  const match = text.match(/linkedin\.com\/in\/[a-zA-Z0-9\-_%]+/i);
+  return match ? "https://" + match[0] : "";
+};
+
+const extractName = (text) => {
+  // Names are usually in the first 5 non-empty lines, before email/phone
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 1 && l.length < 60);
+
+  for (const line of lines.slice(0, 8)) {
+    // Skip lines that look like headers, emails, phones, URLs
+    if (/[@|http|linkedin|github|www\.|objective|summary|profile|education|experience|skill]/i.test(line)) continue;
+    if (/\d{5,}/.test(line)) continue; // skip lines with long numbers
+    if (/[,;|]/.test(line) && line.split(" ").length > 5) continue; // skip address-like lines
+    // Must look like a name: 2-4 words, mostly letters
+    const words = line.trim().split(/\s+/);
+    if (words.length >= 2 && words.length <= 5 && words.every((w) => /^[A-Za-z.'-]+$/.test(w))) {
+      return line.trim();
+    }
+  }
+  return "";
+};
+
+const extractLocation = (text) => {
+  // Common Indian cities + generic pattern
+  const cities = [
+    "Mumbai", "Delhi", "Bangalore", "Bengaluru", "Hyderabad", "Chennai", "Kolkata",
+    "Pune", "Ahmedabad", "Jaipur", "Surat", "Lucknow", "Kanpur", "Nagpur", "Indore",
+    "Bhopal", "Visakhapatnam", "Patna", "Vadodara", "Ghaziabad", "Noida", "Gurugram",
+    "Gurgaon", "Faridabad", "Ranchi", "Coimbatore", "Kochi", "Chandigarh", "Thiruvananthapuram",
+    "Bhubaneswar", "Mysore", "Mysuru", "Nashik", "Meerut", "Agra", "Varanasi",
+  ];
+  for (const city of cities) {
+    if (new RegExp(`\\b${city}\\b`, "i").test(text)) return city;
+  }
+  // Fallback: look for "Location:" or "Address:" line
+  const locMatch = text.match(/(?:location|city|address)[:\s]+([A-Za-z\s,]+)/i);
+  if (locMatch) return locMatch[1].split("\n")[0].trim().slice(0, 60);
+  return "";
+};
+
+const extractExperience = (text) => {
+  // "X years of experience" or "X+ years"
+  const patterns = [
+    /(\d+(?:\.\d+)?)\+?\s*years?\s+(?:of\s+)?(?:work\s+)?experience/i,
+    /experience[:\s]+(\d+(?:\.\d+)?)\+?\s*years?/i,
+    /(\d+(?:\.\d+)?)\s*(?:yrs?|years?)\s+(?:of\s+)?(?:total\s+)?(?:work\s+)?(?:experience|exp)/i,
+  ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m) return m[1];
+  }
+  // Fresher detection
+  if (/fresher|0\s*year|no\s+experience|entry.level/i.test(text)) return "0";
+  return "";
+};
+
+const extractQualification = (text) => {
+  const degrees = [
+    "Ph.D", "PhD", "M.Tech", "MTech", "M.E", "ME", "MBA", "MCA", "M.Sc", "MSc",
+    "M.Com", "MCom", "MA", "B.Tech", "BTech", "B.E", "BE", "BCA", "B.Sc", "BSc",
+    "B.Com", "BCom", "BA", "Diploma", "12th", "10th",
+  ];
+  for (const deg of degrees) {
+    if (new RegExp(`\\b${deg.replace(".", "\\.")}\\b`, "i").test(text)) return deg;
+  }
+  return "";
+};
+
+const TECH_SKILLS_LIST = [
+  "JavaScript", "TypeScript", "Python", "Java", "C++", "C#", "C", "Go", "Rust", "PHP",
+  "Ruby", "Swift", "Kotlin", "Scala", "R", "MATLAB", "Perl", "Shell", "Bash",
+  "React", "Next.js", "Vue", "Angular", "Node.js", "Express", "Django", "Flask",
+  "Spring", "Laravel", "FastAPI", "NestJS", "GraphQL", "REST", "gRPC",
+  "MySQL", "PostgreSQL", "MongoDB", "Redis", "SQLite", "Oracle", "Supabase",
+  "AWS", "Azure", "GCP", "Docker", "Kubernetes", "Terraform", "Jenkins", "CI/CD",
+  "Git", "GitHub", "GitLab", "Linux", "Nginx", "Apache",
+  "TensorFlow", "PyTorch", "Scikit-learn", "Pandas", "NumPy", "OpenCV",
+  "HTML", "CSS", "Tailwind", "Bootstrap", "SASS", "webpack", "Vite",
+  "Android", "iOS", "React Native", "Flutter",
+  "Figma", "Postman", "JIRA", "Confluence",
+];
+
+const SOFT_SKILLS_LIST = [
+  "Communication", "Leadership", "Teamwork", "Problem Solving", "Critical Thinking",
+  "Time Management", "Adaptability", "Creativity", "Collaboration", "Presentation",
+  "Negotiation", "Decision Making", "Conflict Resolution", "Mentoring", "Planning",
+];
+
+const extractTechSkills = (text) => {
+  const found = TECH_SKILLS_LIST.filter((s) =>
+    new RegExp(`\\b${s.replace(/[.+]/g, "\\$&")}\\b`, "i").test(text)
+  );
+  return [...new Set(found)].join(", ");
+};
+
+const extractSoftSkills = (text) => {
+  const found = SOFT_SKILLS_LIST.filter((s) =>
+    new RegExp(`\\b${s}\\b`, "i").test(text)
+  );
+  return [...new Set(found)].join(", ");
+};
+
+const extractCurrentCompany = (text) => {
+  // Look for "Currently working at X" or lines after "Experience" before a date
+  const patterns = [
+    /(?:currently\s+(?:working\s+)?(?:at|in|with)|present)\s+[:\-]?\s*([A-Za-z0-9\s&.,]+?)(?:\n|,|\|)/i,
+    /(?:employer|company|organisation|organization)[:\s]+([A-Za-z0-9\s&.,]+?)(?:\n|,|\|)/i,
+  ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m) return m[1].trim().slice(0, 80);
+  }
+  return "";
+};
+
+// ─── MAIN PARSE FUNCTION ──────────────────────────────────────────────────────
+export const parseResumeText = (text) => {
+  const techSkills = extractTechSkills(text);
+  const softSkills = extractSoftSkills(text);
+  const allSkills = [
+    ...new Set([
+      ...techSkills.split(", ").filter(Boolean),
+      ...softSkills.split(", ").filter(Boolean),
+    ]),
+  ].join(", ");
+
+  return {
+    name: extractName(text),
+    email: extractEmail(text),
+    contact: extractPhone(text),
+    location: extractLocation(text),
+    highest_qualification: extractQualification(text),
+    experience: extractExperience(text),
+    current_company_name: extractCurrentCompany(text),
+    skills: allSkills,
+    technical_skills: techSkills,
+    soft_skills: softSkills,
+    linkedin: extractLinkedIn(text),
+  };
+};
+
+// ─── FULL PIPELINE ────────────────────────────────────────────────────────────
 export const parseResumeFromURL = async (resumeUrl) => {
   const buffer = await downloadPDF(resumeUrl);
   const text = await extractTextFromPDF(buffer);
   if (!text || text.trim().length < 50) {
     throw new Error("PDF has no readable text (may be scanned/image-based)");
   }
-  const parsed = await parseResumeWithAI(text);
+  const parsed = parseResumeText(text);
   return { ...parsed, resume_link: resumeUrl };
 };
