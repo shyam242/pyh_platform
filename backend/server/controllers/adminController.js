@@ -2,7 +2,7 @@ import pool from "../config/db.js";
 import fs from "fs";
 import { parseCSVString, mapCandidateColumns } from "../services/csvParser.js";
 import { sendRecruiterApprovalEmail, sendRecruiterRejectionEmail } from "../services/brevoService.js";
-import { parseResumeFromURL } from "../services/resumeParserService.js";
+import { parseResumeFromURL } from "../services/resumeParserService.js"; // pure regex — no API key needed
 
 const ADMIN_EMAIL = "shyampickyourhire@gmail.com";
 
