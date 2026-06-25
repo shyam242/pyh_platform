@@ -956,3 +956,91 @@ export const bulkUploadResumeLinks = async (req, res) => {
     res.status(500).json({ message: "Failed to process resume links" });
   }
 };
+
+// POST /api/admin/bulk-candidates/push-to-candidates
+// Body: { ids: [1, 2, 3, ...] }
+// Copies selected bulk_candidates rows into the main users table as candidates.
+export const pushBulkCandidatesToMain = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const adminCheck = await pool.query("SELECT role FROM users WHERE id=$1", [adminId]);
+    if (!adminCheck.rows.length || adminCheck.rows[0].role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin only." });
+    }
+
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "No candidate IDs provided" });
+    }
+
+    const pushed = [];
+    const errors = [];
+
+    for (const id of ids) {
+      try {
+        // Fetch from bulk_candidates
+        const bcResult = await pool.query("SELECT * FROM bulk_candidates WHERE id=$1", [id]);
+        if (!bcResult.rows.length) {
+          errors.push({ id, error: "Bulk candidate not found" });
+          continue;
+        }
+        const bc = bcResult.rows[0];
+
+        // Skip if email already exists in users table
+        if (bc.email) {
+          const existing = await pool.query("SELECT id FROM users WHERE email=$1", [bc.email]);
+          if (existing.rows.length > 0) {
+            errors.push({ id, error: `Email ${bc.email} already exists in candidates` });
+            continue;
+          }
+        }
+
+        // Insert into users as a candidate (no password — they'll use magic link / set password later)
+        const insertResult = await pool.query(
+          `INSERT INTO users (
+            name, email, phone, skills, experience,
+            current_location, current_company_name, highest_qualification,
+            technical_skills, soft_skills, linkedin, resume,
+            role, verified, created_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'candidate', true, NOW())
+          RETURNING id, name, email`,
+          [
+            bc.name || "Unknown",
+            bc.email || null,
+            bc.contact || null,
+            bc.skills || null,
+            bc.experience || null,
+            bc.current_location || null,
+            bc.current_company_name || null,
+            bc.highest_qualification || null,
+            bc.technical_skills || null,
+            bc.soft_skills || null,
+            bc.linkedin || null,
+            bc.resume_link || null,
+          ]
+        );
+
+        // Mark bulk candidate as pushed
+        await pool.query(
+          "UPDATE bulk_candidates SET status='pushed', updated_at=NOW() WHERE id=$1",
+          [id]
+        );
+
+        pushed.push(insertResult.rows[0]);
+      } catch (err) {
+        errors.push({ id, error: err.message });
+      }
+    }
+
+    res.json({
+      message: "Push completed",
+      pushedCount: pushed.length,
+      errorCount: errors.length,
+      pushed,
+      errors,
+    });
+  } catch (err) {
+    console.error("pushBulkCandidatesToMain error:", err);
+    res.status(500).json({ message: "Failed to push candidates" });
+  }
+};
