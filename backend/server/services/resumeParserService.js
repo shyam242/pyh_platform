@@ -103,21 +103,41 @@ const extractLinkedIn = (text) => {
 };
 
 const extractName = (text) => {
-  // Names are usually in the first 5 non-empty lines, before email/phone
+  // Names are usually in the first few non-empty lines, before email/phone/url
   const lines = text
     .split("\n")
     .map((l) => l.trim())
-    .filter((l) => l.length > 1 && l.length < 60);
+    .filter((l) => l.length > 1 && l.length < 80);
 
-  for (const line of lines.slice(0, 8)) {
+  for (const line of lines.slice(0, 12)) {
     // Skip lines that look like headers, emails, phones, URLs
-    if (/[@|http|linkedin|github|www\.|objective|summary|profile|education|experience|skill]/i.test(line)) continue;
-    if (/\d{5,}/.test(line)) continue; // skip lines with long numbers
-    if (/[,;|]/.test(line) && line.split(" ").length > 5) continue; // skip address-like lines
-    // Must look like a name: 2-4 words, mostly letters
+    if (/@/.test(line)) continue; // email
+    if (/https?:\/\/|linkedin\.com|github\.com|www\./i.test(line)) continue; // URLs
+    if (/\b(objective|summary|profile|education|experience|skills?|contact|curriculum|vitae|resume|declaration|project|internship|achievement|certif)\b/i.test(line)) continue; // section headers
+    if (/\d{7,}/.test(line)) continue; // lines with long digit runs (phone/aadhaar)
+    if (/[|]{1}/.test(line) && line.split(" ").length > 6) continue; // pipe-separated address lines
+
     const words = line.trim().split(/\s+/);
-    if (words.length >= 2 && words.length <= 5 && words.every((w) => /^[A-Za-z.'-]+$/.test(w))) {
+
+    // Primary: 2-4 words, all alpha (allows dots and hyphens for initials like "A. B. Kumar")
+    if (
+      words.length >= 2 &&
+      words.length <= 4 &&
+      words.every((w) => /^[A-Za-z][A-Za-z.''-]*$/.test(w))
+    ) {
       return line.trim();
+    }
+
+    // Fallback: single word if it looks like a full name in all-caps or title case, min 4 chars
+    // e.g. "RAJESWARI" or headers that are just a surname
+    if (
+      words.length === 1 &&
+      words[0].length >= 4 &&
+      /^[A-Za-z]+$/.test(words[0])
+    ) {
+      // Only accept single-word if line 0 or 1 (very top of resume)
+      const lineIdx = lines.indexOf(line);
+      if (lineIdx <= 1) return line.trim();
     }
   }
   return "";
