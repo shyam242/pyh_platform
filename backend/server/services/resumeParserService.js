@@ -3,17 +3,72 @@
 import fetch from "node-fetch";
 import pdfParse from "pdf-parse";
 
+// ─── GOOGLE DRIVE URL CONVERTER ───────────────────────────────────────────────
+// Converts any Google Drive share/view/docs URL into a direct-download URL.
+// Supports:
+//   drive.google.com/file/d/FILE_ID/view?...
+//   drive.google.com/open?id=FILE_ID
+//   docs.google.com/document/d/FILE_ID/edit?...
+//   docs.google.com/spreadsheets/d/FILE_ID/...
+//   docs.google.com/presentation/d/FILE_ID/...
+export const toGoogleDriveDirectURL = (url) => {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname; // e.g. "drive.google.com" or "docs.google.com"
+
+    if (!host.endsWith("google.com")) return url; // not a Google URL — return as-is
+
+    // Pattern 1: drive.google.com/file/d/FILE_ID/...
+    const fileMatch = parsed.pathname.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+    if (fileMatch) {
+      return `https://drive.google.com/uc?export=download&id=${fileMatch[1]}`;
+    }
+
+    // Pattern 2: drive.google.com/open?id=FILE_ID
+    const openId = parsed.searchParams.get("id");
+    if (host === "drive.google.com" && openId) {
+      return `https://drive.google.com/uc?export=download&id=${openId}`;
+    }
+
+    // Pattern 3: docs.google.com/document|spreadsheets|presentation/d/FILE_ID/...
+    const docsMatch = parsed.pathname.match(/\/(?:document|spreadsheets|presentation)\/d\/([a-zA-Z0-9_-]+)/);
+    if (docsMatch) {
+      return `https://docs.google.com/document/d/${docsMatch[1]}/export?format=pdf`;
+    }
+
+    return url; // unknown Google URL — return unchanged
+  } catch {
+    return url; // invalid URL — return unchanged, let fetch fail naturally
+  }
+};
+
 // ─── PDF DOWNLOAD ─────────────────────────────────────────────────────────────
 export const downloadPDF = async (url) => {
+  // Convert Google Drive share links to direct download links before fetching
+  const directUrl = toGoogleDriveDirectURL(url);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
   try {
-    const res = await fetch(url, {
+    const res = await fetch(directUrl, {
       signal: controller.signal,
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; PYH-ResumeParser/1.0)" },
+      // Google Drive may redirect once for large files — follow redirects (default)
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; PYH-ResumeParser/1.0)",
+      },
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status} when downloading PDF`);
+    if (!res.ok) throw new Error(`HTTP ${res.status} when downloading PDF from ${directUrl}`);
+
     const buffer = await res.buffer();
+
+    // Validate that we actually got a PDF and not an HTML error page
+    // PDF files start with the magic bytes: %PDF  (hex: 25 50 44 46)
+    if (buffer.length < 4 || buffer.slice(0, 4).toString("ascii") !== "%PDF") {
+      throw new Error(
+        "Invalid PDF structure — received non-PDF content. " +
+        "If this is a Google Drive link, ensure the file is shared as 'Anyone with the link can view'."
+      );
+    }
+
     return buffer;
   } finally {
     clearTimeout(timeout);
