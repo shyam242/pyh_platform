@@ -32,7 +32,7 @@ export default function BulkCandidateDetailPage() {
         setCandidate(found);
       } else {
         showError("Candidate not found");
-        router.back();
+        router.push("/admin/bulk-candidates");
       }
     } catch (err) {
       showError("Failed to load candidate details");
@@ -92,7 +92,7 @@ export default function BulkCandidateDetailPage() {
         <div style={{ maxWidth: 1000, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 60 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button
-              onClick={() => router.back()}
+              onClick={() => router.push("/admin/bulk-candidates")}
               style={{ width: 34, height: 34, borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
             >
               <ArrowLeft size={16} color="#374151" />
