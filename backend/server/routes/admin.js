@@ -23,6 +23,7 @@ import {
   updateBulkCandidateStatus,
   getCandidateStatusStats,
   bulkUploadResumeLinks,
+  pushBulkCandidatesToMain,
 } from "../controllers/adminController.js";
 import { adminParseProjects } from "../controllers/jdMatchController.js";
 
@@ -77,6 +78,7 @@ router.post("/bulk-upload/candidates", protect, bulkUploadCandidates);
 router.post("/bulk-upload/csv", protect, upload.single("csvFile"), uploadCandidatesCSV);
 router.post("/bulk-upload/resume-links", protect, bulkUploadResumeLinks);
 router.get("/bulk-candidates", protect, getBulkUploadedCandidates);
+router.post("/bulk-candidates/push-to-candidates", protect, pushBulkCandidatesToMain);
 router.delete("/bulk-candidates/:candidateId", protect, deleteBulkCandidate);
 
 // CANDIDATE STATUS MANAGEMENT
