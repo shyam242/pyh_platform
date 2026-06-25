@@ -21,7 +21,8 @@ import {
   deleteBulkCandidate,
   revokeReferrerIncentive,
   updateBulkCandidateStatus,
-  getCandidateStatusStats
+  getCandidateStatusStats,
+  bulkUploadResumeLinks,
 } from "../controllers/adminController.js";
 import { adminParseProjects } from "../controllers/jdMatchController.js";
 
@@ -74,6 +75,7 @@ router.delete("/incentives/:referrerId", protect, revokeReferrerIncentive);
 router.post("/bulk-upload/jobs", protect, bulkUploadJobs);
 router.post("/bulk-upload/candidates", protect, bulkUploadCandidates);
 router.post("/bulk-upload/csv", protect, upload.single("csvFile"), uploadCandidatesCSV);
+router.post("/bulk-upload/resume-links", protect, bulkUploadResumeLinks);
 router.get("/bulk-candidates", protect, getBulkUploadedCandidates);
 router.delete("/bulk-candidates/:candidateId", protect, deleteBulkCandidate);
 
