@@ -23,7 +23,8 @@ import {
   updateBulkCandidateStatus,
   getCandidateStatusStats,
   bulkUploadResumeLinks,
-  pushBulkCandidatesToMain,
+  updateBulkCandidateDetails,
+  updateCandidateDetails,
 } from "../controllers/adminController.js";
 import { adminParseProjects } from "../controllers/jdMatchController.js";
 
@@ -78,11 +79,12 @@ router.post("/bulk-upload/candidates", protect, bulkUploadCandidates);
 router.post("/bulk-upload/csv", protect, upload.single("csvFile"), uploadCandidatesCSV);
 router.post("/bulk-upload/resume-links", protect, bulkUploadResumeLinks);
 router.get("/bulk-candidates", protect, getBulkUploadedCandidates);
-router.post("/bulk-candidates/push-to-candidates", protect, pushBulkCandidatesToMain);
 router.delete("/bulk-candidates/:candidateId", protect, deleteBulkCandidate);
 
 // CANDIDATE STATUS MANAGEMENT
 router.put("/bulk-candidates/:candidateId/status", protect, updateBulkCandidateStatus);
+router.put("/bulk-candidates/:candidateId/details", protect, updateBulkCandidateDetails);
+router.put("/candidates/:candidateId/details", protect, updateCandidateDetails);
 router.get("/candidate-status-stats", protect, getCandidateStatusStats);
 
 // PROJECT PARSING (admin can trigger for any candidate)
