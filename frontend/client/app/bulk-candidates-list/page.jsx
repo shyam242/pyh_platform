@@ -129,6 +129,10 @@ export default function BulkCandidatesPage() {
       <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "0 32px" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button onClick={() => router.push("/recruiter")}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, backgroundColor: "#fff", fontSize: 13, color: "#64748b", cursor: "pointer", fontFamily: "inherit", fontWeight: 500, marginRight: 4 }}>
+              ← Dashboard
+            </button>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: "#eef2ff", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Users size={18} color="#4f46e5" />
             </div>
