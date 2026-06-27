@@ -10,6 +10,22 @@ import { API_BASE_URL } from "@/utils/api";
 const O = "#ff9d4d";
 const BORDER = "#e2e8f0";
 
+// Defined OUTSIDE component to prevent remount-on-every-keystroke cursor bug
+const Input = ({ label, field, type = "text", form, setForm }) => (
+  <div style={{ marginBottom: 14 }}>
+    <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</label>
+    <input
+      type={type}
+      value={form[field] || ""}
+      onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
+      placeholder={label}
+      style={{ width: "100%", padding: "9px 12px", fontSize: 13, border: `1.5px solid ${BORDER}`, borderRadius: 8, outline: "none", fontFamily: "inherit", boxSizing: "border-box", color: "#0f172a", backgroundColor: "#f8fafc" }}
+      onFocus={e => e.target.style.borderColor = O}
+      onBlur={e => e.target.style.borderColor = BORDER}
+    />
+  </div>
+);
+
 export default function AdminCandidateDetailsPage() {
   const router = useRouter();
   const params = useParams();
@@ -116,21 +132,6 @@ export default function AdminCandidateDetailsPage() {
     }
   };
 
-  const Input = ({ label, field, type = "text" }) => (
-    <div style={{ marginBottom: 14 }}>
-      <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</label>
-      <input
-        type={type}
-        value={form[field] || ""}
-        onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
-        placeholder={label}
-        style={{ width: "100%", padding: "9px 12px", fontSize: 13, border: `1.5px solid ${BORDER}`, borderRadius: 8, outline: "none", fontFamily: "inherit", boxSizing: "border-box", color: "#0f172a", backgroundColor: "#f8fafc" }}
-        onFocus={e => e.target.style.borderColor = O}
-        onBlur={e => e.target.style.borderColor = BORDER}
-      />
-    </div>
-  );
-
   if (loading) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "#f8fafc" }}>
       <p>Loading candidate details...</p>
@@ -173,18 +174,18 @@ export default function AdminCandidateDetailsPage() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
-              <Input label="Full Name" field="name" />
-              <Input label="Email" field="email" type="email" />
-              <Input label="Phone" field="phone" />
-              <Input label="Experience" field="experience" />
-              <Input label="Current Company" field="current_company_name" />
-              <Input label="Qualification" field="highest_qualification" />
-              <Input label="Current Location" field="current_location" />
-              <Input label="Preferred Location" field="preferred_location" />
-              <Input label="Current CTC (LPA)" field="cctc" />
-              <Input label="Expected CTC (LPA)" field="ectc" />
-              <Input label="Notice Period" field="notice_period" />
-              <Input label="Offer in Hand" field="offer_in_hand" />
+              <Input label="Full Name" field="name" form={form} setForm={setForm} />
+              <Input label="Email" field="email" type="email" form={form} setForm={setForm} />
+              <Input label="Phone" field="phone" form={form} setForm={setForm} />
+              <Input label="Experience" field="experience" form={form} setForm={setForm} />
+              <Input label="Current Company" field="current_company_name" form={form} setForm={setForm} />
+              <Input label="Qualification" field="highest_qualification" form={form} setForm={setForm} />
+              <Input label="Current Location" field="current_location" form={form} setForm={setForm} />
+              <Input label="Preferred Location" field="preferred_location" form={form} setForm={setForm} />
+              <Input label="Current CTC (LPA)" field="cctc" form={form} setForm={setForm} />
+              <Input label="Expected CTC (LPA)" field="ectc" form={form} setForm={setForm} />
+              <Input label="Notice Period" field="notice_period" form={form} setForm={setForm} />
+              <Input label="Offer in Hand" field="offer_in_hand" form={form} setForm={setForm} />
             </div>
 
             <div style={{ marginBottom: 14 }}>
@@ -217,7 +218,7 @@ export default function AdminCandidateDetailsPage() {
               </div>
             </div>
 
-            <Input label="LinkedIn Profile URL" field="linkedin_profile" />
+            <Input label="LinkedIn Profile URL" field="linkedin_profile" form={form} setForm={setForm} />
 
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8, paddingTop: 20, borderTop: `1px solid ${BORDER}` }}>
               <button onClick={() => setEditing(false)} style={{ padding: "10px 22px", border: `1.5px solid ${BORDER}`, borderRadius: 9, background: "#fff", color: "#475569", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
