@@ -317,7 +317,7 @@ function SigninInner() {
                   </div>
                   <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.55 }}>
                     I agree to PickYourHire's{" "}
-                    <a href="/terms-of-service" target="_blank" rel="noreferrer" style={{ color: O, fontWeight: 600, textDecoration: "underline" }} onClick={e => e.stopPropagation()}>Terms of Service</a>
+                    <a href="https://www.pickyourhire.com/terms-of-service" target="_blank" rel="noreferrer" style={{ color: O, fontWeight: 600, textDecoration: "underline" }} onClick={e => e.stopPropagation()}>Terms of Service</a>
                     {" "}and{" "}
                     <a href="https://www.pickyourhire.com/privacy-policy" target="_blank" rel="noreferrer" style={{ color: O, fontWeight: 600, textDecoration: "underline" }} onClick={e => e.stopPropagation()}>Privacy Policy</a>
                     . I understand how my data will be used to match me with relevant job opportunities.
