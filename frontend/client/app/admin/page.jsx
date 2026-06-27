@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { Users, DollarSign, UserCheck, Briefcase, LogOut, Trash2, Upload, ChevronDown } from "lucide-react";
+import { Users, DollarSign, UserCheck, Briefcase, LogOut, Trash2, Upload, ChevronDown, ChevronRight, X, TrendingUp, Info, Megaphone, ShieldCheck, UserPlus, Zap, BarChart2, ArrowLeft } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
 
@@ -28,6 +28,7 @@ export default function AdminDashboard() {
   const [candidateStatusStats, setCandidateStatusStats] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(null);
   const [filterStatus, setFilterStatus] = useState("all");
+  const [expandedCard, setExpandedCard] = useState(null); // "candidates"|"referrers"|"recruiters"|"referrals"
 
   // Resume link parser state
   const [resumeLinks, setResumeLinks] = useState("");
@@ -1350,45 +1351,194 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {activeTab === "overview" && dashboardData && (
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-            gap: "1.5rem",
-            marginBottom: "3rem"
-          }}>
-            {[
-              { label: "Total Candidates", value: dashboardData.totalCandidates, color: "#3b82f6" },
-              { label: "Total Referrers", value: dashboardData.totalReferrers, color: "#10b981" },
-              { label: "Recruiters (Approved)", value: dashboardData.approvedRecruiters, color: "#8b5cf6" },
-              { label: "Total Referrals", value: dashboardData.totalReferrals, color: "#f59e0b" }
-            ].map((stat, idx) => (
-              <div key={idx} style={{
-                backgroundColor: "#ffffff",
-                borderRadius: "0.75rem",
-                border: "1px solid #e5e7eb",
-                padding: "1.5rem",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-                display: "flex",
-                alignItems: "center",
-                gap: "1.5rem",
-                transition: "all 0.3s"
-              }}>
-                <div style={{
-                  backgroundColor: stat.color + "20",
-                  padding: "1rem",
-                  borderRadius: "0.5rem"
-                }}>
-                  <div style={{ width: "2rem", height: "2rem", backgroundColor: stat.color, borderRadius: "0.25rem" }} />
-                </div>
+        {activeTab === "overview" && dashboardData && (() => {
+          const O = "#E87722", O_LITE = "#FFF3E8", O_MID = "#FBBF7A", BORDER = "#EBEBEB";
+          const topReferrer = referrers.reduce((top, r) => (!top || (r.referral_count || 0) > (top.referral_count || 0)) ? r : top, null);
+
+          const cards = [
+            {
+              id: "candidates",
+              label: "Total Candidates",
+              value: dashboardData.totalCandidates,
+              change: "+20%",
+              icon: Users,
+              iconBg: "#EFF6FF", iconColor: "#1d4ed8",
+              viewLabel: "View all candidates",
+              viewHref: () => setActiveTab("candidates"),
+              details: [
+                { label: "Active Candidates", value: dashboardData.activeCandidates ?? candidates.filter(c => c.status !== "rejected").length },
+                { label: "New This Month", value: dashboardData.newCandidatesThisMonth ?? "—" },
+                { label: "Shortlisted", value: dashboardData.shortlistedCandidates ?? "—" },
+                { label: "Rejected", value: dashboardData.rejectedCandidates ?? "—" },
+              ],
+              detailLinkLabel: "View all candidates",
+              detailLinkHref: () => setActiveTab("candidates"),
+              labelColor: "#1d4ed8",
+            },
+            {
+              id: "referrers",
+              label: "Total Referrers",
+              value: dashboardData.totalReferrers,
+              change: "+25%",
+              icon: Users,
+              iconBg: "#DCFCE7", iconColor: "#15803d",
+              viewLabel: "View all referrers",
+              viewHref: () => window.location.href = "/admin/referrers",
+              details: [
+                { label: "Active Referrers", value: referrers.filter(r => (r.referral_count || 0) > 0).length || "—" },
+                { label: "New This Month", value: dashboardData.newReferrersThisMonth ?? "—" },
+                { label: "Inactive", value: referrers.filter(r => !(r.referral_count > 0)).length || "—" },
+                { label: "Top Referrer", value: topReferrer?.name?.split(" ")[0] || "—" },
+              ],
+              detailLinkLabel: "View all referrers",
+              detailLinkHref: () => window.location.href = "/admin/referrers",
+              labelColor: "#15803d",
+            },
+            {
+              id: "recruiters",
+              label: "Recruiters (Approved)",
+              value: dashboardData.approvedRecruiters,
+              change: "+100%",
+              icon: ShieldCheck,
+              iconBg: "#F3E8FF", iconColor: "#7c3aed",
+              viewLabel: "View all recruiters",
+              viewHref: () => setActiveTab("recruiters"),
+              details: [
+                { label: "Pending Approval", value: pendingRecruiters.length },
+                { label: "Approved", value: dashboardData.approvedRecruiters },
+                { label: "Rejected", value: dashboardData.rejectedRecruiters ?? "—" },
+                { label: "Total Recruiters", value: (pendingRecruiters.length || 0) + (dashboardData.approvedRecruiters || 0) },
+              ],
+              detailLinkLabel: "View all recruiters",
+              detailLinkHref: () => setActiveTab("recruiters"),
+              labelColor: "#7c3aed",
+            },
+            {
+              id: "referrals",
+              label: "Total Referrals",
+              value: dashboardData.totalReferrals,
+              change: "+30%",
+              icon: Megaphone,
+              iconBg: "#FFF7ED", iconColor: O,
+              viewLabel: "View all referrals",
+              viewHref: () => setActiveTab("candidates"),
+              details: [
+                { label: "Successful Referrals", value: dashboardData.successfulReferrals ?? "—" },
+                { label: "Pending Referrals", value: dashboardData.pendingReferrals ?? "—" },
+                { label: "Expired Referrals", value: dashboardData.expiredReferrals ?? "—" },
+                { label: "Conversion Rate", value: dashboardData.conversionRate ? `${dashboardData.conversionRate}%` : "—" },
+              ],
+              detailLinkLabel: "View all referrals",
+              detailLinkHref: () => setActiveTab("candidates"),
+              labelColor: O,
+            },
+          ];
+
+          return (
+            <div style={{ marginBottom: "2rem" }}>
+              {/* Dashboard header */}
+              <div style={{ background: "linear-gradient(135deg, #f8fafc 0%, #fff7ed 100%)", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "24px 28px", marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
-                  <p style={{ color: "#6b7280", fontSize: "0.875rem", marginBottom: "0.25rem", margin: 0 }}>{stat.label}</p>
-                  <p style={{ fontSize: "1.75rem", fontWeight: "700", color: "#0f172a", margin: 0 }}>{stat.value}</p>
+                  <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 4px", color: "#0f172a" }}>Dashboard Overview</h2>
+                  <p style={{ fontSize: 13, color: "#64748b", margin: 0 }}>Manage your platform efficiently from this comprehensive dashboard</p>
+                </div>
+                <div style={{ width: 64, height: 64, borderRadius: 16, background: "linear-gradient(135deg, #fff 0%, #FFF3E8 100%)", border: `1.5px solid ${O_MID}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <BarChart2 size={28} color={O} />
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+
+              {/* Stat cards grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 28 }}>
+                {cards.map(card => {
+                  const Icon = card.icon;
+                  const isOpen = expandedCard === card.id;
+                  return (
+                    <div key={card.id} style={{ backgroundColor: "#fff", border: `1.5px solid ${isOpen ? card.iconColor : BORDER}`, borderRadius: 16, overflow: "hidden", transition: "border-color 0.2s", boxShadow: isOpen ? `0 4px 20px ${card.iconColor}18` : "none" }}>
+                      {/* Main card content */}
+                      <div style={{ padding: "20px 20px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
+                          <div style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: card.iconBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Icon size={20} color={card.iconColor} />
+                          </div>
+                          <button
+                            onClick={() => setExpandedCard(isOpen ? null : card.id)}
+                            style={{ width: 24, height: 24, borderRadius: "50%", border: `1.5px solid ${BORDER}`, backgroundColor: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Info size={12} color="#94a3b8" />
+                          </button>
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#64748b", marginBottom: 4 }}>{card.label}</div>
+                        <div style={{ fontSize: 32, fontWeight: 800, color: "#0f172a", lineHeight: 1, marginBottom: 8 }}>{card.value ?? "—"}</div>
+                        <div style={{ fontSize: 12, color: "#3B6D11", fontWeight: 600, marginBottom: 12 }}>
+                          ↑ {card.change} <span style={{ color: "#94a3b8", fontWeight: 400 }}>vs last 30 days</span>
+                        </div>
+                        <button
+                          onClick={card.viewHref}
+                          style={{ fontSize: 13, fontWeight: 600, color: card.labelColor, background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4, fontFamily: "inherit" }}>
+                          {card.viewLabel} <ChevronRight size={13} />
+                        </button>
+                      </div>
+
+                      {/* Expandable dropdown */}
+                      {isOpen && (
+                        <div style={{ borderTop: `1.5px solid ${BORDER}`, padding: "16px 20px", backgroundColor: "#FAFAFA" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: card.labelColor }}>{card.label}</span>
+                            <button onClick={() => setExpandedCard(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8" }}><X size={13} /></button>
+                          </div>
+                          {card.details.map(d => (
+                            <div key={d.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid ${BORDER}` }}>
+                              <span style={{ fontSize: 13, color: "#475569" }}>{d.label}</span>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{d.value}</span>
+                            </div>
+                          ))}
+                          <button
+                            onClick={card.detailLinkHref}
+                            style={{ marginTop: 12, fontSize: 12, fontWeight: 600, color: card.labelColor, background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4, fontFamily: "inherit" }}>
+                            {card.detailLinkLabel} <ChevronRight size={12} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Quick Shortcuts */}
+              <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "24px 28px" }}>
+                <div style={{ marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 17, fontWeight: 700, margin: "0 0 3px", color: "#0f172a" }}>Quick Shortcuts</h3>
+                  <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>Frequently used actions to save your time</p>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
+                  {[
+                    { label: "Add Candidates", desc: "Add new candidates to the platform", icon: UserPlus, shortcut: "Alt + C", bg: "#EFF6FF", color: "#1d4ed8", action: () => setActiveTab("bulk-candidates") },
+                    { label: "Post Jobs", desc: "Create and publish new job openings", icon: Briefcase, shortcut: "Alt + J", bg: "#DCFCE7", color: "#15803d", action: () => window.location.href = "/admin/post-job" },
+                    { label: "Recruiter", desc: "Manage recruiters and approvals", icon: UserCheck, shortcut: "Alt + R", bg: "#F3E8FF", color: "#7c3aed", action: () => setActiveTab("pending-recruiters") },
+                    { label: "AI Resume Parser", desc: "Parse resumes using AI technology", icon: Zap, shortcut: "Alt + P", bg: "#FFF7ED", color: O, action: () => setActiveTab("resume-parse") },
+                    { label: "CV Add", desc: "Upload and manage CVs", icon: Upload, shortcut: "Alt + V", bg: "#ECFDF5", color: "#059669", action: () => window.location.href = "/admin/bulk-candidates" },
+                  ].map(s => {
+                    const Icon = s.icon;
+                    return (
+                      <button key={s.label} onClick={s.action}
+                        style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", padding: "16px", border: `1.5px solid ${BORDER}`, borderRadius: 14, backgroundColor: "#fff", cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all 0.15s" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = s.color; e.currentTarget.style.backgroundColor = s.bg; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = BORDER; e.currentTarget.style.backgroundColor = "#fff"; }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: s.bg, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
+                          <Icon size={16} color={s.color} />
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 3, display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                          {s.label} <ChevronRight size={12} color="#94a3b8" />
+                        </div>
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 10, lineHeight: 1.4 }}>{s.desc}</div>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b", backgroundColor: "#F1F5F9", padding: "2px 8px", borderRadius: 5 }}>{s.shortcut}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {activeTab === "jobs" && (
           <div style={{
