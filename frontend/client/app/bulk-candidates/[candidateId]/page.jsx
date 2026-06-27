@@ -14,6 +14,22 @@ import { API_BASE_URL } from "@/utils/api";
 const O = "#f97316";
 const BORDER = "#e5e7eb";
 
+// Defined OUTSIDE component to prevent remount-on-every-keystroke cursor bug
+const Input = ({ label, field, form, setForm, type = "text", placeholder }) => (
+  <div style={{ marginBottom: 14 }}>
+    <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</label>
+    <input
+      type={type}
+      value={form[field] || ""}
+      onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
+      placeholder={placeholder || label}
+      style={{ width: "100%", padding: "9px 12px", fontSize: 13, border: `1.5px solid ${BORDER}`, borderRadius: 8, outline: "none", fontFamily: "inherit", boxSizing: "border-box", color: "#111827", backgroundColor: "#fafafa" }}
+      onFocus={e => e.target.style.borderColor = O}
+      onBlur={e => e.target.style.borderColor = BORDER}
+    />
+  </div>
+);
+
 export default function BulkCandidateDetailPage() {
   const router = useRouter();
   const { candidateId } = useParams();
@@ -86,21 +102,6 @@ export default function BulkCandidateDetailPage() {
     </div>
   );
 
-  const Input = ({ label, field, type = "text", placeholder }) => (
-    <div style={{ marginBottom: 14 }}>
-      <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#6b7280", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</label>
-      <input
-        type={type}
-        value={form[field] || ""}
-        onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
-        placeholder={placeholder || label}
-        style={{ width: "100%", padding: "9px 12px", fontSize: 13, border: `1.5px solid ${BORDER}`, borderRadius: 8, outline: "none", fontFamily: "inherit", boxSizing: "border-box", color: "#111827", backgroundColor: "#fafafa" }}
-        onFocus={e => e.target.style.borderColor = O}
-        onBlur={e => e.target.style.borderColor = BORDER}
-      />
-    </div>
-  );
-
   if (loading) {
     return (
       <div style={{ minHeight: "100vh", background: "#f8f9fc", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -142,18 +143,18 @@ export default function BulkCandidateDetailPage() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
-              <Input label="Full Name" field="name" />
-              <Input label="Email" field="email" type="email" />
-              <Input label="Phone" field="contact" />
-              <Input label="Experience (years)" field="experience" />
-              <Input label="Current Company" field="current_company_name" />
-              <Input label="Qualification" field="highest_qualification" />
-              <Input label="Current Location" field="current_location" />
-              <Input label="Preferred Location" field="preferred_location" />
-              <Input label="Current CTC" field="current_ctc" />
-              <Input label="Expected CTC" field="expected_ctc" />
-              <Input label="Notice Period" field="notice_period" />
-              <Input label="Offer in Hand" field="offer_in_hand" />
+              <Input label="Full Name" field="name" form={form} setForm={setForm} />
+              <Input label="Email" field="email" type="email" form={form} setForm={setForm} />
+              <Input label="Phone" field="contact" form={form} setForm={setForm} />
+              <Input label="Experience (years)" field="experience" form={form} setForm={setForm} />
+              <Input label="Current Company" field="current_company_name" form={form} setForm={setForm} />
+              <Input label="Qualification" field="highest_qualification" form={form} setForm={setForm} />
+              <Input label="Current Location" field="current_location" form={form} setForm={setForm} />
+              <Input label="Preferred Location" field="preferred_location" form={form} setForm={setForm} />
+              <Input label="Current CTC" field="current_ctc" form={form} setForm={setForm} />
+              <Input label="Expected CTC" field="expected_ctc" form={form} setForm={setForm} />
+              <Input label="Notice Period" field="notice_period" form={form} setForm={setForm} />
+              <Input label="Offer in Hand" field="offer_in_hand" form={form} setForm={setForm} />
             </div>
 
             <div style={{ marginBottom: 14 }}>
@@ -186,7 +187,7 @@ export default function BulkCandidateDetailPage() {
               </div>
             </div>
 
-            <Input label="LinkedIn URL" field="linkedin" />
+            <Input label="LinkedIn URL" field="linkedin" form={form} setForm={setForm} />
 
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8, paddingTop: 20, borderTop: `1px solid ${BORDER}` }}>
               <button onClick={() => setEditing(false)} style={{ padding: "10px 22px", border: `1.5px solid ${BORDER}`, borderRadius: 9, background: "#fff", color: "#374151", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
