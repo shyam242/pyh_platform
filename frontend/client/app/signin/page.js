@@ -17,6 +17,7 @@ function SigninInner() {
   const [errors, setErrors]   = useState({});
   const [resendTimer, setResendTimer] = useState(0);
   const [emailFocused, setEmailFocused] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const otpRefs = useRef([]);
   const searchParams = useSearchParams();
   const magicToken = searchParams?.get("invite") || (typeof window !== "undefined" ? sessionStorage.getItem("magic_token") : null);
@@ -72,6 +73,7 @@ function SigninInner() {
   const verify = async () => {
     setErrors({});
     if (otpString.length !== 6) { setErrors({ otp: "Enter all 6 digits" }); return; }
+    if (!termsAccepted) { setErrors({ terms: "Please accept the Terms & Privacy Policy to continue" }); return; }
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
@@ -182,7 +184,7 @@ function SigninInner() {
 
           {magicToken && !otpSent && (
             <div style={{ backgroundColor: "#FFF3E8", border: "1.5px solid #FBBF7A", borderRadius: 12, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#C2410C", fontWeight: 500, display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 16 }}>🎉</span> You're joining as a <strong>Referrer</strong>
+              <span style={{ fontSize: 16 }}>🎉</span> You're joining as a <strong>Referrer</strong> — no role selection needed!
             </div>
           )}
           <div style={{ marginBottom: 36 }}>
@@ -198,16 +200,16 @@ function SigninInner() {
 
           {/* step indicator */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 32 }}>
-            {[{ n: 1, label: "Email" }, { n: 2, label: "Verify" }].map(({ n, label }, i) => {
-              const active = otpSent ? n === 2 : n === 1;
-              const done   = otpSent && n === 1;
+            {[{ n: 1, label: "Email" }, { n: 2, label: "Verify" }, { n: 3, label: "Agree" }].map(({ n, label }, i) => {
+              const active = !otpSent ? n === 1 : n === 2;
+              const done   = (otpSent && n === 1);
               return (
                 <div key={n} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, backgroundColor: done ? "#3B6D11" : active ? O : "#F1F5F9", color: done || active ? "#fff" : "#94a3b8" }}>
                     {done ? <CheckCircle size={14} /> : n}
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 500, color: active ? O : done ? "#3B6D11" : "#94a3b8" }}>{label}</span>
-                  {i === 0 && <div style={{ width: 40, height: 2, backgroundColor: otpSent ? "#3B6D11" : "#F1F5F9", borderRadius: 1 }} />}
+                  {i < 2 && <div style={{ width: 32, height: 2, backgroundColor: (i === 0 && otpSent) ? "#3B6D11" : "#F1F5F9", borderRadius: 1 }} />}
                 </div>
               );
             })}
@@ -295,11 +297,44 @@ function SigninInner() {
                 </button>
               </div>
 
+              {/* Terms & Privacy Policy */}
+              <div style={{ backgroundColor: "#FAFAFA", border: `1.5px solid ${errors.terms ? "#ef4444" : termsAccepted ? "#3B6D11" : "#E5E7EB"}`, borderRadius: 12, padding: "14px 16px", marginBottom: 16, transition: "border-color 0.15s" }}>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}>
+                  <div style={{ position: "relative", flexShrink: 0, marginTop: 2 }}>
+                    <input
+                      type="checkbox"
+                      checked={termsAccepted}
+                      onChange={e => { setTermsAccepted(e.target.checked); setErrors(err => ({ ...err, terms: undefined })); }}
+                      style={{ opacity: 0, position: "absolute", inset: 0, margin: 0, cursor: "pointer" }}
+                    />
+                    <div style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${termsAccepted ? "#3B6D11" : "#D1D5DB"}`, backgroundColor: termsAccepted ? "#3B6D11" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
+                      {termsAccepted && (
+                        <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+                          <path d="M1 4L4 7.5L10 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.55 }}>
+                    I agree to PickYourHire's{" "}
+                    <a href="/terms-of-service" target="_blank" rel="noreferrer" style={{ color: O, fontWeight: 600, textDecoration: "underline" }} onClick={e => e.stopPropagation()}>Terms of Service</a>
+                    {" "}and{" "}
+                    <a href="https://www.pickyourhire.com/privacy-policy" target="_blank" rel="noreferrer" style={{ color: O, fontWeight: 600, textDecoration: "underline" }} onClick={e => e.stopPropagation()}>Privacy Policy</a>
+                    . I understand how my data will be used to match me with relevant job opportunities.
+                  </div>
+                </label>
+                {errors.terms && (
+                  <p style={{ fontSize: 12, color: "#ef4444", margin: "8px 0 0 32px", display: "flex", alignItems: "center", gap: 4 }}>
+                    ⚠ {errors.terms}
+                  </p>
+                )}
+              </div>
+
               <button
-                onClick={verify} disabled={loading || otpString.length !== 6}
-                style={{ width: "100%", padding: "14px", backgroundColor: loading || otpString.length !== 6 ? "#F1F5F9" : O, color: loading || otpString.length !== 6 ? "#94a3b8" : "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: loading || otpString.length !== 6 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "inherit", marginBottom: 12, transition: "background-color 0.15s" }}
-                onMouseEnter={e => { if (!loading && otpString.length === 6) e.currentTarget.style.backgroundColor = "#C0601A"; }}
-                onMouseLeave={e => { if (!loading && otpString.length === 6) e.currentTarget.style.backgroundColor = O; }}
+                onClick={verify} disabled={loading || otpString.length !== 6 || !termsAccepted}
+                style={{ width: "100%", padding: "14px", backgroundColor: loading || otpString.length !== 6 || !termsAccepted ? "#F1F5F9" : O, color: loading || otpString.length !== 6 || !termsAccepted ? "#94a3b8" : "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: loading || otpString.length !== 6 || !termsAccepted ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "inherit", marginBottom: 12, transition: "background-color 0.15s" }}
+                onMouseEnter={e => { if (!loading && otpString.length === 6 && termsAccepted) e.currentTarget.style.backgroundColor = "#C0601A"; }}
+                onMouseLeave={e => { if (!loading && otpString.length === 6 && termsAccepted) e.currentTarget.style.backgroundColor = O; }}
               >
                 {loading ? "Verifying..." : <><span>Verify and sign in</span><ArrowRight size={17} /></>}
               </button>
