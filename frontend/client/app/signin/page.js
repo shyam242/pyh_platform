@@ -107,7 +107,7 @@ function SigninInner() {
       if (data.isAdmin || role === "admin") window.location.href = "/admin";
       else if (role === "referrer") window.location.href = "/referrer";
       else if (role === "recruiter") window.location.href = "/recruiter";
-      else if (role === "candidate") window.location.href = "/candidate-profile";
+      else if (role === "candidate") window.location.href = "/dashboard";
       else window.location.href = "/dashboard";
     } catch (err) { showError(err.message || "Verification failed"); }
     finally { setLoading(false); }
