@@ -226,7 +226,7 @@ export default function Home() {
             PICK<span style={{ color: O }}>YOUR</span>HIRE
           </span>
           <p style={{ fontSize: 13, color: "#94a3b8", margin: 0 }}>
-            &copy; {new Date().getFullYear()} PickYourHire. All rights reserved.
+            &copy; {new Date().getFullYear()} PYH Consultants. All rights reserved.
           </p>
           <div style={{ display: "flex", gap: 20 }}>
             {["Privacy", "Terms", "Contact"].map(l => (
