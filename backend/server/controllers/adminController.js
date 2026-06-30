@@ -3,8 +3,22 @@ import fs from "fs";
 import { parseCSVString, mapCandidateColumns } from "../services/csvParser.js";
 import { sendRecruiterApprovalEmail, sendRecruiterRejectionEmail } from "../services/brevoService.js";
 import { parseResumeFromURL } from "../services/resumeParserService.js"; // pure regex — no API key needed
+import { computeSuitabilityScore } from "../services/suitabilityScoreService.js";
 
 const ADMIN_EMAIL = "shyampickyourhire@gmail.com";
+
+// Shared list of valid candidate pipeline statuses (portal + bulk candidates)
+export const CANDIDATE_STATUSES = [
+  'New', 'Contacted', 'Interested', 'Not Interested', 'No Response',
+  'Follow-up Required', 'In Review', 'Shortlisted',
+  'Interview Scheduled', 'Interview Cleared', 'Offered',
+  'Hired', 'Rejected', 'On Hold'
+];
+
+const isAdmin = async (userId) => {
+  const r = await pool.query("SELECT role FROM users WHERE id=$1", [userId]);
+  return r.rows.length > 0 && r.rows[0].role === "admin";
+};
 
 // GET ADMIN DASHBOARD DATA
 export const getDashboardData = async (req, res) => {
@@ -1073,5 +1087,372 @@ export const updateCandidateDetails = async (req, res) => {
   } catch (err) {
     console.error("updateCandidateDetails error:", err);
     res.status(500).json({ message: "Failed to update candidate" });
+  }
+};
+
+// ════════════════════════════════════════════════════════════════
+// UNIFIED CANDIDATE STATUS MANAGEMENT (Portal users + Bulk uploads)
+// ════════════════════════════════════════════════════════════════
+
+// GET /api/admin/candidate-status/list
+// Query: search, status, source(all|portal|bulk), location, page, limit
+export const getUnifiedCandidateStatusList = async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const activeJobs = (await pool.query(
+      "SELECT job_title, department, qualifications, job_description, experience_required FROM jobs WHERE status='active'"
+    )).rows;
+
+    const portalRows = (await pool.query(
+      `SELECT id, name, email, contact, phone, job_role, skills, experience, current_location,
+              candidate_status, status_updated_at, created_at, resume_file_path, ai_suitability_score,
+              ai_score_breakdown, ai_score_updated_at
+       FROM users WHERE role='candidate' ORDER BY id DESC`
+    )).rows.map(r => ({ ...r, _source: "portal", contact: r.contact || r.phone, resume_link: r.resume_file_path }));
+
+    const bulkRows = (await pool.query(
+      `SELECT id, name, email, contact, role as job_role, skills, experience, current_location,
+              candidate_status, status_updated_at, created_at, resume_link, ai_suitability_score,
+              ai_score_breakdown, ai_score_updated_at
+       FROM bulk_candidates ORDER BY id DESC`
+    )).rows.map(r => ({ ...r, _source: "bulk" }));
+
+    let merged = [...portalRows, ...bulkRows];
+
+    // Live-compute AI suitability score for anyone never scored (or stale > skills changed) — cheap, deterministic
+    merged = merged.map((c) => {
+      if (c.ai_suitability_score === null || c.ai_suitability_score === undefined) {
+        const result = computeSuitabilityScore(c, activeJobs);
+        return { ...c, ai_suitability_score: result.score, ai_score_label: result.label, ai_score_breakdown: result.breakdown };
+      }
+      const labelFor = (s) => s >= 85 ? "Excellent Match" : s >= 70 ? "Very Good Match" : s >= 55 ? "Good Match" : s >= 40 ? "Average Match" : "Low Match";
+      return { ...c, ai_score_label: labelFor(c.ai_suitability_score) };
+    });
+
+    // ── Filters ──
+    const { search = "", status = "all", source = "all", location = "all", skill = "all" } = req.query;
+    const s = search.trim().toLowerCase();
+
+    if (s) {
+      merged = merged.filter(c =>
+        (c.name || "").toLowerCase().includes(s) ||
+        (c.email || "").toLowerCase().includes(s) ||
+        (c.contact || "").toLowerCase().includes(s) ||
+        (c.skills || "").toLowerCase().includes(s)
+      );
+    }
+    if (status !== "all") merged = merged.filter(c => (c.candidate_status || "New") === status);
+    if (source !== "all") merged = merged.filter(c => c._source === source);
+    if (location !== "all") merged = merged.filter(c => (c.current_location || "").toLowerCase() === location.toLowerCase());
+    if (skill !== "all") merged = merged.filter(c => (c.skills || "").toLowerCase().includes(skill.toLowerCase()));
+
+    // Sort newest first
+    merged.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+    const totalFiltered = merged.length;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.max(1, parseInt(req.query.limit) || 10);
+    const paged = merged.slice((page - 1) * limit, page * limit);
+
+    // Distinct filter options for dropdowns (computed from the FULL dataset, not just current page)
+    const allForOptions = [...portalRows, ...bulkRows];
+    const locations = [...new Set(allForOptions.map(c => c.current_location).filter(Boolean))].sort();
+    const skillsSet = new Set();
+    allForOptions.forEach(c => (c.skills || "").split(",").map(x => x.trim()).filter(Boolean).forEach(x => skillsSet.add(x)));
+
+    res.json({
+      candidates: paged,
+      total: totalFiltered,
+      totalAll: allForOptions.length,
+      portalCount: portalRows.length,
+      bulkCount: bulkRows.length,
+      page, limit,
+      totalPages: Math.max(1, Math.ceil(totalFiltered / limit)),
+      filters: { locations, skills: [...skillsSet].sort(), statuses: CANDIDATE_STATUSES },
+    });
+  } catch (err) {
+    console.error("getUnifiedCandidateStatusList error:", err);
+    res.status(500).json({ message: "Failed to fetch candidate status list" });
+  }
+};
+
+// GET /api/admin/candidate-status/overview
+export const getUnifiedCandidateStatusOverview = async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const portal = (await pool.query("SELECT candidate_status FROM users WHERE role='candidate'")).rows;
+    const bulk = (await pool.query("SELECT candidate_status FROM bulk_candidates")).rows;
+    const all = [...portal, ...bulk];
+
+    const bucket = (s) => {
+      const v = (s || "New").toLowerCase();
+      if (["hired"].includes(v)) return "Hired";
+      if (["offered"].includes(v)) return "Offered";
+      if (["interview scheduled", "interview cleared"].includes(v)) return "Interview Scheduled";
+      if (["rejected", "not interested"].includes(v)) return "Rejected";
+      if (["on hold"].includes(v)) return "On Hold";
+      return "Contacted";
+    };
+
+    const counts = { Total: all.length, Contacted: 0, "Interview Scheduled": 0, Offered: 0, Hired: 0, Rejected: 0, "On Hold": 0 };
+    all.forEach(c => { counts[bucket(c.candidate_status)]++; });
+
+    // Raw distribution too (used for the granular filter chips already in the UI)
+    const byStatusMap = {};
+    all.forEach(c => { const k = c.candidate_status || "New"; byStatusMap[k] = (byStatusMap[k] || 0) + 1; });
+    const byStatus = Object.entries(byStatusMap).map(([candidate_status, count]) => ({ candidate_status, count }));
+
+    res.json({ total: all.length, counts, byStatus, portalTotal: portal.length, bulkTotal: bulk.length });
+  } catch (err) {
+    console.error("getUnifiedCandidateStatusOverview error:", err);
+    res.status(500).json({ message: "Failed to fetch overview" });
+  }
+};
+
+// PUT /api/admin/candidate-status/:source/:id
+export const updateUnifiedCandidateStatus = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    if (!(await isAdmin(adminId))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const { source, id } = req.params;
+    const { candidate_status } = req.body;
+    if (!CANDIDATE_STATUSES.includes(candidate_status)) {
+      return res.status(400).json({ message: "Invalid status. Valid: " + CANDIDATE_STATUSES.join(", ") });
+    }
+    if (!["portal", "bulk"].includes(source)) return res.status(400).json({ message: "Invalid source" });
+
+    const table = source === "portal" ? "users" : "bulk_candidates";
+    const roleClause = source === "portal" ? "AND role='candidate'" : "";
+    const result = await pool.query(
+      `UPDATE ${table} SET candidate_status=$1, status_updated_at=NOW(), status_updated_by=$2 WHERE id=$3 ${roleClause} RETURNING *`,
+      [candidate_status, adminId, id]
+    );
+    if (!result.rows.length) return res.status(404).json({ message: "Candidate not found" });
+
+    res.json({ message: "Status updated", candidate: result.rows[0] });
+  } catch (err) {
+    console.error("updateUnifiedCandidateStatus error:", err);
+    res.status(500).json({ message: "Failed to update status" });
+  }
+};
+
+// GET /api/admin/candidate-status/export — CSV download honoring the same filters as the list view
+export const exportUnifiedCandidateStatusCSV = async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const portalRows = (await pool.query(
+      `SELECT id, name, email, contact, phone, job_role, skills, experience, current_location, candidate_status, created_at
+       FROM users WHERE role='candidate' ORDER BY id DESC`
+    )).rows.map(r => ({ ...r, _source: "Portal", contact: r.contact || r.phone }));
+
+    const bulkRows = (await pool.query(
+      `SELECT id, name, email, contact, role as job_role, skills, experience, current_location, candidate_status, created_at
+       FROM bulk_candidates ORDER BY id DESC`
+    )).rows.map(r => ({ ...r, _source: "Bulk" }));
+
+    let merged = [...portalRows, ...bulkRows];
+    const { search = "", status = "all", source = "all" } = req.query;
+    const s = search.trim().toLowerCase();
+    if (s) merged = merged.filter(c => (c.name || "").toLowerCase().includes(s) || (c.email || "").toLowerCase().includes(s));
+    if (status !== "all") merged = merged.filter(c => (c.candidate_status || "New") === status);
+    if (source !== "all") merged = merged.filter(c => c._source.toLowerCase() === source);
+
+    const headers = ["ID", "Source", "Name", "Email", "Contact", "Role", "Skills", "Experience", "Location", "Status", "Created At"];
+    const escape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [headers.join(",")];
+    merged.forEach(c => {
+      lines.push([c.id, c._source, c.name, c.email, c.contact, c.job_role, c.skills, c.experience, c.current_location, c.candidate_status || "New", c.created_at]
+        .map(escape).join(","));
+    });
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="candidate-status-${Date.now()}.csv"`);
+    res.send(lines.join("\n"));
+  } catch (err) {
+    console.error("exportUnifiedCandidateStatusCSV error:", err);
+    res.status(500).json({ message: "Failed to export CSV" });
+  }
+};
+
+// ════════════════════════════════════════════════════════════════
+// RECRUITER APPROVAL CENTER
+// ════════════════════════════════════════════════════════════════
+
+const documentsStatusFor = (r) => {
+  const fields = [r.company_name, r.company_website, r.phone];
+  const filled = fields.filter(Boolean).length;
+  if (filled === fields.length) return "Complete";
+  if (filled === 0) return "Missing";
+  return "Partial";
+};
+
+const logRecruiterActivity = async (recruiter, action, note, adminId) => {
+  await pool.query(
+    `INSERT INTO recruiter_activity_log (recruiter_id, recruiter_name, company_name, action, note, actor_admin_id)
+     VALUES ($1,$2,$3,$4,$5,$6)`,
+    [recruiter.id, recruiter.name, recruiter.company_name, action, note || null, adminId]
+  );
+};
+
+// GET /api/admin/recruiters/pending  (rich filters for the Approval Center)
+// Query: search, status(pending|approved|rejected|all - default pending), company, registeredOn(today|week|month|all)
+export const getRecruiterApprovalCenter = async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const { search = "", status = "pending", company = "all", registeredOn = "all" } = req.query;
+
+    let recruiters = (await pool.query(
+      `SELECT id, name, email, phone, company_name, company_website, is_recruiter_approved,
+              recruiter_status, recruiter_approved_at, recruiter_rejected_at, rejection_reason, created_at
+       FROM users WHERE role='recruiter' ORDER BY id DESC`
+    )).rows.map(r => ({ ...r, documents_status: documentsStatusFor(r), recruiter_status: r.recruiter_status || (r.is_recruiter_approved ? "approved" : "pending") }));
+
+    const s = search.trim().toLowerCase();
+    if (s) {
+      recruiters = recruiters.filter(r =>
+        (r.name || "").toLowerCase().includes(s) ||
+        (r.email || "").toLowerCase().includes(s) ||
+        (r.company_name || "").toLowerCase().includes(s)
+      );
+    }
+    if (status !== "all") recruiters = recruiters.filter(r => r.recruiter_status === status);
+    if (company !== "all") recruiters = recruiters.filter(r => r.company_name === company);
+    if (registeredOn !== "all") {
+      const now = new Date();
+      const cutoffs = { today: 1, week: 7, month: 30 };
+      const days = cutoffs[registeredOn] ?? null;
+      if (days) {
+        const cutoff = new Date(now.getTime() - days * 86400000);
+        recruiters = recruiters.filter(r => new Date(r.created_at) >= cutoff);
+      }
+    }
+
+    const allRecruiters = (await pool.query(
+      `SELECT recruiter_status, is_recruiter_approved, company_name FROM users WHERE role='recruiter'`
+    )).rows;
+    const stats = {
+      pending: allRecruiters.filter(r => (r.recruiter_status || (r.is_recruiter_approved ? "approved" : "pending")) === "pending").length,
+      approved: allRecruiters.filter(r => (r.recruiter_status || (r.is_recruiter_approved ? "approved" : "pending")) === "approved").length,
+      rejected: allRecruiters.filter(r => r.recruiter_status === "rejected").length,
+      total: allRecruiters.length,
+    };
+    const companies = [...new Set(allRecruiters.map(r => r.company_name).filter(Boolean))].sort();
+
+    const activity = (await pool.query(
+      `SELECT * FROM recruiter_activity_log ORDER BY created_at DESC LIMIT 8`
+    )).rows;
+
+    res.json({ recruiters, stats, companies, activity });
+  } catch (err) {
+    console.error("getRecruiterApprovalCenter error:", err);
+    res.status(500).json({ message: "Failed to fetch recruiter approval data" });
+  }
+};
+
+// GET /api/admin/recruiters/export
+export const exportRecruitersCSV = async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
+    const { status = "all" } = req.query;
+    let recruiters = (await pool.query(
+      `SELECT id, name, email, phone, company_name, company_website, recruiter_status, is_recruiter_approved, created_at, recruiter_approved_at
+       FROM users WHERE role='recruiter' ORDER BY id DESC`
+    )).rows.map(r => ({ ...r, recruiter_status: r.recruiter_status || (r.is_recruiter_approved ? "approved" : "pending") }));
+    if (status !== "all") recruiters = recruiters.filter(r => r.recruiter_status === status);
+
+    const headers = ["ID", "Name", "Email", "Phone", "Company", "Website", "Status", "Registered On", "Approved On"];
+    const escape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [headers.join(",")];
+    recruiters.forEach(r => lines.push([r.id, r.name, r.email, r.phone, r.company_name, r.company_website, r.recruiter_status, r.created_at, r.recruiter_approved_at].map(escape).join(",")));
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="recruiters-${Date.now()}.csv"`);
+    res.send(lines.join("\n"));
+  } catch (err) {
+    console.error("exportRecruitersCSV error:", err);
+    res.status(500).json({ message: "Failed to export recruiters" });
+  }
+};
+
+// PUT /api/admin/recruiters/:recruiterId/approve  (overrides legacy handler with activity logging)
+export const approveRecruiterV2 = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    if (!(await isAdmin(adminId))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const { recruiterId } = req.params;
+    const check = await pool.query("SELECT * FROM users WHERE id=$1 AND role='recruiter'", [recruiterId]);
+    if (!check.rows.length) return res.status(404).json({ message: "Recruiter not found" });
+    const recruiter = check.rows[0];
+
+    const result = await pool.query(
+      `UPDATE users SET is_recruiter_approved=true, recruiter_status='approved', recruiter_approved_at=NOW(),
+              rejection_reason=NULL, recruiter_rejected_at=NULL
+       WHERE id=$1 RETURNING *`,
+      [recruiterId]
+    );
+
+    await logRecruiterActivity(recruiter, "approved", null, adminId);
+    try { await sendRecruiterApprovalEmail(recruiter.email, recruiter.name); } catch (e) { console.error("Approval email failed:", e.message); }
+
+    res.json({ message: "Recruiter approved successfully. Approval email sent.", recruiter: result.rows[0] });
+  } catch (err) {
+    console.error("approveRecruiterV2 error:", err);
+    res.status(500).json({ message: "Failed to approve recruiter" });
+  }
+};
+
+// PUT /api/admin/recruiters/:recruiterId/reject  (soft-reject — keeps the record, no destructive delete)
+export const rejectRecruiterV2 = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    if (!(await isAdmin(adminId))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const { recruiterId } = req.params;
+    const { reason } = req.body;
+    const check = await pool.query("SELECT * FROM users WHERE id=$1 AND role='recruiter'", [recruiterId]);
+    if (!check.rows.length) return res.status(404).json({ message: "Recruiter not found" });
+    const recruiter = check.rows[0];
+
+    const result = await pool.query(
+      `UPDATE users SET is_recruiter_approved=false, recruiter_status='rejected', recruiter_rejected_at=NOW(), rejection_reason=$2
+       WHERE id=$1 RETURNING *`,
+      [recruiterId, reason || null]
+    );
+
+    await logRecruiterActivity(recruiter, "rejected", reason, adminId);
+    try { await sendRecruiterRejectionEmail(recruiter.email, recruiter.name, reason); } catch (e) { console.error("Rejection email failed:", e.message); }
+
+    res.json({ message: "Recruiter rejected. Rejection email sent.", recruiter: result.rows[0] });
+  } catch (err) {
+    console.error("rejectRecruiterV2 error:", err);
+    res.status(500).json({ message: "Failed to reject recruiter" });
+  }
+};
+
+// PUT /api/admin/recruiters/:recruiterId/reconsider  (move a rejected recruiter back to pending)
+export const reconsiderRecruiter = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    if (!(await isAdmin(adminId))) return res.status(403).json({ message: "Access denied. Admin only." });
+    const { recruiterId } = req.params;
+    const check = await pool.query("SELECT * FROM users WHERE id=$1 AND role='recruiter'", [recruiterId]);
+    if (!check.rows.length) return res.status(404).json({ message: "Recruiter not found" });
+
+    const result = await pool.query(
+      `UPDATE users SET recruiter_status='pending', is_recruiter_approved=false, rejection_reason=NULL, recruiter_rejected_at=NULL
+       WHERE id=$1 RETURNING *`,
+      [recruiterId]
+    );
+    await logRecruiterActivity(check.rows[0], "reconsidered", null, adminId);
+    res.json({ message: "Recruiter moved back to pending review", recruiter: result.rows[0] });
+  } catch (err) {
+    console.error("reconsiderRecruiter error:", err);
+    res.status(500).json({ message: "Failed to reconsider recruiter" });
   }
 };
