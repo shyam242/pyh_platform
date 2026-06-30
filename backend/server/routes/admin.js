@@ -8,8 +8,6 @@ import {
   getAllCandidates,
   getCandidateDetails,
   getCandidatesByRole,
-  approveRecruiter,
-  rejectRecruiter,
   updateReferrerIncentive,
   getReferrerIncentive,
   getAllReferrersWithIncentives,
@@ -25,6 +23,15 @@ import {
   bulkUploadResumeLinks,
   updateBulkCandidateDetails,
   updateCandidateDetails,
+  getUnifiedCandidateStatusList,
+  getUnifiedCandidateStatusOverview,
+  updateUnifiedCandidateStatus,
+  exportUnifiedCandidateStatusCSV,
+  getRecruiterApprovalCenter,
+  exportRecruitersCSV,
+  approveRecruiterV2,
+  rejectRecruiterV2,
+  reconsiderRecruiter,
 } from "../controllers/adminController.js";
 import { adminParseProjects } from "../controllers/jdMatchController.js";
 
@@ -64,8 +71,11 @@ router.delete("/candidates/:candidateId", protect, deleteCandidate);
 router.get("/users/:role", protect, getCandidatesByRole);
 
 // RECRUITER MANAGEMENT
-router.put("/recruiters/:recruiterId/approve", protect, approveRecruiter);
-router.put("/recruiters/:recruiterId/reject", protect, rejectRecruiter);
+router.put("/recruiters/:recruiterId/approve", protect, approveRecruiterV2);
+router.put("/recruiters/:recruiterId/reject", protect, rejectRecruiterV2);
+router.put("/recruiters/:recruiterId/reconsider", protect, reconsiderRecruiter);
+router.get("/recruiters/approval-center", protect, getRecruiterApprovalCenter);
+router.get("/recruiters/export", protect, exportRecruitersCSV);
 
 // INCENTIVE MANAGEMENT
 router.get("/referrers", protect, getAllReferrersWithIncentives);
@@ -86,6 +96,12 @@ router.put("/bulk-candidates/:candidateId/status", protect, updateBulkCandidateS
 router.put("/bulk-candidates/:candidateId/details", protect, updateBulkCandidateDetails);
 router.put("/candidates/:candidateId/details", protect, updateCandidateDetails);
 router.get("/candidate-status-stats", protect, getCandidateStatusStats);
+
+// UNIFIED CANDIDATE STATUS MANAGEMENT (portal + bulk, tagged & filterable)
+router.get("/candidate-status/list", protect, getUnifiedCandidateStatusList);
+router.get("/candidate-status/overview", protect, getUnifiedCandidateStatusOverview);
+router.get("/candidate-status/export", protect, exportUnifiedCandidateStatusCSV);
+router.put("/candidate-status/:source/:id", protect, updateUnifiedCandidateStatus);
 
 // PROJECT PARSING (admin can trigger for any candidate)
 router.post("/candidates/:userId/parse-projects", protect, adminParseProjects);
