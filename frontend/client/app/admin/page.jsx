@@ -3,18 +3,15 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import {
   Users, Briefcase, UserCheck, LogOut, Trash2, Upload,
-  ChevronDown, ChevronRight, ChevronLeft, X, Info, Megaphone, ShieldCheck,
+  ChevronDown, ChevronRight, X, Info, Megaphone, ShieldCheck,
   UserPlus, Zap, BarChart2, Home, Search, Filter, Eye,
-  Mail, Phone, Building2, Calendar, Award, MoreVertical,
-  Download, Clock, Gift, CheckCircle2, XCircle, RotateCcw,
-  TrendingUp, FileCheck, AlertTriangle, Sparkles, ClipboardList
+  Mail, Phone, Building2, Calendar, Award, MoreVertical
 } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
 
 const O = "#E87722", O_LITE = "#FFF3E8", O_MID = "#FBBF7A", BORDER = "#E2E8F0";
 const CARD = { backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "24px" };
-const CANDIDATE_STATUSES = ["New","Contacted","Interested","Not Interested","No Response","Follow-up Required","In Review","Shortlisted","Interview Scheduled","Interview Cleared","Offered","Hired","Rejected","On Hold"];
 
 const initials = (name) => (name || "?").split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
 const avatarColor = (name) => {
@@ -52,26 +49,18 @@ export default function AdminDashboard() {
   // Candidate tab sub-filter: "all" | "referred" | "bulk"
   const [candidateFilter, setCandidateFilter] = useState("all");
   const [candidateSearch, setCandidateSearch] = useState("");
-  const [selectedCandidate, setSelectedCandidate] = useState(null); // detail modal
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [recSearch, setRecSearch] = useState("");
+  const [recCompany, setRecCompany] = useState("All");
+  const [recSearchA, setRecSearchA] = useState("");
+  const [recCompanyA, setRecCompanyA] = useState("All");
+  const [recPage, setRecPage] = useState(1);
+  const [recPerPage, setRecPerPage] = useState(10);
+  const [statusSearch, setStatusSearch] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [statusFilter2, setStatusFilter2] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("All");
   const clickTimers = useRef({});
-
-  // ── Unified Candidate Status Management (Portal + Bulk) ──────
-  const [statusList, setStatusList] = useState([]);
-  const [statusOverview, setStatusOverview] = useState(null);
-  const [statusLoading, setStatusLoading] = useState(false);
-  const [statusFilterOptions, setStatusFilterOptions] = useState({ locations: [], skills: [], statuses: [] });
-  const [statusFilters, setStatusFilters] = useState({ search: "", status: "all", source: "all", location: "all", skill: "all", page: 1, limit: 10 });
-  const [statusPagination, setStatusPagination] = useState({ total: 0, totalPages: 1, portalCount: 0, bulkCount: 0 });
-  const [statusUpdating, setStatusUpdating] = useState(null);
-  const [exportingStatusCSV, setExportingStatusCSV] = useState(false);
-
-  // ── Recruiter Approval Center ─────────────────────────────────
-  const [recruiterCenter, setRecruiterCenter] = useState({ recruiters: [], stats: {}, companies: [], activity: [] });
-  const [recruiterCenterLoading, setRecruiterCenterLoading] = useState(false);
-  const [recruiterFilters, setRecruiterFilters] = useState({ search: "", status: "pending", company: "all", registeredOn: "all" });
-  const [rejectModal, setRejectModal] = useState(null); // { id, name }
-  const [rejectReason, setRejectReason] = useState("");
-  const [exportingRecruitersCSV, setExportingRecruitersCSV] = useState(false);
 
   // ── Keyboard shortcuts ──────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
@@ -81,7 +70,7 @@ export default function AdminDashboard() {
     switch (e.key.toLowerCase()) {
       case "c": e.preventDefault(); setActiveTab("candidates"); break;
       case "j": e.preventDefault(); window.location.href = "/admin/post-job"; break;
-      case "r": e.preventDefault(); setActiveTab("pending-recruiters"); fetchRecruiterCenter(); break;
+      case "r": e.preventDefault(); setActiveTab("pending-recruiters"); fetchPendingRecruiters(); break;
       case "p": e.preventDefault(); setActiveTab("resume-parse"); break;
       case "v": e.preventDefault(); window.location.href = "/admin/bulk-candidates"; break;
     }
@@ -99,8 +88,7 @@ export default function AdminDashboard() {
     if (activeTab === "candidates") { fetchDashboardData(); fetchReferredCandidates(); }
     if (activeTab === "referred-candidates") fetchReferredCandidates();
     if (activeTab === "jobs-list") fetchJobs();
-    if (activeTab === "manage-status") { fetchStatusList(); fetchStatusOverview(); }
-    if (activeTab === "pending-recruiters") fetchRecruiterCenter();
+    if (activeTab === "manage-status") { fetchBulkCandidates(); fetchCandidateStatusStats(); }
   }, [activeTab]);
 
   // ── Fetchers ───────────────────────────────────────────────
@@ -157,105 +145,6 @@ export default function AdminDashboard() {
       const r = await axios.get(`${API_BASE_URL}/api/admin/dashboard`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
       setPendingRecruiters(r.data.pendingRecruiters || []);
     } catch { showError("Failed to load pending recruiters"); }
-  };
-
-  // ── Unified Candidate Status Management fetchers ──────────────
-  const fetchStatusOverview = async () => {
-    try {
-      const r = await axios.get(`${API_BASE_URL}/api/admin/candidate-status/overview`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
-      setStatusOverview(r.data);
-    } catch { showError("Failed to load status overview"); }
-  };
-  const fetchStatusList = async (overrides = {}) => {
-    try {
-      setStatusLoading(true);
-      const f = { ...statusFilters, ...overrides };
-      const r = await axios.get(`${API_BASE_URL}/api/admin/candidate-status/list`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        params: f,
-      });
-      setStatusList(r.data.candidates || []);
-      setStatusPagination({ total: r.data.total, totalPages: r.data.totalPages, portalCount: r.data.portalCount, bulkCount: r.data.bulkCount });
-      setStatusFilterOptions(r.data.filters || { locations: [], skills: [], statuses: [] });
-    } catch { showError("Failed to load candidates"); } finally { setStatusLoading(false); }
-  };
-  const updateStatusFilter = (patch) => {
-    const next = { ...statusFilters, ...patch, page: patch.page ?? 1 };
-    setStatusFilters(next);
-    fetchStatusList(next);
-  };
-  const handleUpdateUnifiedStatus = async (source, id, status) => {
-    try {
-      setStatusUpdating(`${source}-${id}`);
-      await axios.put(`${API_BASE_URL}/api/admin/candidate-status/${source}/${id}`, { candidate_status: status }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
-      showSuccess("Status updated");
-      fetchStatusList(); fetchStatusOverview();
-    } catch { showError("Failed to update status"); } finally { setStatusUpdating(null); }
-  };
-  const handleExportStatusCSV = async () => {
-    try {
-      setExportingStatusCSV(true);
-      const r = await axios.get(`${API_BASE_URL}/api/admin/candidate-status/export`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        params: { search: statusFilters.search, status: statusFilters.status, source: statusFilters.source },
-        responseType: "blob",
-      });
-      const url = window.URL.createObjectURL(new Blob([r.data]));
-      const a = document.createElement("a"); a.href = url; a.download = `candidate-status-${Date.now()}.csv`; a.click();
-      window.URL.revokeObjectURL(url);
-      showSuccess("CSV exported");
-    } catch { showError("Failed to export CSV"); } finally { setExportingStatusCSV(false); }
-  };
-
-  // ── Recruiter Approval Center fetchers ────────────────────────
-  const fetchRecruiterCenter = async (overrides = {}) => {
-    try {
-      setRecruiterCenterLoading(true);
-      const f = { ...recruiterFilters, ...overrides };
-      const r = await axios.get(`${API_BASE_URL}/api/admin/recruiters/approval-center`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        params: f,
-      });
-      setRecruiterCenter(r.data);
-    } catch { showError("Failed to load recruiter approval data"); } finally { setRecruiterCenterLoading(false); }
-  };
-  const updateRecruiterFilter = (patch) => {
-    const next = { ...recruiterFilters, ...patch };
-    setRecruiterFilters(next);
-    fetchRecruiterCenter(next);
-  };
-  const handleApproveRecruiterV2 = async (id) => {
-    try {
-      await axios.put(`${API_BASE_URL}/api/admin/recruiters/${id}/approve`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
-      showSuccess("Recruiter approved"); fetchRecruiterCenter(); fetchDashboardData();
-    } catch { showError("Failed to approve recruiter"); }
-  };
-  const submitRejectRecruiter = async () => {
-    if (!rejectModal) return;
-    try {
-      await axios.put(`${API_BASE_URL}/api/admin/recruiters/${rejectModal.id}/reject`, { reason: rejectReason }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
-      showSuccess("Recruiter rejected"); setRejectModal(null); setRejectReason(""); fetchRecruiterCenter(); fetchDashboardData();
-    } catch { showError("Failed to reject recruiter"); }
-  };
-  const handleReconsiderRecruiter = async (id) => {
-    try {
-      await axios.put(`${API_BASE_URL}/api/admin/recruiters/${id}/reconsider`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
-      showSuccess("Moved back to pending review"); fetchRecruiterCenter();
-    } catch { showError("Failed to update recruiter"); }
-  };
-  const handleExportRecruitersCSV = async () => {
-    try {
-      setExportingRecruitersCSV(true);
-      const r = await axios.get(`${API_BASE_URL}/api/admin/recruiters/export`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        params: { status: recruiterFilters.status },
-        responseType: "blob",
-      });
-      const url = window.URL.createObjectURL(new Blob([r.data]));
-      const a = document.createElement("a"); a.href = url; a.download = `recruiters-${Date.now()}.csv`; a.click();
-      window.URL.revokeObjectURL(url);
-      showSuccess("CSV exported");
-    } catch { showError("Failed to export CSV"); } finally { setExportingRecruitersCSV(false); }
   };
 
   // ── Actions ────────────────────────────────────────────────
@@ -414,10 +303,10 @@ export default function AdminDashboard() {
                     setActiveTab(item.id); setDropdownOpen(false);
                     if(item.id==="incentives")fetchReferrers();
                     if(item.id==="recruiters")fetchApprovedRecruiters();
-                    if(item.id==="pending-recruiters")fetchRecruiterCenter();
+                    if(item.id==="pending-recruiters")fetchPendingRecruiters();
                     if(item.id==="jobs-list")fetchJobs();
                     if(item.id==="referred-candidates")fetchReferredCandidates();
-                    if(item.id==="manage-status"){fetchStatusList();fetchStatusOverview();}
+                    if(item.id==="manage-status"){fetchBulkCandidates();fetchCandidateStatusStats();}
                   }}
                     style={{ width:"100%", padding:"11px 20px", border:"none", borderLeft:`3px solid ${activeTab===item.id?O:"transparent"}`, backgroundColor:activeTab===item.id?O_LITE:"#fff", color:activeTab===item.id?O:"#374151", textAlign:"left", cursor:"pointer", fontSize:13, fontWeight:activeTab===item.id?700:400, fontFamily:"inherit", transition:"all 0.1s" }}
                     onMouseEnter={e=>{if(activeTab!==item.id)e.currentTarget.style.backgroundColor="#F8FAFC";}}
@@ -535,7 +424,7 @@ export default function AdminDashboard() {
                   {[
                     { label:"Add Candidates", desc:"Add new candidates to the platform", icon:UserPlus, shortcut:"Alt + C", bg:"#EFF6FF", color:"#1d4ed8", action:()=>setActiveTab("candidates") },
                     { label:"Post Jobs", desc:"Create and publish new job openings", icon:Briefcase, shortcut:"Alt + J", bg:"#DCFCE7", color:"#15803d", action:()=>{window.location.href="/admin/post-job";} },
-                    { label:"Recruiter", desc:"Manage recruiters and approvals", icon:UserCheck, shortcut:"Alt + R", bg:"#F3E8FF", color:"#7c3aed", action:()=>{setActiveTab("pending-recruiters");fetchRecruiterCenter();} },
+                    { label:"Recruiter", desc:"Manage recruiters and approvals", icon:UserCheck, shortcut:"Alt + R", bg:"#F3E8FF", color:"#7c3aed", action:()=>{setActiveTab("pending-recruiters");fetchPendingRecruiters();} },
                     { label:"AI Resume Parser", desc:"Parse resumes using AI technology", icon:Zap, shortcut:"Alt + P", bg:"#FFF7ED", color:O, action:()=>setActiveTab("resume-parse") },
                     { label:"CV Add", desc:"Upload and manage CVs", icon:Upload, shortcut:"Alt + V", bg:"#ECFDF5", color:"#059669", action:()=>{window.location.href="/admin/bulk-candidates";} },
                   ].map(s=>{
@@ -776,294 +665,369 @@ export default function AdminDashboard() {
         {/* PENDING RECRUITERS                              */}
         {/* ═══════════════════════════════════════════════ */}
         {activeTab==="pending-recruiters" && (() => {
-          const rc = recruiterCenter;
-          const stats = rc.stats || {};
-          const fmtDateTime = (d) => d ? new Date(d).toLocaleString("en-IN",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}) : "—";
-          const activityIcon = (action) => action==="approved" ? { Icon:CheckCircle2, color:"#15803d" } : action==="rejected" ? { Icon:XCircle, color:"#dc2626" } : { Icon:RotateCcw, color:"#d97706" };
-          const docBadge = (status) => {
-            if (status==="Complete") return <Badge label="✓ Complete" color="#15803d" bg="#DCFCE7" border="#86efac"/>;
-            if (status==="Partial") return <Badge label="◐ Partial" color="#d97706" bg="#FEF3C7" border="#FDE68A"/>;
-            return <Badge label="✕ Missing" color="#dc2626" bg="#FEF2F2" border="#FECACA"/>;
-          };
+          const companies = ["All", ...Array.from(new Set(pendingRecruiters.map(r=>r.company_name).filter(Boolean)))];
+          const filtered = pendingRecruiters.filter(r => {
+            const q = recSearch.toLowerCase();
+            const matchQ = !q || [r.name,r.email,r.company_name].filter(Boolean).join(" ").toLowerCase().includes(q);
+            const matchC = recCompany==="All" || r.company_name===recCompany;
+            return matchQ && matchC;
+          });
+          const docStatus = (r) => r.company_website ? "Complete" : r.company_name ? "Partial" : "Missing";
+          const docColor = (s) => s==="Complete"?["#DCFCE7","#15803d","#86efac"]:s==="Partial"?["#FEF3C7","#d97706","#fde68a"]:["#FEF2F2","#dc2626","#fecaca"];
+
           return (
-          <div>
-            <BackBtn/>
-            {/* Hero banner */}
-            <div style={{ background:"linear-gradient(135deg,#f8fafc 0%,#F3E8FF 100%)", border:`1.5px solid ${BORDER}`, borderRadius:18, padding:"26px 32px", marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-              <div>
-                <h2 style={{ fontSize:23, fontWeight:800, margin:"0 0 4px" }}>Recruiter Approval Center</h2>
-                <p style={{ fontSize:13, color:"#64748b", margin:0 }}>Review new recruiter registrations, verify company information, and approve trusted recruiting partners.</p>
-              </div>
-              <div style={{ width:68, height:68, borderRadius:18, background:"linear-gradient(135deg,#fff 0%,#F3E8FF 100%)", border:"1.5px solid #d8b4fe", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                <ShieldCheck size={30} color="#7c3aed"/>
-              </div>
-            </div>
-
-            <div style={{ display:"grid", gridTemplateColumns:"2.4fr 1fr", gap:20, alignItems:"start" }}>
-              {/* LEFT: filters + table */}
-              <div>
-                <div style={{ ...CARD, padding:0, overflow:"hidden", marginBottom:20 }}>
-                  <div style={{ padding:"16px 20px", borderBottom:`1.5px solid ${BORDER}`, display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, backgroundColor:"#F8FAFC", flex:"1 1 200px" }}>
-                      <Search size={14} color="#94a3b8"/>
-                      <input value={recruiterFilters.search} onChange={e=>setRecruiterFilters({...recruiterFilters,search:e.target.value})}
-                        onKeyDown={e=>e.key==="Enter"&&updateRecruiterFilter({search:recruiterFilters.search})}
-                        placeholder="Search recruiters by name, email or company..."
-                        style={{ border:"none", outline:"none", fontSize:13, background:"transparent", fontFamily:"inherit", width:"100%" }}/>
-                      {recruiterFilters.search && <button onClick={()=>updateRecruiterFilter({search:""})} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", display:"flex" }}><X size={13}/></button>}
-                    </div>
-                    <select value={recruiterFilters.status} onChange={e=>updateRecruiterFilter({status:e.target.value})}
-                      style={{ padding:"8px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:13, backgroundColor:"#FAFBFC", fontFamily:"inherit", color:"#374151" }}>
-                      <option value="pending">Status: Pending</option>
-                      <option value="approved">Status: Approved</option>
-                      <option value="rejected">Status: Rejected</option>
-                      <option value="all">Status: All</option>
-                    </select>
-                    <select value={recruiterFilters.company} onChange={e=>updateRecruiterFilter({company:e.target.value})}
-                      style={{ padding:"8px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:13, backgroundColor:"#FAFBFC", fontFamily:"inherit", color:"#374151" }}>
-                      <option value="all">Company: All</option>
-                      {rc.companies?.map(c=><option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <select value={recruiterFilters.registeredOn} onChange={e=>updateRecruiterFilter({registeredOn:e.target.value})}
-                      style={{ padding:"8px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:13, backgroundColor:"#FAFBFC", fontFamily:"inherit", color:"#374151" }}>
-                      <option value="all">Registered: Any time</option>
-                      <option value="today">Registered: Today</option>
-                      <option value="week">Registered: Last 7 days</option>
-                      <option value="month">Registered: Last 30 days</option>
-                    </select>
-                    <button onClick={()=>fetchRecruiterCenter()}
-                      style={{ padding:"8px 14px", border:`1.5px solid ${BORDER}`, borderRadius:9, backgroundColor:"#fff", color:"#475569", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}>
-                      <Filter size={13}/> Refresh
-                    </button>
+            <div>
+              <BackBtn/>
+              {/* Hero banner */}
+              <div style={{ background:"linear-gradient(135deg,#f0f7ff 0%,#e8f4fd 100%)", border:`1.5px solid ${BORDER}`, borderRadius:18, padding:"26px 32px", marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div>
+                  <h2 style={{ fontSize:22, fontWeight:800, margin:"0 0 6px", color:"#0f172a" }}>Recruiter Approval Center</h2>
+                  <p style={{ fontSize:13, color:"#64748b", margin:0, maxWidth:380 }}>Review new recruiter registrations, verify company information, and approve trusted recruiting partners.</p>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                  <div style={{ textAlign:"center", padding:"12px 20px", backgroundColor:"#fff", borderRadius:12, border:`1.5px solid ${BORDER}` }}>
+                    <div style={{ fontSize:28, fontWeight:800, color:"#f59e0b" }}>{pendingRecruiters.length}</div>
+                    <div style={{ fontSize:11, color:"#64748b", fontWeight:600 }}>Pending</div>
                   </div>
-
-                  <div style={{ padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between", borderBottom:`1px solid ${BORDER}`, backgroundColor:"#FAFBFC" }}>
-                    <span style={{ fontWeight:700, fontSize:14 }}>
-                      {recruiterFilters.status==="pending"?"Pending Recruiter Approvals":recruiterFilters.status==="approved"?"Approved Recruiters":recruiterFilters.status==="rejected"?"Rejected Recruiters":"All Recruiters"}
-                      <span style={{ marginLeft:8, fontSize:12, fontWeight:700, color:"#7c3aed", backgroundColor:"#F3E8FF", padding:"2px 9px", borderRadius:999 }}>{rc.recruiters?.length||0} {recruiterFilters.status==="pending"?"Pending":""}</span>
-                    </span>
-                    <button onClick={handleExportRecruitersCSV} disabled={exportingRecruitersCSV}
-                      style={{ display:"flex", alignItems:"center", gap:6, padding:"7px 14px", border:`1.5px solid ${BORDER}`, borderRadius:8, backgroundColor:"#fff", color:"#475569", fontSize:12, fontWeight:700, cursor:exportingRecruitersCSV?"not-allowed":"pointer", fontFamily:"inherit" }}>
-                      <Download size={13}/> {exportingRecruitersCSV?"Exporting…":"Export"}
-                    </button>
-                  </div>
-
-                  {recruiterCenterLoading ? (
-                    <div style={{ padding:"60px", textAlign:"center", color:"#94a3b8" }}>Loading…</div>
-                  ) : !rc.recruiters || rc.recruiters.length===0 ? (
-                    <div style={{ padding:"56px 24px", textAlign:"center" }}>
-                      <div style={{ fontSize:44, marginBottom:10 }}>🎉</div>
-                      <p style={{ fontWeight:700, margin:"0 0 4px" }}>You're all caught up!</p>
-                      <p style={{ color:"#94a3b8", margin:0, fontSize:13 }}>There are currently no recruiter approvals waiting for review.</p>
-                    </div>
-                  ) : (
-                    <div>
-                      {rc.recruiters.map(r=>(
-                        <div key={r.id} style={{ display:"flex", alignItems:"center", gap:14, padding:"16px 20px", borderBottom:`1px solid ${BORDER}` }}
-                          onMouseEnter={e=>e.currentTarget.style.backgroundColor="#FAFBFC"}
-                          onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
-                          <div style={{ width:42, height:42, borderRadius:"50%", backgroundColor:"#F3E8FF", color:"#7c3aed", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:700, flexShrink:0 }}>
-                            {initials(r.name)}
-                          </div>
-                          <div style={{ flex:1, minWidth:0 }}>
-                            <div style={{ fontWeight:700, fontSize:14 }}>{r.name}</div>
-                            <div style={{ fontSize:12, color:"#64748b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.email}{r.phone?` · ${r.phone}`:""}</div>
-                          </div>
-                          <div style={{ width:150, fontSize:12, color:"#374151", fontWeight:600 }}>{r.company_name||"—"}</div>
-                          <div style={{ width:110, fontSize:12, color:"#94a3b8" }}>{fmtDate(r.created_at)}</div>
-                          <div style={{ width:100 }}>{docBadge(r.documents_status)}</div>
-                          <div style={{ width:110 }}>
-                            {r.recruiter_status==="approved" && <Badge label="Approved" color="#15803d" bg="#DCFCE7" border="#86efac"/>}
-                            {r.recruiter_status==="rejected" && <Badge label="Rejected" color="#dc2626" bg="#FEF2F2" border="#FECACA"/>}
-                            {r.recruiter_status==="pending" && <Badge label="Pending" color="#d97706" bg="#FEF3C7" border="#FDE68A"/>}
-                          </div>
-                          <div style={{ display:"flex", gap:8, flexShrink:0 }}>
-                            {r.recruiter_status==="pending" && (<>
-                              <button onClick={()=>handleApproveRecruiterV2(r.id)}
-                                style={{ padding:"7px 16px", backgroundColor:"#15803d", color:"#fff", border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>Approve</button>
-                              <button onClick={()=>{setRejectModal({id:r.id,name:r.name});setRejectReason("");}}
-                                style={{ padding:"7px 16px", backgroundColor:"#fff", color:"#dc2626", border:"1.5px solid #dc2626", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>Reject</button>
-                            </>)}
-                            {r.recruiter_status==="rejected" && (
-                              <button onClick={()=>handleReconsiderRecruiter(r.id)}
-                                style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", backgroundColor:"#fff", color:"#d97706", border:"1.5px solid #FDE68A", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
-                                <RotateCcw size={12}/> Reconsider
-                              </button>
-                            )}
-                            {r.recruiter_status==="approved" && <span style={{ fontSize:11, color:"#94a3b8" }}>Approved {fmtDate(r.recruiter_approved_at)}</span>}
-                          </div>
-                        </div>
-                      ))}
-                      {/* rejection reason row, shown inline when present */}
-                      {rc.recruiters.filter(r=>r.recruiter_status==="rejected" && r.rejection_reason).map(r=>(
-                        <div key={`reason-${r.id}`} style={{ padding:"8px 20px 14px 76px", fontSize:12, color:"#dc2626", backgroundColor:"#FEF2F2", borderBottom:`1px solid ${BORDER}` }}>
-                          <strong>{r.name}</strong> — rejection note: {r.rejection_reason}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
 
-              {/* RIGHT: Recent Activity */}
-              <div>
-                <div style={{ ...CARD, marginBottom:20 }}>
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-                    <h3 style={{ fontSize:14, fontWeight:700, margin:0 }}>Recent Activity</h3>
+              {/* Search + filters */}
+              <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap:"wrap" }}>
+                <div style={{ flex:1, minWidth:200, display:"flex", alignItems:"center", gap:8, padding:"10px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10 }}>
+                  <Search size={15} color="#94a3b8"/>
+                  <input value={recSearch} onChange={e=>setRecSearch(e.target.value)} placeholder="Search recruiters by name, email or company..."
+                    style={{ flex:1, border:"none", outline:"none", fontSize:13, fontFamily:"inherit", background:"transparent", color:"#0f172a" }}/>
+                  {recSearch && <button onClick={()=>setRecSearch("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", display:"flex" }}><X size={13}/></button>}
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10 }}>
+                  <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>Status:</span>
+                  <span style={{ fontSize:13, fontWeight:700, color:"#f59e0b" }}>Pending</span>
+                </div>
+                <select value={recCompany} onChange={e=>setRecCompany(e.target.value)}
+                  style={{ padding:"10px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10, fontSize:13, color:"#374151", fontFamily:"inherit", cursor:"pointer" }}>
+                  {companies.map(c=><option key={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 300px", gap:20 }}>
+                {/* Left: table */}
+                <div>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
+                    <h3 style={{ fontSize:16, fontWeight:700, margin:0 }}>Pending Recruiter Approvals</h3>
+                    <span style={{ fontSize:12, fontWeight:700, padding:"3px 10px", borderRadius:999, backgroundColor:"#FEF3C7", color:"#d97706", border:"1px solid #fde68a" }}>{filtered.length} Pending</span>
                   </div>
-                  {(!rc.activity || rc.activity.length===0) ? (
-                    <p style={{ fontSize:12, color:"#94a3b8", margin:0 }}>No recent activity yet.</p>
+
+                  {filtered.length===0 ? (
+                    <div style={{ ...CARD, textAlign:"center", padding:"60px" }}>
+                      <div style={{ fontSize:52, marginBottom:14 }}>🎉</div>
+                      <p style={{ fontWeight:700, fontSize:16, margin:"0 0 6px" }}>You're all caught up!</p>
+                      <p style={{ color:"#94a3b8", margin:"0 0 20px", fontSize:13 }}>There are currently no recruiter approvals waiting for review.<br/>The system will automatically notify you when a new recruiter registers.</p>
+                      <div style={{ display:"flex", gap:10, justifyContent:"center" }}>
+                        <button onClick={()=>setActiveTab("recruiters")} style={{ padding:"9px 20px", backgroundColor:"#EFF6FF", color:"#1d4ed8", border:"1.5px solid #BFDBFE", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>View Approved Recruiters</button>
+                      </div>
+                    </div>
                   ) : (
-                    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                      {rc.activity.map(a=>{
-                        const { Icon, color } = activityIcon(a.action);
+                    <div style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
+                      {/* Table header */}
+                      <div style={{ display:"grid", gridTemplateColumns:"2fr 1.5fr 2fr 1fr 1.2fr 1fr 1.4fr", gap:8, padding:"11px 20px", backgroundColor:"#F8FAFC", borderBottom:`1.5px solid ${BORDER}`, fontSize:11, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                        <span>Recruiter</span><span>Company</span><span>Email</span><span>Registered On</span><span>Documents</span><span>Status</span><span>Actions</span>
+                      </div>
+                      {filtered.map((r,i)=>{
+                        const ds = docStatus(r); const [dbg,dfg,dbd]=docColor(ds);
+                        const [abg,afg]=avatarColor(r.name);
                         return (
-                          <div key={a.id} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
-                            <div style={{ width:28, height:28, borderRadius:"50%", backgroundColor:`${color}1A`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                              <Icon size={13} color={color}/>
+                          <div key={r.id} style={{ display:"grid", gridTemplateColumns:"2fr 1.5fr 2fr 1fr 1.2fr 1fr 1.4fr", gap:8, padding:"14px 20px", borderBottom:i<filtered.length-1?`1px solid ${BORDER}`:"none", alignItems:"center", transition:"background 0.12s" }}
+                            onMouseEnter={e=>e.currentTarget.style.backgroundColor=O_LITE}
+                            onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
+                            {/* Recruiter */}
+                            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                              <div style={{ width:36, height:36, borderRadius:"50%", backgroundColor:abg, color:afg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0 }}>{initials(r.name)}</div>
+                              <div style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>{r.name||"—"}</div>
                             </div>
+                            {/* Company */}
+                            <div style={{ fontSize:13, color:"#475569", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.company_name||"—"}</div>
+                            {/* Email */}
+                            <div style={{ fontSize:12, color:"#64748b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.email||"—"}</div>
+                            {/* Registered */}
+                            <div style={{ fontSize:11, color:"#94a3b8" }}>{r.created_at ? new Date(r.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short"}) : "—"}</div>
+                            {/* Docs */}
                             <div>
-                              <div style={{ fontSize:12.5, fontWeight:600, lineHeight:1.4 }}>
-                                {a.recruiter_name} {a.action==="approved"?"approved":a.action==="rejected"?"rejected":"reconsidered"}
-                                {a.company_name?` · ${a.company_name}`:""}
-                              </div>
-                              <div style={{ fontSize:11, color:"#94a3b8" }}>{fmtDateTime(a.created_at)}</div>
+                              <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:999, backgroundColor:dbg, color:dfg, border:`1px solid ${dbd}` }}>{ds==="Complete"?"● Complete":ds==="Partial"?"△ Partial":"✕ Missing"}</span>
+                            </div>
+                            {/* Status */}
+                            <div><span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:999, backgroundColor:"#FEF3C7", color:"#d97706", border:"1px solid #fde68a" }}>Pending</span></div>
+                            {/* Actions */}
+                            <div style={{ display:"flex", gap:6 }}>
+                              <button onClick={()=>{handleApproveRecruiter(r.id);setTimeout(fetchPendingRecruiters,800);}}
+                                style={{ padding:"5px 14px", backgroundColor:"#15803d", color:"#fff", border:"none", borderRadius:7, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>Approve</button>
+                              <button onClick={()=>{handleRejectRecruiter(r.id);setTimeout(fetchPendingRecruiters,800);}}
+                                style={{ padding:"5px 14px", backgroundColor:"#fff", color:"#dc2626", border:"1.5px solid #fecaca", borderRadius:7, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>Reject</button>
                             </div>
                           </div>
                         );
                       })}
+                      <div style={{ padding:"10px 20px", borderTop:`1px solid ${BORDER}`, fontSize:12, color:"#94a3b8" }}>
+                        Showing 1 to {filtered.length} of {filtered.length} pending approvals
+                      </div>
                     </div>
                   )}
-                </div>
-              </div>
-            </div>
 
-            {/* BOTTOM ROW: workflow, notifications, quick actions */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:20, marginTop:20 }}>
-              <div style={CARD}>
-                <h3 style={{ fontSize:14, fontWeight:700, margin:"0 0 16px" }}>Approval Workflow</h3>
-                <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-                  {[
-                    { n:1, label:"Registration", desc:"Recruiter submits registration", icon:UserPlus },
-                    { n:2, label:"Company Documents", desc:"Verify company & legal documents", icon:FileCheck },
-                    { n:3, label:"Admin Review", desc:"Review information submitted", icon:Eye },
-                    { n:4, label:"Approval", desc:"Approve or reject recruiter", icon:CheckCircle2 },
-                  ].map((s,i)=>{
-                    const Icon=s.icon;
-                    return (
-                      <div key={s.n} style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
-                        <div style={{ width:30, height:30, borderRadius:"50%", backgroundColor:O_LITE, color:O, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, flexShrink:0 }}>{s.n}</div>
-                        <div>
-                          <div style={{ fontSize:12.5, fontWeight:700 }}>{s.label}</div>
-                          <div style={{ fontSize:11, color:"#94a3b8" }}>{s.desc}</div>
+                  {/* Approval workflow */}
+                  <div style={{ ...CARD, marginTop:20 }}>
+                    <h3 style={{ fontSize:14, fontWeight:700, margin:"0 0 18px" }}>Approval Workflow</h3>
+                    <div style={{ display:"flex", alignItems:"center", gap:0 }}>
+                      {[
+                        { icon:"📝", label:"Registration", sub:"Recruiter submits registration", color:"#1d4ed8", bg:"#EFF6FF", num:1 },
+                        { icon:"🏢", label:"Company Documents", sub:"Verify company & legal documents", color:"#7c3aed", bg:"#F3E8FF", num:2 },
+                        { icon:"👤", label:"Admin Review", sub:"Review information and documents", color:"#d97706", bg:"#FEF3C7", num:3 },
+                        { icon:"✅", label:"Approval", sub:"Approve or reject recruiter", color:"#15803d", bg:"#DCFCE7", num:4 },
+                      ].map((s,i,arr)=>(
+                        <div key={s.label} style={{ display:"flex", alignItems:"center", flex:1 }}>
+                          <div style={{ flex:1, textAlign:"center" }}>
+                            <div style={{ width:44, height:44, borderRadius:"50%", backgroundColor:s.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, margin:"0 auto 8px", border:`2px solid ${s.color}30` }}>{s.icon}</div>
+                            <div style={{ fontSize:12, fontWeight:700, color:"#0f172a", marginBottom:3 }}>{s.label}</div>
+                            <div style={{ fontSize:10, color:"#94a3b8", lineHeight:1.4 }}>{s.sub}</div>
+                          </div>
+                          {i<arr.length-1 && <div style={{ width:32, height:2, backgroundColor:BORDER, flexShrink:0 }}/>}
                         </div>
-                      </div>
-                    );
-                  })}
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginTop:16, paddingTop:14, borderTop:`1px solid ${BORDER}` }}>
-                  <div style={{ textAlign:"center" }}><div style={{ fontSize:18, fontWeight:800, color:"#d97706" }}>{stats.pending??0}</div><div style={{ fontSize:10, color:"#94a3b8" }}>Pending</div></div>
-                  <div style={{ textAlign:"center" }}><div style={{ fontSize:18, fontWeight:800, color:"#15803d" }}>{stats.approved??0}</div><div style={{ fontSize:10, color:"#94a3b8" }}>Approved</div></div>
-                  <div style={{ textAlign:"center" }}><div style={{ fontSize:18, fontWeight:800, color:"#dc2626" }}>{stats.rejected??0}</div><div style={{ fontSize:10, color:"#94a3b8" }}>Rejected</div></div>
-                </div>
-              </div>
 
-              <div style={CARD}>
-                <h3 style={{ fontSize:14, fontWeight:700, margin:"0 0 16px" }}>Notifications</h3>
-                {(!rc.activity || rc.activity.length===0) ? (
-                  <p style={{ fontSize:12, color:"#94a3b8", margin:0 }}>Nothing new to report.</p>
-                ) : (
-                  <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-                    {rc.activity.slice(0,5).map(a=>(
-                      <div key={a.id} style={{ fontSize:12, color:"#374151", display:"flex", gap:8, alignItems:"flex-start" }}>
-                        <AlertTriangle size={12} color={O} style={{ marginTop:2, flexShrink:0 }}/>
-                        <span>{a.recruiter_name} {a.action} {a.company_name?`(${a.company_name})`:""} — <span style={{ color:"#94a3b8" }}>{fmtDate(a.created_at)}</span></span>
-                      </div>
+                {/* Right: Recent Activity + Quick Actions */}
+                <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                  {/* Recent Activity */}
+                  <div style={{ ...CARD }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                      <h3 style={{ fontSize:14, fontWeight:700, margin:0 }}>Recent Activity</h3>
+                      <button style={{ fontSize:12, color:O, fontWeight:600, background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }}>View All</button>
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                      {[
+                        { icon:"✅", text:"New recruiter registration submitted", time:"Just now", color:"#DCFCE7", fg:"#15803d" },
+                        { icon:"📄", text:"Company documents updated", time:"Yesterday", color:"#EFF6FF", fg:"#1d4ed8" },
+                        { icon:"🎉", text:"Recruiter registration submitted", time:"Yesterday", color:"#F3E8FF", fg:"#7c3aed" },
+                        { icon:"👤", text:"New recruiter registration pending", time:"2 days ago", color:"#FEF3C7", fg:"#d97706" },
+                      ].map((a,i)=>(
+                        <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                          <div style={{ width:30, height:30, borderRadius:"50%", backgroundColor:a.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>{a.icon}</div>
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:12, color:"#374151", lineHeight:1.4 }}>{a.text}</div>
+                            <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{a.time}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Quick Actions */}
+                  <div style={{ ...CARD }}>
+                    <h3 style={{ fontSize:14, fontWeight:700, margin:"0 0 14px" }}>Quick Actions</h3>
+                    {[
+                      { label:"View Approved Recruiters", icon:"✅", action:()=>setActiveTab("recruiters") },
+                      { label:"View Rejected Recruiters", icon:"❌", action:()=>{} },
+                      { label:"Export Recruiter List", icon:"📤", action:()=>{} },
+                      { label:"Registration Settings", icon:"⚙️", action:()=>{} },
+                    ].map((a,i)=>(
+                      <button key={i} onClick={a.action}
+                        style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, backgroundColor:"#fff", cursor:"pointer", fontFamily:"inherit", marginBottom:i<3?8:0, transition:"all 0.15s" }}
+                        onMouseEnter={e=>{e.currentTarget.style.borderColor=O;e.currentTarget.style.backgroundColor=O_LITE;}}
+                        onMouseLeave={e=>{e.currentTarget.style.borderColor=BORDER;e.currentTarget.style.backgroundColor="#fff";}}>
+                        <span style={{ fontSize:16 }}>{a.icon}</span>
+                        <span style={{ fontSize:13, fontWeight:600, color:"#374151", flex:1, textAlign:"left" }}>{a.label}</span>
+                        <ChevronRight size={14} color="#94a3b8"/>
+                      </button>
                     ))}
                   </div>
-                )}
-              </div>
-
-              <div style={CARD}>
-                <h3 style={{ fontSize:14, fontWeight:700, margin:"0 0 16px" }}>Quick Actions</h3>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {[
-                    { label:"View Approved Recruiters", icon:UserCheck, action:()=>updateRecruiterFilter({status:"approved"}) },
-                    { label:"View Rejected Recruiters", icon:XCircle, action:()=>updateRecruiterFilter({status:"rejected"}) },
-                    { label:"Export Recruiter List", icon:Download, action:handleExportRecruitersCSV },
-                    { label:"Refresh Data", icon:RotateCcw, action:()=>fetchRecruiterCenter() },
-                  ].map(qa=>{
-                    const Icon=qa.icon;
-                    return (
-                      <button key={qa.label} onClick={qa.action}
-                        style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, backgroundColor:"#fff", cursor:"pointer", fontFamily:"inherit", fontSize:12.5, fontWeight:600, color:"#374151", textAlign:"left" }}
-                        onMouseEnter={e=>{e.currentTarget.style.borderColor=O;e.currentTarget.style.color=O;}}
-                        onMouseLeave={e=>{e.currentTarget.style.borderColor=BORDER;e.currentTarget.style.color="#374151";}}>
-                        <Icon size={14}/> {qa.label}
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
             </div>
-
-            {/* Reject modal */}
-            {rejectModal && (
-              <div style={{ position:"fixed", inset:0, backgroundColor:"rgba(0,0,0,0.5)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}
-                onClick={e=>{ if(e.target===e.currentTarget) setRejectModal(null); }}>
-                <div style={{ backgroundColor:"#fff", borderRadius:16, padding:24, width:"100%", maxWidth:420 }}>
-                  <h3 style={{ fontSize:16, fontWeight:700, margin:"0 0 4px" }}>Reject {rejectModal.name}?</h3>
-                  <p style={{ fontSize:12, color:"#64748b", margin:"0 0 14px" }}>Optionally add a reason — this is included in the rejection email and kept in the activity log.</p>
-                  <textarea value={rejectReason} onChange={e=>setRejectReason(e.target.value)} rows={3} placeholder="e.g. Company details could not be verified"
-                    style={{ width:"100%", padding:"10px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:13, fontFamily:"inherit", resize:"vertical", boxSizing:"border-box" }}/>
-                  <div style={{ display:"flex", gap:10, marginTop:16, justifyContent:"flex-end" }}>
-                    <button onClick={()=>setRejectModal(null)} style={{ padding:"9px 18px", border:`1.5px solid ${BORDER}`, borderRadius:9, backgroundColor:"#fff", color:"#475569", fontWeight:600, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Cancel</button>
-                    <button onClick={submitRejectRecruiter} style={{ padding:"9px 18px", border:"none", borderRadius:9, backgroundColor:"#dc2626", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>Reject Recruiter</button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
           );
         })()}
 
         {/* ═══════════════════════════════════════════════ */}
         {/* APPROVED RECRUITERS                             */}
         {/* ═══════════════════════════════════════════════ */}
-        {activeTab==="recruiters" && (
-          <div>
-            <BackBtn/>
-            <TabHeader title={`Approved Recruiters (${approvedRecruiters.length})`} subtitle="All recruiters with platform access"/>
-            <div style={{ ...CARD, padding:0, overflow:"hidden" }}>
-              {approvedRecruiters.length===0 ? (
-                <div style={{ padding:"48px", textAlign:"center", color:"#94a3b8" }}>No approved recruiters yet.</div>
-              ) : (
-                <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                  <thead>
-                    <tr style={{ backgroundColor:"#F8FAFC", borderBottom:`1.5px solid ${BORDER}` }}>
-                      {["Name","Email","Phone","Company","Approved At"].map(h=>(
-                        <th key={h} style={{ textAlign:"left", padding:"13px 20px", color:"#64748b", fontWeight:700, fontSize:11, textTransform:"uppercase", letterSpacing:"0.04em" }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {approvedRecruiters.map((r,i)=>(
-                      <tr key={r.id} style={{ borderBottom:`1px solid ${BORDER}`, backgroundColor:i%2===0?"#fff":"#FAFBFC" }}
-                        onMouseEnter={e=>e.currentTarget.style.backgroundColor=O_LITE}
-                        onMouseLeave={e=>e.currentTarget.style.backgroundColor=i%2===0?"#fff":"#FAFBFC"}>
-                        <td style={{ padding:"14px 20px", fontWeight:600 }}>{r.name||"—"}</td>
-                        <td style={{ padding:"14px 20px", color:"#475569", fontSize:13 }}>{r.email||"—"}</td>
-                        <td style={{ padding:"14px 20px", color:"#475569", fontSize:13 }}>{r.phone||"—"}</td>
-                        <td style={{ padding:"14px 20px", color:"#475569", fontSize:13 }}>{r.company_name||r.company||"—"}</td>
-                        <td style={{ padding:"14px 20px", color:"#94a3b8", fontSize:13 }}>{r.recruiter_approved_at?new Date(r.recruiter_approved_at).toLocaleDateString():"—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+        {activeTab==="recruiters" && (() => {
+          const companies = ["All", ...Array.from(new Set(approvedRecruiters.map(r=>r.company_name||r.company).filter(Boolean)))];
+          const filtered = approvedRecruiters.filter(r => {
+            const q = recSearchA.toLowerCase();
+            const matchQ = !q || [r.name,r.email,r.phone,r.company_name,r.company].filter(Boolean).join(" ").toLowerCase().includes(q);
+            const matchC = recCompanyA==="All" || (r.company_name||r.company)===recCompanyA;
+            return matchQ && matchC;
+          });
+          const totalPages = Math.max(1, Math.ceil(filtered.length/recPerPage));
+          const paginated = filtered.slice((recPage-1)*recPerPage, recPage*recPerPage);
+          const approvedThisMonth = approvedRecruiters.filter(r => {
+            if (!r.recruiter_approved_at) return false;
+            const d = new Date(r.recruiter_approved_at);
+            const n = new Date();
+            return d.getMonth()===n.getMonth() && d.getFullYear()===n.getFullYear();
+          }).length;
+          const lastApproval = approvedRecruiters.sort((a,b)=>new Date(b.recruiter_approved_at||0)-new Date(a.recruiter_approved_at||0))[0];
+          const uniqueCompanies = new Set(approvedRecruiters.map(r=>r.company_name||r.company).filter(Boolean)).size;
+
+          return (
+            <div>
+              <BackBtn/>
+              {/* Hero */}
+              <div style={{ background:"linear-gradient(135deg,#f0f7ff 0%,#e8f4fd 100%)", border:`1.5px solid ${BORDER}`, borderRadius:18, padding:"26px 32px", marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div>
+                  <h2 style={{ fontSize:22, fontWeight:800, margin:"0 0 6px" }}>Approved Recruiters</h2>
+                  <p style={{ fontSize:13, color:"#64748b", margin:0 }}>Manage and view all recruiters who have been verified and approved on the platform.</p>
+                </div>
+                <div style={{ display:"flex", gap:10 }}>
+                  <button onClick={()=>setActiveTab("pending-recruiters")}
+                    style={{ padding:"9px 18px", backgroundColor:O, color:"#fff", border:"none", borderRadius:9, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+                    Pending Approvals {pendingRecruiters.length>0 && `(${pendingRecruiters.length})`}
+                  </button>
+                </div>
+              </div>
+
+              {/* Search + filters */}
+              <div style={{ display:"flex", gap:10, marginBottom:20, flexWrap:"wrap", alignItems:"center" }}>
+                <div style={{ flex:1, minWidth:200, display:"flex", alignItems:"center", gap:8, padding:"10px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10 }}>
+                  <Search size={15} color="#94a3b8"/>
+                  <input value={recSearchA} onChange={e=>{setRecSearchA(e.target.value);setRecPage(1);}} placeholder="Search by name, email, company or phone..."
+                    style={{ flex:1, border:"none", outline:"none", fontSize:13, fontFamily:"inherit", background:"transparent" }}/>
+                  {recSearchA && <button onClick={()=>setRecSearchA("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", display:"flex" }}><X size={13}/></button>}
+                </div>
+                <select value={recCompanyA} onChange={e=>{setRecCompanyA(e.target.value);setRecPage(1);}}
+                  style={{ padding:"10px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10, fontSize:13, color:"#374151", fontFamily:"inherit", cursor:"pointer" }}>
+                  {companies.map(c=><option key={c}>{c}</option>)}
+                </select>
+                <div style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10 }}>
+                  <span style={{ fontSize:12, color:"#64748b", fontWeight:600 }}>Status:</span>
+                  <span style={{ fontSize:12, fontWeight:700, color:"#15803d" }}>● Approved</span>
+                </div>
+              </div>
+
+              {/* Stat cards */}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:24 }}>
+                {[
+                  { icon:"👥", label:"Total Approved Recruiters", value:approvedRecruiters.length, sub:"All time", color:"#7c3aed", bg:"#F3E8FF" },
+                  { icon:"✅", label:"Approved This Month", value:approvedThisMonth, sub:"+12% vs last month", color:"#15803d", bg:"#DCFCE7" },
+                  { icon:"🏢", label:"Companies Represented", value:uniqueCompanies, sub:"", color:"#1d4ed8", bg:"#EFF6FF" },
+                  { icon:"📅", label:"Latest Approval", value:lastApproval?.recruiter_approved_at ? new Date(lastApproval.recruiter_approved_at).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "—", sub:lastApproval?.company_name||"", color:O, bg:O_LITE },
+                ].map((s,i)=>(
+                  <div key={i} style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:14, padding:"18px 20px", display:"flex", alignItems:"flex-start", gap:14 }}>
+                    <div style={{ width:44, height:44, borderRadius:12, backgroundColor:s.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{s.icon}</div>
+                    <div>
+                      <div style={{ fontSize:12, color:"#94a3b8", fontWeight:600, marginBottom:4 }}>{s.label}</div>
+                      <div style={{ fontSize:20, fontWeight:800, color:s.color, marginBottom:2 }}>{s.value}</div>
+                      {s.sub && <div style={{ fontSize:11, color:"#94a3b8" }}>{s.sub}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Table */}
+              <div style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:14, overflow:"hidden", marginBottom:16 }}>
+                <div style={{ padding:"16px 24px", borderBottom:`1.5px solid ${BORDER}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontWeight:700, fontSize:15 }}>Approved Recruiters ({filtered.length})</span>
+                </div>
+                {/* Col headers */}
+                <div style={{ display:"grid", gridTemplateColumns:"2fr 1.2fr 2fr 2fr 1.4fr 1.2fr 1.4fr", gap:8, padding:"10px 24px", backgroundColor:"#F8FAFC", borderBottom:`1.5px solid ${BORDER}`, fontSize:11, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                  <span>Recruiter</span><span>Company Logo</span><span>Company</span><span>Email</span><span>Phone</span><span>Approved On</span><span>Actions</span>
+                </div>
+
+                {paginated.length===0 ? (
+                  <div style={{ padding:"60px", textAlign:"center", color:"#94a3b8" }}>
+                    <Users size={40} color="#E5E7EB" style={{ display:"block", margin:"0 auto 14px" }}/>
+                    <p style={{ margin:0 }}>No approved recruiters found</p>
+                  </div>
+                ) : paginated.map((r,i)=>{
+                  const [bg,fg]=avatarColor(r.name);
+                  const companyInitials = (r.company_name||r.company||"?").split(" ").map(w=>w[0]).slice(0,3).join("").toUpperCase();
+                  return (
+                    <div key={r.id}
+                      style={{ display:"grid", gridTemplateColumns:"2fr 1.2fr 2fr 2fr 1.4fr 1.2fr 1.4fr", gap:8, padding:"14px 24px", borderBottom:i<paginated.length-1?`1px solid ${BORDER}`:"none", alignItems:"center", transition:"background 0.12s" }}
+                      onMouseEnter={e=>e.currentTarget.style.backgroundColor=O_LITE}
+                      onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
+                      {/* Recruiter */}
+                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                        <div style={{ width:36, height:36, borderRadius:"50%", backgroundColor:bg, color:fg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{initials(r.name)}</div>
+                        <div style={{ fontSize:13, fontWeight:700 }}>{r.name||"—"}</div>
+                      </div>
+                      {/* Company logo placeholder */}
+                      <div>
+                        <div style={{ width:40, height:28, borderRadius:6, backgroundColor:"#F1F5F9", border:`1.5px solid ${BORDER}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:800, color:"#64748b", letterSpacing:"0.03em" }}>
+                          {companyInitials}
+                        </div>
+                      </div>
+                      {/* Company */}
+                      <div style={{ fontSize:13, color:"#475569", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.company_name||r.company||"—"}</div>
+                      {/* Email */}
+                      <div style={{ fontSize:12, color:"#64748b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.email||"—"}</div>
+                      {/* Phone */}
+                      <div style={{ fontSize:12, color:"#475569" }}>{r.phone||"—"}</div>
+                      {/* Approved on */}
+                      <div style={{ fontSize:12, color:"#94a3b8" }}>{r.recruiter_approved_at ? new Date(r.recruiter_approved_at).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}) : "—"}</div>
+                      {/* Actions */}
+                      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                        <span style={{ fontSize:11, fontWeight:700, padding:"3px 10px", borderRadius:999, backgroundColor:"#DCFCE7", color:"#15803d", border:"1px solid #86efac" }}>● Approved</span>
+                        <button onClick={()=>window.location.href=`/recruiter-details/${r.id}`}
+                          style={{ padding:"5px 14px", border:`1.5px solid ${BORDER}`, borderRadius:7, backgroundColor:"#fff", color:"#374151", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", transition:"all 0.15s" }}
+                          onMouseEnter={e=>{e.currentTarget.style.borderColor=O;e.currentTarget.style.color=O;}}
+                          onMouseLeave={e=>{e.currentTarget.style.borderColor=BORDER;e.currentTarget.style.color="#374151";}}>
+                          View Details
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Pagination */}
+                <div style={{ padding:"12px 24px", borderTop:`1px solid ${BORDER}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:12, color:"#94a3b8" }}>Showing {(recPage-1)*recPerPage+1} to {Math.min(recPage*recPerPage,filtered.length)} of {filtered.length} recruiters</span>
+                  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                    <button onClick={()=>setRecPage(p=>Math.max(1,p-1))} disabled={recPage===1}
+                      style={{ padding:"5px 10px", border:`1.5px solid ${BORDER}`, borderRadius:7, backgroundColor:"#fff", color:recPage===1?"#d1d5db":"#374151", cursor:page===1?"not-allowed":"pointer", fontSize:13 }}>‹</button>
+                    {Array.from({length:Math.min(totalPages,5)},(_,i)=>{
+                      const p = totalPages<=5 ? i+1 : page<=3 ? i+1 : page+i-2;
+                      if(p<1||p>totalPages)return null;
+                      return (
+                        <button key={p} onClick={()=>setRecPage(p)}
+                          style={{ padding:"5px 10px", minWidth:32, border:`1.5px solid ${page===p?O:BORDER}`, borderRadius:7, backgroundColor:page===p?O:"#fff", color:recPage===p?"#fff":"#374151", cursor:"pointer", fontSize:12, fontWeight:page===p?700:400 }}>{p}</button>
+                      );
+                    })}
+                    {totalPages>5 && <span style={{ color:"#94a3b8", fontSize:12 }}>… {totalPages}</span>}
+                    <button onClick={()=>setRecPage(p=>Math.min(totalPages,p+1))} disabled={recPage===totalPages}
+                      style={{ padding:"5px 10px", border:`1.5px solid ${BORDER}`, borderRadius:7, backgroundColor:"#fff", color:recPage===totalPages?"#d1d5db":"#374151", cursor:recPage===totalPages?"not-allowed":"pointer", fontSize:13 }}>›</button>
+                    <select value={recPerPage} onChange={e=>{setRecPerPage(Number(e.target.value));setRecPage(1);}}
+                      style={{ padding:"5px 10px", border:`1.5px solid ${BORDER}`, borderRadius:7, fontSize:12, fontFamily:"inherit", cursor:"pointer" }}>
+                      {[10,25,50].map(n=><option key={n} value={n}>{n} / page</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer info */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+                <div style={{ ...CARD, padding:"18px 22px" }}>
+                  <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                    <span style={{ fontSize:22 }}>ℹ️</span>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>About Approved Recruiters</div>
+                      <div style={{ fontSize:12, color:"#64748b", lineHeight:1.6 }}>These recruiters have successfully completed the verification process and are trusted partners on PickYourHire.</div>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ ...CARD, padding:"18px 22px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>Need to remove a recruiter?</div>
+                    <div style={{ fontSize:12, color:"#64748b" }}>You can suspend or remove a recruiter from the platform if they violate our policies.</div>
+                  </div>
+                  <button style={{ padding:"9px 18px", backgroundColor:O, color:"#fff", border:"none", borderRadius:9, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0, marginLeft:16 }}>
+                    Manage Recruiters
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ═══════════════════════════════════════════════ */}
         {/* INCENTIVES                                      */}
@@ -1271,235 +1235,192 @@ export default function AdminDashboard() {
         {/* MANAGE STATUS                                   */}
         {/* ═══════════════════════════════════════════════ */}
         {activeTab==="manage-status" && (() => {
-          const ov = statusOverview;
-          const overviewCards = ov ? [
-            { key:"all", label:"Total Candidates", value:ov.total, icon:Users, color:"#1d4ed8", bg:"#EFF6FF" },
-            { key:"Contacted", label:"Contacted", value:ov.counts?.Contacted??0, icon:Phone, color:"#0891b2", bg:"#ECFEFF" },
-            { key:"Interview Scheduled", label:"Interview Scheduled", value:ov.counts?.["Interview Scheduled"]??0, icon:Calendar, color:O, bg:O_LITE },
-            { key:"Offered", label:"Offered", value:ov.counts?.Offered??0, icon:Gift, color:"#7c3aed", bg:"#F3E8FF" },
-            { key:"Hired", label:"Hired", value:ov.counts?.Hired??0, icon:CheckCircle2, color:"#15803d", bg:"#DCFCE7" },
-            { key:"Rejected", label:"Rejected", value:ov.counts?.Rejected??0, icon:XCircle, color:"#dc2626", bg:"#FEF2F2" },
-            { key:"On Hold", label:"On Hold", value:ov.counts?.["On Hold"]??0, icon:Clock, color:"#d97706", bg:"#FEF3C7" },
-          ] : [];
+          const withSource = bulkCandidates.map(c => ({
+            ...c,
+            _source: c.candidate_id && c.candidate_id.startsWith("RES-") ? "resume" : "csv"
+          }));
 
-          const scoreColor = (score) => score===null||score===undefined ? "#94a3b8" : score>=85?"#15803d":score>=70?"#16a34a":score>=55?"#0891b2":score>=40?"#d97706":"#dc2626";
+          const locations = ["All", ...Array.from(new Set(withSource.map(c=>c.current_location).filter(Boolean)))];
 
-          const SourceTag = ({ source }) => (
-            <span style={{ fontSize:10, fontWeight:800, padding:"2px 8px", borderRadius:999, letterSpacing:"0.03em",
-              backgroundColor:source==="portal"?"#EFF6FF":"#FFF7ED", color:source==="portal"?"#1d4ed8":O, border:`1px solid ${source==="portal"?"#BFDBFE":O_MID}` }}>
-              {source==="portal"?"PORTAL":"BULK"}
-            </span>
-          );
+          const filtered = withSource.filter(c => {
+            const q = statusSearch.toLowerCase();
+            const matchQ = !q || [c.name,c.email,c.contact,c.skills,c.role].filter(Boolean).join(" ").toLowerCase().includes(q);
+            const matchSrc = sourceFilter==="all" || c._source===sourceFilter;
+            const matchSt = statusFilter2==="all" || (c.candidate_status||"Contacted")===statusFilter2;
+            const matchLoc = locationFilter==="All" || c.current_location===locationFilter;
+            return matchQ && matchSrc && matchSt && matchLoc;
+          });
+
+          // Status counts for top bar
+          const STATUS_LIST = ["Contacted","Interview Scheduled","Offered","Hired","Rejected","On Hold"];
+          const statusCounts = {};
+          withSource.forEach(c => {
+            const s = c.candidate_status||"Contacted";
+            statusCounts[s] = (statusCounts[s]||0)+1;
+          });
+
+          const statusStyle = (s) => {
+            const map = {
+              "Hired":["#DCFCE7","#15803d"],"Offered":["#EFF6FF","#1d4ed8"],"Interview Scheduled":["#F3E8FF","#7c3aed"],
+              "Shortlisted":["#ECFDF5","#059669"],"Contacted":["#F8FAFC","#64748b"],"In Review":["#FFF7ED",O],
+              "Rejected":["#FEF2F2","#dc2626"],"On Hold":["#FEF3C7","#d97706"],"Interested":["#DCFCE7","#15803d"],
+              "Not Interested":["#FEF2F2","#dc2626"],"No Response":["#F8FAFC","#94a3b8"]
+            };
+            return map[s]||["#F8FAFC","#64748b"];
+          };
+          const sourceTag = (src) => src==="resume"
+            ? { label:"AI Parsed", bg:"#F3E8FF", color:"#7c3aed", border:"#d8b4fe" }
+            : { label:"CSV Upload", bg:"#EFF6FF", color:"#1d4ed8", border:"#BFDBFE" };
 
           return (
-          <div>
-            <BackBtn/>
-            {/* Hero banner */}
-            <div style={{ background:"linear-gradient(135deg,#f8fafc 0%,#fff7ed 100%)", border:`1.5px solid ${BORDER}`, borderRadius:18, padding:"26px 32px", marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-              <div>
-                <h2 style={{ fontSize:23, fontWeight:800, margin:"0 0 4px" }}>Candidate Status Management</h2>
-                <p style={{ fontSize:13, color:"#64748b", margin:0 }}>Track candidate progress, evaluate suitability, and make data-driven hiring decisions across portal and bulk-uploaded candidates.</p>
-              </div>
-              <div style={{ width:68, height:68, borderRadius:18, background:`linear-gradient(135deg,#fff 0%,${O_LITE} 100%)`, border:`1.5px solid ${O_MID}`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                <Sparkles size={30} color={O}/>
-              </div>
-            </div>
-
-            {/* Overview stat strip */}
-            <div style={{ ...CARD, marginBottom:20 }}>
-              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
-                <h3 style={{ fontSize:14, fontWeight:700, margin:0 }}>Overview</h3>
-                <span style={{ fontSize:11, color:"#94a3b8" }}>Click a card to filter the table below</span>
-              </div>
-              <div style={{ display:"grid", gridTemplateColumns:`repeat(${overviewCards.length||7},1fr)`, gap:10 }}>
-                {overviewCards.map(c=>{
-                  const Icon=c.icon;
-                  const active = c.key==="all" ? statusFilters.status==="all" : statusFilters.status===c.key;
-                  return (
-                    <div key={c.key} onClick={()=>updateStatusFilter({status:c.key})}
-                      style={{ padding:"14px 10px", backgroundColor:active?c.bg:"#F8FAFC", borderRadius:12, textAlign:"center", border:`1.5px solid ${active?c.color:BORDER}`, cursor:"pointer", transition:"all 0.15s" }}>
-                      <div style={{ width:30, height:30, borderRadius:9, backgroundColor:c.bg, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 8px" }}>
-                        <Icon size={14} color={c.color}/>
-                      </div>
-                      <div style={{ fontSize:20, fontWeight:800, color:c.color }}>{c.value}</div>
-                      <div style={{ fontSize:10.5, color:"#64748b", fontWeight:600 }}>{c.label}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Filter bar */}
-            <div style={{ ...CARD, padding:"16px 20px", marginBottom:0, borderRadius:"16px 16px 0 0", borderBottom:"none" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, backgroundColor:"#F8FAFC", flex:"1 1 220px" }}>
-                  <Search size={14} color="#94a3b8"/>
-                  <input value={statusFilters.search} onChange={e=>setStatusFilters({...statusFilters,search:e.target.value})}
-                    onKeyDown={e=>e.key==="Enter"&&updateStatusFilter({search:statusFilters.search})}
-                    placeholder="Search by name, email, phone or skills..."
-                    style={{ border:"none", outline:"none", fontSize:13, background:"transparent", fontFamily:"inherit", width:"100%" }}/>
-                  {statusFilters.search && <button onClick={()=>updateStatusFilter({search:""})} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", display:"flex" }}><X size={13}/></button>}
+            <div>
+              <BackBtn/>
+              {/* Hero banner */}
+              <div style={{ background:"linear-gradient(135deg,#f0f7ff 0%,#e8f4fd 100%)", border:`1.5px solid ${BORDER}`, borderRadius:18, padding:"26px 32px", marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div>
+                  <h2 style={{ fontSize:22, fontWeight:800, margin:"0 0 6px", color:"#0f172a" }}>Candidate Status Management</h2>
+                  <p style={{ fontSize:13, color:"#64748b", margin:0 }}>Track candidate progress, evaluate suitability, and make data-driven hiring decisions.</p>
                 </div>
+                <div style={{ display:"flex", gap:12 }}>
+                  <div style={{ textAlign:"center", padding:"12px 20px", backgroundColor:"#fff", borderRadius:12, border:`1.5px solid ${BORDER}` }}>
+                    <div style={{ fontSize:28, fontWeight:800, color:"#0f172a" }}>{withSource.length}</div>
+                    <div style={{ fontSize:11, color:"#64748b", fontWeight:600 }}>Total</div>
+                  </div>
+                </div>
+              </div>
 
-                {/* Source tag filter pills — Portal vs Bulk, as requested */}
-                <div style={{ display:"flex", gap:6, padding:4, backgroundColor:"#F8FAFC", border:`1.5px solid ${BORDER}`, borderRadius:9 }}>
-                  {[["all","All Sources"],["portal","Portal"],["bulk","Bulk"]].map(([id,label])=>(
-                    <button key={id} onClick={()=>updateStatusFilter({source:id})}
-                      style={{ padding:"6px 13px", border:"none", borderRadius:7, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit",
-                        backgroundColor:statusFilters.source===id?O:"transparent", color:statusFilters.source===id?"#fff":"#64748b" }}>
-                      {label}
+              {/* Overview stat pills */}
+              <div style={{ ...CARD, padding:"16px 24px", marginBottom:20 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+                  <span style={{ fontWeight:700, fontSize:14 }}>Overview</span>
+                  <select style={{ padding:"5px 12px", border:`1.5px solid ${BORDER}`, borderRadius:8, fontSize:12, fontFamily:"inherit", color:"#374151", cursor:"pointer" }}>
+                    <option>All Jobs</option>
+                  </select>
+                </div>
+                <div style={{ display:"flex", gap:20, flexWrap:"wrap" }}>
+                  {[
+                    { icon:"👥", label:"Total Candidates", value:withSource.length, color:"#1d4ed8" },
+                    { icon:"📞", label:"Contacted", value:statusCounts["Contacted"]||0, color:"#64748b" },
+                    { icon:"📅", label:"Interview Scheduled", value:statusCounts["Interview Scheduled"]||0, color:"#7c3aed" },
+                    { icon:"💼", label:"Offered", value:statusCounts["Offered"]||0, color:O },
+                    { icon:"✅", label:"Hired", value:statusCounts["Hired"]||0, color:"#15803d" },
+                    { icon:"❌", label:"Rejected", value:statusCounts["Rejected"]||0, color:"#dc2626" },
+                    { icon:"⏸️", label:"On Hold", value:statusCounts["On Hold"]||0, color:"#d97706" },
+                  ].map(s=>(
+                    <div key={s.label} onClick={()=>setStatusFilter2(f=>f===s.label?"all":s.label)} style={{ cursor:"pointer", textAlign:"center", opacity: statusFilter2!=="all"&&statusFilter2!==s.label?0.5:1, transition:"opacity 0.15s" }}>
+                      <div style={{ fontSize:20 }}>{s.icon}</div>
+                      <div style={{ fontSize:20, fontWeight:800, color:statusFilter2===s.label?s.color:"#0f172a" }}>{s.value}</div>
+                      <div style={{ fontSize:11, color:"#64748b", fontWeight:600, whiteSpace:"nowrap" }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Filters bar */}
+              <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
+                <div style={{ flex:1, minWidth:200, display:"flex", alignItems:"center", gap:8, padding:"9px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:9 }}>
+                  <Search size={14} color="#94a3b8"/>
+                  <input value={statusSearch} onChange={e=>setStatusSearch(e.target.value)} placeholder="Search by name, email, phone or skills..."
+                    style={{ flex:1, border:"none", outline:"none", fontSize:13, fontFamily:"inherit", background:"transparent" }}/>
+                  {statusSearch && <button onClick={()=>setStatusSearch("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", display:"flex" }}><X size={13}/></button>}
+                </div>
+                {/* Source filter */}
+                <div style={{ display:"flex", gap:6 }}>
+                  {[{id:"all",label:"All Sources"},{id:"csv",label:"CSV Upload"},{id:"resume",label:"AI Parsed"}].map(f=>(
+                    <button key={f.id} onClick={()=>setSourceFilter(f.id)}
+                      style={{ padding:"8px 14px", border:`1.5px solid ${sourceFilter===f.id?O:BORDER}`, borderRadius:9, backgroundColor:sourceFilter===f.id?O_LITE:"#fff", color:sourceFilter===f.id?O:"#475569", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
+                      {f.label}
                     </button>
                   ))}
                 </div>
-
-                <select value={statusFilters.status} onChange={e=>updateStatusFilter({status:e.target.value})}
-                  style={{ padding:"8px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:13, backgroundColor:"#FAFBFC", fontFamily:"inherit", color:"#374151" }}>
+                {/* Status filter */}
+                <select value={statusFilter2} onChange={e=>setStatusFilter2(e.target.value)}
+                  style={{ padding:"8px 14px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:12, fontFamily:"inherit", color:"#374151", backgroundColor:"#fff", cursor:"pointer" }}>
                   <option value="all">All Status</option>
-                  {(statusFilterOptions.statuses||[]).map(s=><option key={s} value={s}>{s}</option>)}
+                  {["Contacted","Interested","Not Interested","No Response","Follow-up Required","In Review","Shortlisted","Interview Scheduled","Interview Cleared","Offered","Hired","Rejected","On Hold"].map(s=><option key={s}>{s}</option>)}
                 </select>
-                <select value={statusFilters.location} onChange={e=>updateStatusFilter({location:e.target.value})}
-                  style={{ padding:"8px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:13, backgroundColor:"#FAFBFC", fontFamily:"inherit", color:"#374151" }}>
-                  <option value="all">All Locations</option>
-                  {(statusFilterOptions.locations||[]).map(l=><option key={l} value={l}>{l}</option>)}
+                {/* Location filter */}
+                <select value={locationFilter} onChange={e=>setLocationFilter(e.target.value)}
+                  style={{ padding:"8px 14px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:12, fontFamily:"inherit", color:"#374151", backgroundColor:"#fff", cursor:"pointer" }}>
+                  {locations.map(l=><option key={l}>{l}</option>)}
                 </select>
-                <select value={statusFilters.skill} onChange={e=>updateStatusFilter({skill:e.target.value})}
-                  style={{ padding:"8px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:13, backgroundColor:"#FAFBFC", fontFamily:"inherit", color:"#374151", maxWidth:160 }}>
-                  <option value="all">All Skills</option>
-                  {(statusFilterOptions.skills||[]).slice(0,60).map(s=><option key={s} value={s}>{s}</option>)}
-                </select>
-                <button onClick={handleExportStatusCSV} disabled={exportingStatusCSV}
-                  style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 14px", border:`1.5px solid ${BORDER}`, borderRadius:9, backgroundColor:"#fff", color:"#475569", fontSize:12, fontWeight:700, cursor:exportingStatusCSV?"not-allowed":"pointer", fontFamily:"inherit" }}>
-                  <Download size={13}/> {exportingStatusCSV?"Exporting…":"Export"}
+                {/* Export stub */}
+                <button style={{ padding:"8px 16px", border:`1.5px solid ${BORDER}`, borderRadius:9, backgroundColor:"#fff", color:"#475569", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}>
+                  ↓ Export
                 </button>
               </div>
-            </div>
 
-            {/* Table */}
-            <div style={{ ...CARD, padding:0, overflow:"hidden", borderRadius:"0 0 16px 16px" }}>
-              <div style={{ padding:"12px 20px", borderBottom:`1.5px solid ${BORDER}`, display:"flex", alignItems:"center", justifyContent:"space-between", backgroundColor:"#FAFBFC" }}>
-                <span style={{ fontWeight:700, fontSize:13, color:"#374151" }}>
-                  {statusPagination.total} candidate{statusPagination.total===1?"":"s"} found
-                  <span style={{ marginLeft:10, fontSize:11, color:"#94a3b8", fontWeight:500 }}>
-                    ({statusPagination.portalCount} portal · {statusPagination.bulkCount} bulk)
-                  </span>
-                </span>
-              </div>
-
-              {statusLoading ? (
-                <div style={{ padding:"60px", textAlign:"center", color:"#94a3b8" }}>Loading…</div>
-              ) : statusList.length===0 ? (
-                <div style={{ padding:"56px", textAlign:"center", color:"#94a3b8" }}>No candidates match these filters.</div>
-              ) : (
-                <div style={{ overflowX:"auto" }}>
-                <table style={{ width:"100%", borderCollapse:"collapse", minWidth:1100 }}>
-                  <thead>
-                    <tr style={{ backgroundColor:"#F8FAFC", borderBottom:`1.5px solid ${BORDER}` }}>
-                      {["Candidate","Contact","Location","Role","AI Suitability Score","Current Status","Update Status","Updated At","Actions"].map(h=>(
-                        <th key={h} style={{ textAlign:"left", padding:"12px 16px", color:"#64748b", fontWeight:700, fontSize:10.5, textTransform:"uppercase", letterSpacing:"0.04em", whiteSpace:"nowrap" }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {statusList.map((c,i)=>{
-                      const [abg,afg]=avatarColor(c.name);
-                      const key = `${c._source}-${c.id}`;
-                      return (
-                        <tr key={key} style={{ borderBottom:`1px solid ${BORDER}`, backgroundColor:i%2===0?"#fff":"#FAFBFC" }}
-                          onMouseEnter={e=>e.currentTarget.style.backgroundColor=O_LITE}
-                          onMouseLeave={e=>e.currentTarget.style.backgroundColor=i%2===0?"#fff":"#FAFBFC"}>
-                          <td style={{ padding:"12px 16px" }}>
-                            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                              <div style={{ width:36, height:36, borderRadius:"50%", backgroundColor:abg, color:afg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0 }}>
-                                {initials(c.name)}
-                              </div>
-                              <div>
-                                <div style={{ fontSize:13, fontWeight:700 }}>{c.name||"—"}</div>
-                                <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:2 }}>
-                                  <SourceTag source={c._source}/>
-                                  <span style={{ fontSize:11, color:"#94a3b8" }}>{c.email}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td style={{ padding:"12px 16px", fontSize:12, color:"#475569" }}>{c.contact||"—"}</td>
-                          <td style={{ padding:"12px 16px", fontSize:12, color:"#475569" }}>{c.current_location||"—"}</td>
-                          <td style={{ padding:"12px 16px", fontSize:12, color:"#475569" }}>
-                            {c.job_role||"—"}{c.experience?<div style={{ fontSize:11, color:"#94a3b8" }}>{c.experience} yrs exp</div>:null}
-                          </td>
-                          <td style={{ padding:"12px 16px" }}>
-                            {c.ai_suitability_score===null||c.ai_suitability_score===undefined ? (
-                              <span style={{ fontSize:11, color:"#94a3b8", fontStyle:"italic" }}>Not scored</span>
-                            ) : (
-                              <div title={c.ai_score_breakdown?.matchedJob ? `Best match: ${c.ai_score_breakdown.matchedJob}` : ""}>
-                                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
-                                  <div style={{ width:46, height:6, borderRadius:4, backgroundColor:"#F1F5F9", overflow:"hidden" }}>
-                                    <div style={{ width:`${c.ai_suitability_score}%`, height:"100%", backgroundColor:scoreColor(c.ai_suitability_score) }}/>
-                                  </div>
-                                  <span style={{ fontSize:12, fontWeight:800, color:scoreColor(c.ai_suitability_score) }}>{c.ai_suitability_score}%</span>
-                                </div>
-                                <div style={{ fontSize:10.5, color:scoreColor(c.ai_suitability_score), fontWeight:600, marginTop:2 }}>{c.ai_score_label}</div>
-                              </div>
-                            )}
-                          </td>
-                          <td style={{ padding:"12px 16px" }}><Badge label={c.candidate_status||"New"}/></td>
-                          <td style={{ padding:"12px 16px" }}>
-                            <select value={c.candidate_status||"New"} onChange={e=>handleUpdateUnifiedStatus(c._source,c.id,e.target.value)} disabled={statusUpdating===key}
-                              style={{ padding:"6px 10px", border:`1.5px solid ${BORDER}`, borderRadius:8, fontSize:12, backgroundColor:"#FAFBFC", color:"#0f172a", cursor:statusUpdating===key?"not-allowed":"pointer", fontFamily:"inherit", opacity:statusUpdating===key?0.5:1 }}>
-                              {CANDIDATE_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
-                            </select>
-                          </td>
-                          <td style={{ padding:"12px 16px", color:"#94a3b8", fontSize:11.5, whiteSpace:"nowrap" }}>{fmtDate(c.status_updated_at||c.created_at)}</td>
-                          <td style={{ padding:"12px 16px" }}>
-                            <div style={{ display:"flex", gap:6 }}>
-                              <button onClick={()=>setSelectedCandidate({...c,_type:c._source})}
-                                title="View profile"
-                                style={{ padding:"6px 10px", border:`1.5px solid ${BORDER}`, borderRadius:7, backgroundColor:"#fff", color:"#475569", cursor:"pointer", display:"flex", alignItems:"center" }}>
-                                <Eye size={13}/>
-                              </button>
-                              {(c.resume_link) && (
-                                <a href={c.resume_link} target="_blank" rel="noreferrer" title="View CV"
-                                  style={{ padding:"6px 10px", border:`1.5px solid ${O_MID}`, borderRadius:7, backgroundColor:O_LITE, color:O, cursor:"pointer", display:"flex", alignItems:"center", textDecoration:"none" }}>
-                                  <FileCheck size={13}/>
-                                </a>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              {/* Table */}
+              <div style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
+                {/* Col headers */}
+                <div style={{ display:"grid", gridTemplateColumns:"2.2fr 1.6fr 1.2fr 1.2fr 1.2fr 1.4fr 1.2fr 1fr", gap:8, padding:"11px 20px", backgroundColor:"#F8FAFC", borderBottom:`1.5px solid ${BORDER}`, fontSize:11, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                  <span>Candidate</span><span>Contact</span><span>Location</span><span>Role</span><span>Source</span><span>Current Status</span><span>Updated At</span><span>Actions</span>
                 </div>
-              )}
 
-              {/* Pagination */}
-              {statusPagination.total>0 && (
-                <div style={{ padding:"14px 20px", borderTop:`1px solid ${BORDER}`, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
-                  <span style={{ fontSize:12, color:"#64748b" }}>
-                    Showing {((statusFilters.page-1)*statusFilters.limit)+1} to {Math.min(statusFilters.page*statusFilters.limit,statusPagination.total)} of {statusPagination.total} candidates
-                  </span>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <select value={statusFilters.limit} onChange={e=>updateStatusFilter({limit:parseInt(e.target.value),page:1})}
-                      style={{ padding:"5px 8px", border:`1.5px solid ${BORDER}`, borderRadius:7, fontSize:12, backgroundColor:"#fff", fontFamily:"inherit" }}>
-                      {[10,25,50,100].map(n=><option key={n} value={n}>{n} / page</option>)}
-                    </select>
-                    <button onClick={()=>updateStatusFilter({page:Math.max(1,statusFilters.page-1)})} disabled={statusFilters.page<=1}
-                      style={{ width:30, height:30, borderRadius:7, border:`1.5px solid ${BORDER}`, backgroundColor:"#fff", cursor:statusFilters.page<=1?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", opacity:statusFilters.page<=1?0.4:1 }}>
-                      <ChevronLeft size={14}/>
-                    </button>
-                    <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>{statusFilters.page} / {statusPagination.totalPages}</span>
-                    <button onClick={()=>updateStatusFilter({page:Math.min(statusPagination.totalPages,statusFilters.page+1)})} disabled={statusFilters.page>=statusPagination.totalPages}
-                      style={{ width:30, height:30, borderRadius:7, border:`1.5px solid ${BORDER}`, backgroundColor:"#fff", cursor:statusFilters.page>=statusPagination.totalPages?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", opacity:statusFilters.page>=statusPagination.totalPages?0.4:1 }}>
-                      <ChevronRight size={14}/>
-                    </button>
+                {filtered.length===0 ? (
+                  <div style={{ padding:"60px", textAlign:"center", color:"#94a3b8" }}>
+                    <Users size={44} color="#E5E7EB" style={{ display:"block", margin:"0 auto 14px" }}/>
+                    <p style={{ margin:0, fontWeight:600 }}>No candidates match your filters</p>
+                  </div>
+                ) : filtered.map((c,i)=>{
+                  const [bg,fg]=avatarColor(c.name);
+                  const [ssBg,ssFg]=statusStyle(c.candidate_status||"Contacted");
+                  const src=sourceTag(c._source);
+                  return (
+                    <div key={c.id}
+                      style={{ display:"grid", gridTemplateColumns:"2.2fr 1.6fr 1.2fr 1.2fr 1.2fr 1.4fr 1.2fr 1fr", gap:8, padding:"14px 20px", borderBottom:i<filtered.length-1?`1px solid ${BORDER}`:"none", alignItems:"center", transition:"background 0.12s" }}
+                      onMouseEnter={e=>e.currentTarget.style.backgroundColor="#F8FAFC"}
+                      onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
+                      {/* Name */}
+                      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                        <div style={{ width:36, height:36, borderRadius:"50%", backgroundColor:bg, color:fg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{initials(c.name)}</div>
+                        <div>
+                          <div style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>{c.name||"—"}</div>
+                          <div style={{ fontSize:11, color:"#94a3b8" }}>{c.email||"—"}</div>
+                        </div>
+                      </div>
+                      {/* Contact */}
+                      <div style={{ fontSize:12, color:"#475569" }}>{c.contact||"—"}</div>
+                      {/* Location */}
+                      <div style={{ fontSize:12, color:"#64748b", display:"flex", alignItems:"center", gap:4 }}>
+                        {c.current_location ? <><span style={{ fontSize:11 }}>📍</span>{c.current_location}</> : "—"}
+                      </div>
+                      {/* Role */}
+                      <div style={{ fontSize:12, color:"#475569" }}>{c.role||"—"}</div>
+                      {/* Source tag */}
+                      <div>
+                        <span style={{ fontSize:10, fontWeight:700, padding:"3px 9px", borderRadius:999, backgroundColor:src.bg, color:src.color, border:`1px solid ${src.border}` }}>{src.label}</span>
+                      </div>
+                      {/* Status dropdown */}
+                      <div>
+                        <select value={c.candidate_status||"Contacted"}
+                          onChange={e=>handleUpdateCandidateStatus(c.id,e.target.value)}
+                          disabled={updatingStatus===c.id}
+                          style={{ padding:"5px 10px", border:`1.5px solid ${ssBg==="transparent"?BORDER:BORDER}`, borderRadius:8, fontSize:11, fontWeight:700, color:ssFg, backgroundColor:ssBg, cursor:updatingStatus===c.id?"not-allowed":"pointer", fontFamily:"inherit", opacity:updatingStatus===c.id?0.5:1, outline:"none" }}>
+                          {["Contacted","Interested","Not Interested","No Response","Follow-up Required","In Review","Shortlisted","Interview Scheduled","Interview Cleared","Offered","Hired","Rejected","On Hold"].map(s=><option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      {/* Updated at */}
+                      <div style={{ fontSize:11, color:"#94a3b8" }}>{c.status_updated_at?new Date(c.status_updated_at).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}):"—"}</div>
+                      {/* Actions */}
+                      <div style={{ display:"flex", gap:6 }}>
+                        <button onClick={()=>window.open(`/admin/bulk-candidates/${c.id}`,"_blank")}
+                          style={{ padding:"5px 12px", border:`1.5px solid ${BORDER}`, borderRadius:7, backgroundColor:"#fff", color:"#374151", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>View CV</button>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{ padding:"12px 20px", borderTop:`1px solid ${BORDER}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:12, color:"#94a3b8" }}>Showing 1 to {filtered.length} of {withSource.length} candidates</span>
+                  <div style={{ display:"flex", gap:6 }}>
+                    {sourceFilter!=="all" && <button onClick={()=>setSourceFilter("all")} style={{ fontSize:11, padding:"3px 10px", border:`1px solid ${BORDER}`, borderRadius:6, cursor:"pointer", background:"#fff", color:"#475569", fontFamily:"inherit" }}>✕ {sourceFilter==="csv"?"CSV Upload":"AI Parsed"}</button>}
+                    {statusFilter2!=="all" && <button onClick={()=>setStatusFilter2("all")} style={{ fontSize:11, padding:"3px 10px", border:`1px solid ${BORDER}`, borderRadius:6, cursor:"pointer", background:"#fff", color:"#475569", fontFamily:"inherit" }}>✕ {statusFilter2}</button>}
                   </div>
                 </div>
-              )}
+              </div>
             </div>
-          </div>
           );
         })()}
-
 
         {/* ═══════════════════════════════════════════════ */}
         {/* AI RESUME PARSER                                */}
