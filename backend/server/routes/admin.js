@@ -28,6 +28,7 @@ import {
   updateUnifiedCandidateStatus,
   exportUnifiedCandidateStatusCSV,
   getRecruiterApprovalCenter,
+  getRecruiterDetails,
   exportRecruitersCSV,
   approveRecruiterV2,
   rejectRecruiterV2,
@@ -69,6 +70,7 @@ router.delete("/candidates/:candidateId", protect, deleteCandidate);
 
 // USERS BY ROLE
 router.get("/users/:role", protect, getCandidatesByRole);
+router.get("/users/recruiter/:recruiterId", protect, getRecruiterDetails);
 
 // RECRUITER MANAGEMENT
 router.put("/recruiters/:recruiterId/approve", protect, approveRecruiterV2);
