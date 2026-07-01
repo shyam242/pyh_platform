@@ -218,6 +218,7 @@ export default function RecruiterDashboard() {
     { id: "candidates", label: "Candidates", icon: Users },
     { id: "shortlisted", label: "Shortlisted", icon: Star },
     { id: "project-search", label: "Search by Project", icon: Search },
+    { id: "my-profile", label: "My Profile", icon: UserCheck },
   ];
 
   return (
@@ -629,8 +630,205 @@ export default function RecruiterDashboard() {
               )}
             </div>
           )}
+          {tab === "my-profile" && (
+            <RecruiterMyProfile user={user} onSave={(updated) => setUser(u => ({ ...u, ...updated }))} />
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────
+// MY PROFILE sub-component (rendered inside RecruiterDashboard)
+// ──────────────────────────────────────────────────────────
+function RecruiterMyProfile({ user, onSave }) {
+  const O = "#E87722", O_LITE = "#FFF3E8", BORDER = "#E2E8F0";
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [profileTab, setProfileTab] = useState("company");
+
+  // Load saved extended profile from localStorage (until backend supports it)
+  const loadProfile = () => {
+    try { return JSON.parse(localStorage.getItem("recruiter_profile") || "{}"); } catch { return {}; }
+  };
+  const [form, setForm] = useState(() => ({
+    name: user?.name || "",
+    email: user?.email || "",
+    phone: user?.phone || "",
+    company_name: user?.company_name || user?.company || "",
+    company_website: user?.company_website || "",
+    industry: "",
+    company_size: "",
+    headquarters: "",
+    company_description: "",
+    linkedin: user?.linkedin || "",
+    designation: "",
+    years_experience: "",
+    specializations: "",
+    ...loadProfile(),
+  }));
+
+  const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const token = localStorage.getItem("token");
+      // Save basic fields to backend
+      await fetch(`${API_BASE_URL}/api/profile`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ name: form.name, phone: form.phone, company: form.company_name }),
+      });
+      // Save extended fields locally
+      localStorage.setItem("recruiter_profile", JSON.stringify(form));
+      onSave({ name: form.name, phone: form.phone, company_name: form.company_name });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      // Save locally anyway
+      localStorage.setItem("recruiter_profile", JSON.stringify(form));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } finally { setSaving(false); }
+  };
+
+  const initials = n => (n||"?").split(" ").map(w=>w[0]).slice(0,2).join("").toUpperCase();
+
+  const INPUT = { padding:"10px 14px", border:`1.5px solid ${BORDER}`, borderRadius:10, fontSize:13, fontFamily:"inherit", color:"#0f172a", backgroundColor:"#FAFBFC", outline:"none", boxSizing:"border-box" };
+
+  return (
+    <div style={{ maxWidth:860, margin:"0 auto" }}>
+      {/* Header */}
+      <div style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:16, padding:"24px 28px", marginBottom:20 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
+          <div>
+            <h2 style={{ fontSize:20, fontWeight:700, margin:"0 0 4px" }}>My Profile</h2>
+            <p style={{ fontSize:13, color:"#64748b", margin:0 }}>Manage your recruiter profile and company information</p>
+          </div>
+          <button onClick={handleSave} disabled={saving}
+            style={{ padding:"10px 24px", backgroundColor:saved?"#15803d":O, color:"#fff", border:"none", borderRadius:10, fontSize:13, fontWeight:700, cursor:saving?"not-allowed":"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:7, transition:"background 0.2s" }}>
+            {saving ? "Saving…" : saved ? "✓ Saved!" : "Save Changes"}
+          </button>
+        </div>
+
+        {/* Avatar + basic */}
+        <div style={{ display:"flex", alignItems:"center", gap:20 }}>
+          <div style={{ width:80, height:80, borderRadius:"50%", backgroundColor:O_LITE, color:O, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26, fontWeight:700, border:`2px solid ${O}30`, flexShrink:0 }}>
+            {initials(form.name)}
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:18, fontWeight:700, marginBottom:3 }}>{form.name||"Your Name"}</div>
+            <div style={{ fontSize:13, color:"#64748b" }}>{form.designation||"Recruiter"} {form.company_name?`at ${form.company_name}`:""}</div>
+            <div style={{ fontSize:12, color:"#94a3b8", marginTop:3 }}>{form.email}</div>
+          </div>
+          <div style={{ backgroundColor:"#DCFCE7", border:"1px solid #86efac", borderRadius:999, padding:"4px 14px", fontSize:11, fontWeight:700, color:"#15803d" }}>● Approved</div>
+        </div>
+      </div>
+
+      {/* Sub tabs */}
+      <div style={{ display:"flex", gap:8, marginBottom:20 }}>
+        {[["company","🏢 Company Info"],["personal","👤 Personal Info"],["expertise","⭐ Expertise"]].map(([id,label])=>(
+          <button key={id} onClick={()=>setProfileTab(id)}
+            style={{ padding:"9px 18px", border:`1.5px solid ${profileTab===id?O:BORDER}`, borderRadius:10, backgroundColor:profileTab===id?O_LITE:"#fff", color:profileTab===id?O:"#475569", fontSize:13, fontWeight:profileTab===id?700:500, cursor:"pointer", fontFamily:"inherit" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* COMPANY INFO */}
+      {profileTab==="company" && (
+        <div style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:16, padding:"24px 28px" }}>
+          <h3 style={{ fontSize:15, fontWeight:700, margin:"0 0 20px" }}>Company Information</h3>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+            {[
+              ["Company Name","company_name","text","e.g. Acme Technologies"],
+              ["Company Website","company_website","url","https://yourcompany.com"],
+              ["Industry","industry","text","e.g. Information Technology"],
+              ["Company Size","company_size","text","e.g. 51-200 employees"],
+              ["Headquarters","headquarters","text","e.g. Bangalore, India"],
+              ["LinkedIn Page","linkedin","url","https://linkedin.com/company/..."],
+            ].map(([label,key,type,placeholder])=>(
+              <div key={key}>
+                <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:6 }}>{label}</label>
+                <input type={type} value={form[key]||""} onChange={e=>setF(key,e.target.value)} placeholder={placeholder}
+                  style={{ ...INPUT, width:"100%" }}
+                  onFocus={e=>e.target.style.borderColor=O} onBlur={e=>e.target.style.borderColor=BORDER}/>
+              </div>
+            ))}
+            <div style={{ gridColumn:"1/-1" }}>
+              <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:6 }}>Company Description</label>
+              <textarea value={form.company_description||""} onChange={e=>setF("company_description",e.target.value)} rows={3}
+                placeholder="Brief description of your company, what you do, and your culture..."
+                style={{ ...INPUT, width:"100%", resize:"vertical", lineHeight:1.6 }}
+                onFocus={e=>e.target.style.borderColor=O} onBlur={e=>e.target.style.borderColor=BORDER}/>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PERSONAL INFO */}
+      {profileTab==="personal" && (
+        <div style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:16, padding:"24px 28px" }}>
+          <h3 style={{ fontSize:15, fontWeight:700, margin:"0 0 20px" }}>Personal Information</h3>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+            {[
+              ["Full Name","name","text","Your full name"],
+              ["Phone Number","phone","tel","+91 9876543210"],
+              ["Email Address","email","email","you@company.com"],
+              ["Designation","designation","text","e.g. Senior Technical Recruiter"],
+              ["Years of Experience","years_experience","number","e.g. 5"],
+              ["LinkedIn Profile","linkedin","url","https://linkedin.com/in/..."],
+            ].map(([label,key,type,placeholder])=>(
+              <div key={key}>
+                <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:6 }}>{label}</label>
+                <input type={type} value={form[key]||""} onChange={e=>setF(key,e.target.value)} placeholder={placeholder}
+                  disabled={key==="email"}
+                  style={{ ...INPUT, width:"100%", opacity:key==="email"?0.6:1 }}
+                  onFocus={e=>{ if(key!=="email") e.target.style.borderColor=O; }} onBlur={e=>e.target.style.borderColor=BORDER}/>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* EXPERTISE */}
+      {profileTab==="expertise" && (
+        <div style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:16, padding:"24px 28px" }}>
+          <h3 style={{ fontSize:15, fontWeight:700, margin:"0 0 20px" }}>Expertise & Specializations</h3>
+          <div style={{ display:"grid", gap:16 }}>
+            <div>
+              <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:6 }}>Specializations</label>
+              <input value={form.specializations||""} onChange={e=>setF("specializations",e.target.value)} placeholder="e.g. React, Java, Data Science, DevOps (comma separated)"
+                style={{ ...INPUT, width:"100%" }} onFocus={e=>e.target.style.borderColor=O} onBlur={e=>e.target.style.borderColor=BORDER}/>
+              <p style={{ fontSize:11, color:"#94a3b8", margin:"6px 0 0" }}>These help candidates and admins understand your recruiting focus areas</p>
+            </div>
+            {form.specializations && (
+              <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                {form.specializations.split(",").map(s=>s.trim()).filter(Boolean).map(s=>(
+                  <span key={s} style={{ fontSize:12, fontWeight:600, padding:"5px 14px", backgroundColor:O_LITE, color:O, border:`1.5px solid ${O}30`, borderRadius:999 }}>{s}</span>
+                ))}
+              </div>
+            )}
+            <div style={{ backgroundColor:"#F8FAFC", border:`1.5px solid ${BORDER}`, borderRadius:12, padding:"16px 20px" }}>
+              <div style={{ fontWeight:700, fontSize:13, marginBottom:12 }}>📊 Platform Stats</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+                {[
+                  { label:"Member Since", value: user?.created_at ? new Date(user.created_at).toLocaleDateString("en-IN",{month:"long",year:"numeric"}) : "—" },
+                  { label:"Status", value:"Approved ✓" },
+                  { label:"Account Type", value:"Recruiter" },
+                ].map(s=>(
+                  <div key={s.label} style={{ textAlign:"center" }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>{s.value}</div>
+                    <div style={{ fontSize:11, color:"#94a3b8" }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
