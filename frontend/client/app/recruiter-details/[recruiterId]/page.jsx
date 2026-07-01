@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, Mail, Phone, Linkedin, Globe, Building2, Users, Calendar, Briefcase, Star, TrendingUp, FileText, Award, ChevronRight, ExternalLink, Edit3, X, Check, AlertCircle } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Globe, Building2, Users, Calendar, Briefcase, Star, TrendingUp, FileText, Award, ChevronRight, ExternalLink, Edit3, X, Check, AlertCircle } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
 
@@ -157,7 +157,7 @@ export default function RecruiterDetailPage() {
                 )}
                 {recruiter.linkedin && (
                   <a href={recruiter.linkedin} target="_blank" rel="noreferrer" style={{ display:"flex", alignItems:"center", gap:5, fontSize:12, color:"#1d4ed8", textDecoration:"none" }}>
-                    <Linkedin size={13}/> LinkedIn Profile
+                    <ExternalLink size={13}/> LinkedIn Profile
                   </a>
                 )}
               </div>
