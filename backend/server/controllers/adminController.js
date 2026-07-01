@@ -1298,6 +1298,35 @@ const logRecruiterActivity = async (recruiter, action, note, adminId) => {
   );
 };
 
+// GET /api/admin/users/recruiter/:recruiterId  (single recruiter profile for the Recruiter Details page)
+export const getRecruiterDetails = async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const { recruiterId } = req.params;
+
+    const result = await pool.query(
+      `SELECT id, name, email, phone, company_name, company_website, is_recruiter_approved,
+              recruiter_status, recruiter_approved_at, recruiter_rejected_at, rejection_reason, created_at
+       FROM users WHERE id=$1 AND role='recruiter'`,
+      [recruiterId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Recruiter not found" });
+    }
+
+    const recruiter = result.rows[0];
+    recruiter.recruiter_status = recruiter.recruiter_status || (recruiter.is_recruiter_approved ? "approved" : "pending");
+    recruiter.documents_status = documentsStatusFor(recruiter);
+
+    res.json(recruiter);
+  } catch (err) {
+    console.error("getRecruiterDetails error:", err);
+    res.status(500).json({ message: "Failed to fetch recruiter details" });
+  }
+};
+
 // GET /api/admin/recruiters/pending  (rich filters for the Approval Center)
 // Query: search, status(pending|approved|rejected|all - default pending), company, registeredOn(today|week|month|all)
 export const getRecruiterApprovalCenter = async (req, res) => {
