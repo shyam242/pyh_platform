@@ -1020,7 +1020,8 @@ export default function AdminDashboard() {
                     <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>Need to remove a recruiter?</div>
                     <div style={{ fontSize:12, color:"#64748b" }}>You can suspend or remove a recruiter from the platform if they violate our policies.</div>
                   </div>
-                  <button style={{ padding:"9px 18px", backgroundColor:O, color:"#fff", border:"none", borderRadius:9, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0, marginLeft:16 }}>
+                  <button onClick={()=>window.scrollTo({ top:0, behavior:"smooth" })}
+                    style={{ padding:"9px 18px", backgroundColor:O, color:"#fff", border:"none", borderRadius:9, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0, marginLeft:16 }}>
                     Manage Recruiters
                   </button>
                 </div>
