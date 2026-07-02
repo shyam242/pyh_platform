@@ -5,7 +5,7 @@ import {
   Users, Briefcase, UserCheck, LogOut, Trash2, Upload,
   ChevronDown, ChevronRight, X, Info, Megaphone, ShieldCheck,
   UserPlus, Zap, BarChart2, Home, Search, Filter, Eye,
-  Mail, Phone, Building2, Calendar, Award, MoreVertical
+  Mail, Phone, Building2, Calendar, Award, MoreVertical, ExternalLink
 } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
@@ -60,6 +60,8 @@ export default function AdminDashboard() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [statusFilter2, setStatusFilter2] = useState("all");
   const [locationFilter, setLocationFilter] = useState("All");
+  const [incPage, setIncPage] = useState(1);
+  const [incSearch, setIncSearch] = useState("");
   const clickTimers = useRef({});
 
   // ── Keyboard shortcuts ──────────────────────────────────────
@@ -984,13 +986,13 @@ export default function AdminDashboard() {
                   <span style={{ fontSize:12, color:"#94a3b8" }}>Showing {(recPage-1)*recPerPage+1} to {Math.min(recPage*recPerPage,filtered.length)} of {filtered.length} recruiters</span>
                   <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                     <button onClick={()=>setRecPage(p=>Math.max(1,p-1))} disabled={recPage===1}
-                      style={{ padding:"5px 10px", border:`1.5px solid ${BORDER}`, borderRadius:7, backgroundColor:"#fff", color:recPage===1?"#d1d5db":"#374151", cursor:recPage===1?"not-allowed":"pointer", fontSize:13 }}>‹</button>
+                      style={{ padding:"5px 10px", border:`1.5px solid ${BORDER}`, borderRadius:7, backgroundColor:"#fff", color:recPage===1?"#d1d5db":"#374151", cursor:page===1?"not-allowed":"pointer", fontSize:13 }}>‹</button>
                     {Array.from({length:Math.min(totalPages,5)},(_,i)=>{
-                      const p = totalPages<=5 ? i+1 : recPage<=3 ? i+1 : recPage+i-2;
+                      const p = totalPages<=5 ? i+1 : page<=3 ? i+1 : page+i-2;
                       if(p<1||p>totalPages)return null;
                       return (
                         <button key={p} onClick={()=>setRecPage(p)}
-                          style={{ padding:"5px 10px", minWidth:32, border:`1.5px solid ${recPage===p?O:BORDER}`, borderRadius:7, backgroundColor:recPage===p?O:"#fff", color:recPage===p?"#fff":"#374151", cursor:"pointer", fontSize:12, fontWeight:recPage===p?700:400 }}>{p}</button>
+                          style={{ padding:"5px 10px", minWidth:32, border:`1.5px solid ${page===p?O:BORDER}`, borderRadius:7, backgroundColor:page===p?O:"#fff", color:recPage===p?"#fff":"#374151", cursor:"pointer", fontSize:12, fontWeight:page===p?700:400 }}>{p}</button>
                       );
                     })}
                     {totalPages>5 && <span style={{ color:"#94a3b8", fontSize:12 }}>… {totalPages}</span>}
@@ -1020,8 +1022,7 @@ export default function AdminDashboard() {
                     <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>Need to remove a recruiter?</div>
                     <div style={{ fontSize:12, color:"#64748b" }}>You can suspend or remove a recruiter from the platform if they violate our policies.</div>
                   </div>
-                  <button onClick={()=>window.scrollTo({ top:0, behavior:"smooth" })}
-                    style={{ padding:"9px 18px", backgroundColor:O, color:"#fff", border:"none", borderRadius:9, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0, marginLeft:16 }}>
+                  <button style={{ padding:"9px 18px", backgroundColor:O, color:"#fff", border:"none", borderRadius:9, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0, marginLeft:16 }}>
                     Manage Recruiters
                   </button>
                 </div>
@@ -1033,81 +1034,184 @@ export default function AdminDashboard() {
         {/* ═══════════════════════════════════════════════ */}
         {/* INCENTIVES                                      */}
         {/* ═══════════════════════════════════════════════ */}
-        {activeTab==="incentives" && (
-          <div>
-            <BackBtn/>
-            <TabHeader title="Referrer Incentives" subtitle="Manage referral rewards for each referrer"/>
-            <div style={{ display:"grid", gridTemplateColumns:"320px 1fr", gap:20 }}>
-              <div style={{ ...CARD, alignSelf:"start" }}>
-                <h3 style={{ fontSize:15, fontWeight:700, margin:"0 0 18px" }}>Set Incentive</h3>
-                <form onSubmit={handleUpdateIncentive} style={{ display:"grid", gap:14 }}>
+        {activeTab==="incentives" && (() => {
+          const incPerPage = 10;
+          const filteredRefs = referrers.filter(r => !incSearch || [r.name,r.email,r.company,r.linkedin].filter(Boolean).join(" ").toLowerCase().includes(incSearch.toLowerCase()));
+          const totalIncPages = Math.max(1, Math.ceil(filteredRefs.length / incPerPage));
+          const pagedRefs = filteredRefs.slice((incPage-1)*incPerPage, incPage*incPerPage);
+
+          return (
+            <div>
+              <BackBtn/>
+              {/* Hero */}
+              <div style={{ background:"linear-gradient(135deg,#fff7ed 0%,#fef3e2 100%)", border:`1.5px solid ${BORDER}`, borderRadius:18, padding:"24px 32px", marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+                  <div style={{ width:56, height:56, borderRadius:14, backgroundColor:O_LITE, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26 }}>🎁</div>
                   <div>
-                    <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:6 }}>Select Referrer</label>
-                    <select value={incentiveForm.referrerId} onChange={e=>setIncentiveForm({...incentiveForm,referrerId:e.target.value})}
-                      style={{ width:"100%", padding:"10px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:13, color:"#0f172a", backgroundColor:"#FAFBFC", fontFamily:"inherit" }}>
-                      <option value="">Choose referrer…</option>
-                      {referrers.map(r=><option key={r.id} value={r.id}>{r.name} (₹{r.incentive_value})</option>)}
-                    </select>
+                    <h2 style={{ fontSize:21, fontWeight:800, margin:"0 0 4px" }}>Referrer Incentives</h2>
+                    <p style={{ fontSize:13, color:"#64748b", margin:0 }}>Manage your platform efficiently from this comprehensive dashboard.</p>
                   </div>
-                  <div>
-                    <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:6 }}>Incentive Value (₹)</label>
-                    <input type="number" value={incentiveForm.value} onChange={e=>setIncentiveForm({...incentiveForm,value:e.target.value})} placeholder="500"
-                      style={{ width:"100%", padding:"10px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:13, color:"#0f172a", backgroundColor:"#FAFBFC", fontFamily:"inherit", boxSizing:"border-box" }}/>
-                  </div>
-                  <button type="submit"
-                    style={{ padding:"11px", backgroundColor:O, color:"#fff", border:"none", borderRadius:9, fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" }}
-                    onMouseEnter={e=>e.currentTarget.style.backgroundColor="#d4671e"}
-                    onMouseLeave={e=>e.currentTarget.style.backgroundColor=O}>
-                    Update Incentive
-                  </button>
-                </form>
-              </div>
-              <div style={{ ...CARD, padding:0, overflow:"hidden" }}>
-                <div style={{ padding:"16px 20px", borderBottom:`1.5px solid ${BORDER}` }}>
-                  <h3 style={{ fontSize:15, fontWeight:700, margin:0 }}>All Referrers & Incentives</h3>
                 </div>
-                <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                  <thead>
-                    <tr style={{ backgroundColor:"#F8FAFC", borderBottom:`1.5px solid ${BORDER}` }}>
-                      {["Name","Email","Company","Incentive","Actions"].map(h=>(
-                        <th key={h} style={{ textAlign:"left", padding:"12px 18px", color:"#64748b", fontWeight:700, fontSize:11, textTransform:"uppercase", letterSpacing:"0.04em" }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {referrers.map(r=>(
-                      editingReferrerId===r.id ? (
-                        <tr key={r.id} style={{ borderBottom:`1px solid ${BORDER}`, backgroundColor:"#F8FAFC" }}>
-                          <td style={{ padding:"12px 18px", fontWeight:600 }}>{r.name}</td>
-                          <td style={{ padding:"12px 18px", fontSize:13, color:"#475569" }}>{r.email}</td>
-                          <td style={{ padding:"12px 18px", fontSize:13, color:"#475569" }}>{r.company||"—"}</td>
-                          <td style={{ padding:"12px 18px" }}><input type="number" value={editingIncentiveValue} onChange={e=>setEditingIncentiveValue(e.target.value)} style={{ padding:"6px 10px", border:`1.5px solid ${O}`, borderRadius:7, fontSize:13, width:100, fontFamily:"inherit" }}/></td>
-                          <td style={{ padding:"12px 18px", display:"flex", gap:6 }}>
-                            <button onClick={()=>handleQuickEditIncentive(r.id)} style={{ padding:"5px 12px", backgroundColor:"#15803d", color:"#fff", border:"none", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:600 }}>Save</button>
-                            <button onClick={()=>setEditingReferrerId(null)} style={{ padding:"5px 12px", backgroundColor:"#f1f5f9", color:"#475569", border:"none", borderRadius:7, cursor:"pointer", fontSize:12 }}>Cancel</button>
-                          </td>
-                        </tr>
-                      ) : (
-                        <tr key={r.id} style={{ borderBottom:`1px solid ${BORDER}` }}
-                          onMouseEnter={e=>e.currentTarget.style.backgroundColor="#FAFBFC"}
-                          onMouseLeave={e=>e.currentTarget.style.backgroundColor="#fff"}>
-                          <td style={{ padding:"12px 18px", fontWeight:600 }}>{r.name}</td>
-                          <td style={{ padding:"12px 18px", fontSize:13, color:"#475569" }}>{r.email}</td>
-                          <td style={{ padding:"12px 18px", fontSize:13, color:"#475569" }}>{r.company||"—"}</td>
-                          <td style={{ padding:"12px 18px" }}><span style={{ fontSize:14, fontWeight:700, color:"#15803d" }}>₹{r.incentive_value}</span></td>
-                          <td style={{ padding:"12px 18px", display:"flex", gap:6 }}>
-                            <button onClick={()=>{setEditingReferrerId(r.id);setEditingIncentiveValue(r.incentive_value.toString());}} style={{ padding:"5px 12px", backgroundColor:"#3b82f6", color:"#fff", border:"none", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:600 }}>Edit</button>
-                            <button onClick={()=>handleRevokeIncentive(r.id)} style={{ padding:"5px 12px", backgroundColor:"#fef2f2", color:"#dc2626", border:"1px solid #fecaca", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:600 }}>Revoke</button>
-                          </td>
-                        </tr>
-                      )
+                <div style={{ fontSize:48, opacity:0.5 }}>🎁</div>
+              </div>
+
+              {/* SECTION 1: All Referrers */}
+              <div style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:16, overflow:"hidden", marginBottom:24 }}>
+                <div style={{ padding:"16px 24px", borderBottom:`1.5px solid ${BORDER}`, display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ width:32, height:32, borderRadius:8, backgroundColor:"#EFF6FF", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    <Users size={16} color="#1d4ed8"/>
+                  </div>
+                  <span style={{ fontWeight:700, fontSize:15 }}>All Referrers</span>
+                  <span style={{ fontSize:12, color:"#94a3b8", marginLeft:4 }}>{referrers.length} total</span>
+                </div>
+                {/* Table header */}
+                <div style={{ display:"grid", gridTemplateColumns:"40px 2fr 2.5fr 1.5fr 2fr 1fr", gap:0, padding:"10px 24px", backgroundColor:"#F8FAFC", borderBottom:`1px solid ${BORDER}`, fontSize:11, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                  <span>#</span><span>Name</span><span>Email</span><span>Company</span><span>LinkedIn ID</span><span>Actions</span>
+                </div>
+                {pagedRefs.length === 0 ? (
+                  <div style={{ padding:"40px", textAlign:"center", color:"#94a3b8" }}>No referrers found</div>
+                ) : pagedRefs.map((r, i) => {
+                  const [bg, fg] = avatarColor(r.name);
+                  const rowNum = (incPage-1)*incPerPage + i + 1;
+                  const linkedinDisplay = r.linkedin ? r.linkedin.replace(/^https?:\/\/(www\.)?/i,"").replace(/\/$/,"") : null;
+                  return (
+                    <div key={r.id} style={{ display:"grid", gridTemplateColumns:"40px 2fr 2.5fr 1.5fr 2fr 1fr", gap:0, padding:"13px 24px", borderBottom:`1px solid ${BORDER}`, alignItems:"center", transition:"background 0.1s" }}
+                      onMouseEnter={e=>e.currentTarget.style.backgroundColor="#FAFBFC"}
+                      onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
+                      <span style={{ fontSize:12, color:"#94a3b8", fontWeight:600 }}>{rowNum}</span>
+                      <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+                        <div style={{ width:32, height:32, borderRadius:"50%", backgroundColor:bg, color:fg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{initials(r.name)}</div>
+                        <span style={{ fontSize:13, fontWeight:600, color:"#0f172a" }}>{r.name||"—"}</span>
+                      </div>
+                      <span style={{ fontSize:12, color:"#475569", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.email||"—"}</span>
+                      <span style={{ fontSize:12, color:"#475569" }}>{r.company||"—"}</span>
+                      <div>
+                        {linkedinDisplay ? (
+                          <a href={r.linkedin.startsWith("http")?r.linkedin:`https://${r.linkedin}`} target="_blank" rel="noreferrer"
+                            style={{ fontSize:12, color:"#1d4ed8", textDecoration:"none", display:"flex", alignItems:"center", gap:4 }}
+                            onMouseEnter={e=>e.currentTarget.style.textDecoration="underline"}
+                            onMouseLeave={e=>e.currentTarget.style.textDecoration="none"}>
+                            {linkedinDisplay.length>30?linkedinDisplay.slice(0,30)+"…":linkedinDisplay}
+                            <ExternalLink size={10}/>
+                          </a>
+                        ) : <span style={{ fontSize:12, color:"#94a3b8" }}>—</span>}
+                      </div>
+                      <div>
+                        <a href={`/admin/referrers`} style={{ padding:"5px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:7, fontSize:12, fontWeight:600, color:"#374151", cursor:"pointer", textDecoration:"none", display:"inline-flex", alignItems:"center", gap:5, transition:"all 0.15s" }}
+                          onMouseEnter={e=>{e.currentTarget.style.borderColor=O;e.currentTarget.style.color=O;}}
+                          onMouseLeave={e=>{e.currentTarget.style.borderColor=BORDER;e.currentTarget.style.color="#374151";}}>
+                          <Eye size={12}/> View
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Pagination */}
+                <div style={{ padding:"12px 24px", borderTop:`1px solid ${BORDER}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:12, color:"#64748b" }}>Showing {(incPage-1)*incPerPage+1} to {Math.min(incPage*incPerPage,filteredRefs.length)} of {filteredRefs.length} referrers</span>
+                  <div style={{ display:"flex", gap:4 }}>
+                    <button onClick={()=>setIncPage(p=>Math.max(1,p-1))} disabled={incPage===1}
+                      style={{ width:28, height:28, border:`1.5px solid ${BORDER}`, borderRadius:6, backgroundColor:"#fff", cursor:incPage===1?"not-allowed":"pointer", color:incPage===1?"#d1d5db":"#374151", fontSize:13, display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>
+                    {Array.from({length:Math.min(totalIncPages,5)},(_,i)=>i+1).map(p=>(
+                      <button key={p} onClick={()=>setIncPage(p)}
+                        style={{ width:28, height:28, border:`1.5px solid ${incPage===p?O:BORDER}`, borderRadius:6, backgroundColor:incPage===p?O:"#fff", color:incPage===p?"#fff":"#374151", cursor:"pointer", fontSize:12, fontWeight:incPage===p?700:400, display:"flex", alignItems:"center", justifyContent:"center" }}>{p}</button>
                     ))}
-                  </tbody>
-                </table>
+                    {totalIncPages>5 && <span style={{ color:"#94a3b8", alignSelf:"center", fontSize:12 }}>…{totalIncPages}</span>}
+                    <button onClick={()=>setIncPage(p=>Math.min(totalIncPages,p+1))} disabled={incPage===totalIncPages}
+                      style={{ width:28, height:28, border:`1.5px solid ${BORDER}`, borderRadius:6, backgroundColor:"#fff", cursor:incPage===totalIncPages?"not-allowed":"pointer", color:incPage===totalIncPages?"#d1d5db":"#374151", fontSize:13, display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 2: Referrer Incentives */}
+              <div style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:16, overflow:"hidden" }}>
+                <div style={{ padding:"16px 24px", borderBottom:`1.5px solid ${BORDER}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ width:32, height:32, borderRadius:8, backgroundColor:O_LITE, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>🎁</div>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:15 }}>Referrer Incentives</div>
+                      <div style={{ fontSize:11, color:"#94a3b8" }}>Manage and update incentive amounts for all referrers.</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize:32, opacity:0.4 }}>💰</div>
+                </div>
+                {/* Table header */}
+                <div style={{ display:"grid", gridTemplateColumns:"40px 2fr 2.5fr 1.5fr 2fr 1.5fr 1.5fr", gap:0, padding:"10px 24px", backgroundColor:"#F8FAFC", borderBottom:`1px solid ${BORDER}`, fontSize:11, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                  <span>#</span><span>Name</span><span>Email</span><span>Company</span><span>LinkedIn ID</span><span>Current Incentive (₹)</span><span>Actions</span>
+                </div>
+                {pagedRefs.length === 0 ? (
+                  <div style={{ padding:"40px", textAlign:"center", color:"#94a3b8" }}>No referrers found</div>
+                ) : pagedRefs.map((r, i) => {
+                  const [bg, fg] = avatarColor(r.name);
+                  const rowNum = (incPage-1)*incPerPage + i + 1;
+                  const linkedinDisplay = r.linkedin ? r.linkedin.replace(/^https?:\/\/(www\.)?/i,"").replace(/\/$/,"") : null;
+                  const isEditing = editingReferrerId === r.id;
+                  return (
+                    <div key={r.id} style={{ display:"grid", gridTemplateColumns:"40px 2fr 2.5fr 1.5fr 2fr 1.5fr 1.5fr", gap:0, padding:"13px 24px", borderBottom:`1px solid ${BORDER}`, alignItems:"center", backgroundColor:isEditing?"#FFFBF7":"transparent", transition:"background 0.1s" }}
+                      onMouseEnter={e=>{ if(!isEditing) e.currentTarget.style.backgroundColor="#FAFBFC"; }}
+                      onMouseLeave={e=>{ if(!isEditing) e.currentTarget.style.backgroundColor="transparent"; }}>
+                      <span style={{ fontSize:12, color:"#94a3b8", fontWeight:600 }}>{rowNum}</span>
+                      <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+                        <div style={{ width:32, height:32, borderRadius:"50%", backgroundColor:bg, color:fg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0 }}>{initials(r.name)}</div>
+                        <span style={{ fontSize:13, fontWeight:600, color:"#0f172a" }}>{r.name||"—"}</span>
+                      </div>
+                      <span style={{ fontSize:12, color:"#475569", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.email||"—"}</span>
+                      <span style={{ fontSize:12, color:"#475569" }}>{r.company||"—"}</span>
+                      <div>
+                        {linkedinDisplay ? (
+                          <a href={r.linkedin.startsWith("http")?r.linkedin:`https://${r.linkedin}`} target="_blank" rel="noreferrer"
+                            style={{ fontSize:12, color:"#1d4ed8", textDecoration:"none", display:"flex", alignItems:"center", gap:4 }}>
+                            {linkedinDisplay.length>28?linkedinDisplay.slice(0,28)+"…":linkedinDisplay}
+                            <ExternalLink size={10}/>
+                          </a>
+                        ) : <span style={{ fontSize:12, color:"#94a3b8" }}>—</span>}
+                      </div>
+                      <div>
+                        {isEditing ? (
+                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                            <input type="number" value={editingIncentiveValue} onChange={e=>setEditingIncentiveValue(e.target.value)} autoFocus
+                              style={{ width:80, padding:"5px 8px", border:`1.5px solid ${O}`, borderRadius:7, fontSize:13, fontFamily:"inherit", outline:"none" }}/>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize:14, fontWeight:700, color:"#15803d" }}>₹{r.incentive_value||0}</span>
+                        )}
+                      </div>
+                      <div style={{ display:"flex", gap:6 }}>
+                        {isEditing ? (
+                          <>
+                            <button onClick={()=>handleQuickEditIncentive(r.id)}
+                              style={{ padding:"5px 12px", backgroundColor:"#15803d", color:"#fff", border:"none", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:600, fontFamily:"inherit" }}>Save</button>
+                            <button onClick={()=>{setEditingReferrerId(null);setEditingIncentiveValue("");}}
+                              style={{ padding:"5px 10px", backgroundColor:"#f1f5f9", color:"#475569", border:"none", borderRadius:7, cursor:"pointer", fontSize:12, fontFamily:"inherit" }}>✕</button>
+                          </>
+                        ) : (
+                          <button onClick={()=>{setEditingReferrerId(r.id);setEditingIncentiveValue((r.incentive_value||0).toString());}}
+                            style={{ padding:"5px 16px", backgroundColor:O, color:"#fff", border:"none", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:600, fontFamily:"inherit", display:"flex", alignItems:"center", gap:5 }}>
+                            ✏️ Edit Incentive
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+                <div style={{ padding:"12px 24px", borderTop:`1px solid ${BORDER}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:12, color:"#64748b" }}>Showing {(incPage-1)*incPerPage+1} to {Math.min(incPage*incPerPage,filteredRefs.length)} of {filteredRefs.length} referrers</span>
+                  <div style={{ display:"flex", gap:4 }}>
+                    <button onClick={()=>setIncPage(p=>Math.max(1,p-1))} disabled={incPage===1}
+                      style={{ width:28, height:28, border:`1.5px solid ${BORDER}`, borderRadius:6, backgroundColor:"#fff", cursor:incPage===1?"not-allowed":"pointer", color:incPage===1?"#d1d5db":"#374151", fontSize:13, display:"flex", alignItems:"center", justifyContent:"center" }}>‹</button>
+                    {Array.from({length:Math.min(totalIncPages,5)},(_,i)=>i+1).map(p=>(
+                      <button key={p} onClick={()=>setIncPage(p)}
+                        style={{ width:28, height:28, border:`1.5px solid ${incPage===p?O:BORDER}`, borderRadius:6, backgroundColor:incPage===p?O:"#fff", color:incPage===p?"#fff":"#374151", cursor:"pointer", fontSize:12, fontWeight:incPage===p?700:400, display:"flex", alignItems:"center", justifyContent:"center" }}>{p}</button>
+                    ))}
+                    {totalIncPages>5 && <span style={{ color:"#94a3b8", alignSelf:"center", fontSize:12 }}>…{totalIncPages}</span>}
+                    <button onClick={()=>setIncPage(p=>Math.min(totalIncPages,p+1))} disabled={incPage===totalIncPages}
+                      style={{ width:28, height:28, border:`1.5px solid ${BORDER}`, borderRadius:6, backgroundColor:"#fff", cursor:incPage===totalIncPages?"not-allowed":"pointer", color:incPage===totalIncPages?"#d1d5db":"#374151", fontSize:13, display:"flex", alignItems:"center", justifyContent:"center" }}>›</button>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ═══════════════════════════════════════════════ */}
         {/* JOBS LIST                                       */}
