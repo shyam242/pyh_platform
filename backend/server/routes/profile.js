@@ -3,7 +3,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-import { createProfile, getUserProfile, updateUserProfile, uploadProfileImage, getBankDetails, updateBankDetails, createCandidateProfile, getCandidateProfile, updateCandidateProfile, verifyCandidateProfile, deleteCandidateProfile } from "../controllers/ProfileController.js";
+import { createProfile, getUserProfile, updateUserProfile, uploadProfileImage, getBankDetails, updateBankDetails, createCandidateProfile, getCandidateProfile, updateCandidateProfile, verifyCandidateProfile, deleteCandidateProfile, getReferrerProfile } from "../controllers/ProfileController.js";
 import { parseProjects } from "../controllers/jdMatchController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
@@ -117,5 +117,8 @@ router.delete("/candidate", protect, deleteCandidateProfile);
 
 // PARSE PROJECTS FROM RESUME
 router.post("/parse-projects", protect, parseProjects);
+
+// GET REFERRER PROFILE BY ID
+router.get("/referrer/:referrerId", getReferrerProfile);
 
 export default router;   // ⭐ VERY IMPORTANT
