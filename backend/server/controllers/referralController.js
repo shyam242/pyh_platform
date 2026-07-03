@@ -105,27 +105,33 @@ export const getReferrerStats = async (req, res) => {
   try {
     const referrerId = req.user.id;
 
-    // Total candidates referred
-    const totalReferred = await pool.query(
-      "SELECT COUNT(*) as count FROM referrals WHERE referrer_id=$1",
+    // Actual per-referrer incentive rate (defaults to 500 if none set by admin yet)
+    const incentiveResult = await pool.query(
+      "SELECT incentive_value FROM incentives WHERE referrer_id=$1",
       [referrerId]
     );
+    const incentiveValue = incentiveResult.rows.length > 0
+      ? parseFloat(incentiveResult.rows[0].incentive_value)
+      : 500;
 
-    // Successful joinings (assuming 'hired' status exists or we can use 'verified' as success)
-    const successfulJoinings = await pool.query(
-      "SELECT COUNT(*) as count FROM referrals WHERE referrer_id=$1 AND verified=true",
+    const referralsResult = await pool.query(
+      "SELECT referral_status, status, incentive_status FROM referrals WHERE referrer_id=$1",
       [referrerId]
     );
+    const referrals = referralsResult.rows;
 
-    // Total incentives (assuming we have an incentives field, otherwise calculate based on successful joinings)
-    // For now, let's assume $500 per successful joining
-    const incentivesPerJoining = 500;
-    const totalIncentives = successfulJoinings.rows[0].count * incentivesPerJoining;
+    const accepted = referrals.filter(r => (r.referral_status || r.status) === "accepted");
+    const paid = accepted.filter(r => r.incentive_status === "paid");
 
     res.json({
-      totalReferred: parseInt(totalReferred.rows[0].count),
-      successfulJoinings: parseInt(successfulJoinings.rows[0].count),
-      totalIncentives: totalIncentives
+      totalReferred: referrals.length,
+      successfulJoinings: accepted.length,
+      pending: referrals.filter(r => (r.referral_status || r.status) === "pending").length,
+      rejected: referrals.filter(r => (r.referral_status || r.status) === "rejected").length,
+      awaitingCandidate: referrals.filter(r => (r.referral_status || r.status) === "pending_candidate_acceptance").length,
+      incentiveValue,
+      totalIncentives: accepted.length * incentiveValue,
+      totalIncentivesPaid: paid.length * incentiveValue,
     });
   } catch (err) {
     console.error(err);
