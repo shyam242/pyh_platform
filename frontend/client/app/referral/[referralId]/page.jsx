@@ -383,6 +383,39 @@ export default function ReferralDetailsPage() {
                   </div>
                 </div>
 
+                {/* Incentive Information — only meaningful once the referral has been accepted */}
+                <div style={{ marginBottom: 32 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                    <DollarSign size={18} color={O} /> Incentive
+                  </h3>
+                  {(referral.referral_status || referral.status) === "accepted" ? (
+                    <div style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      backgroundColor: referral.incentive_status === "paid" ? "#EAF3DE" : O_LITE,
+                      border: `1px solid ${referral.incentive_status === "paid" ? "#97C459" : O_MID}`,
+                      borderRadius: 12, padding: "16px 18px"
+                    }}>
+                      <div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: referral.incentive_status === "paid" ? "#3B6D11" : O }}>
+                          ₹{referrer?.incentive_value ? Number(referrer.incentive_value).toLocaleString("en-IN") : "500"}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                          {referral.incentive_status === "paid"
+                            ? `Paid on ${formatDate(referral.incentive_paid_at)}${referral.payment_mode ? ` via ${referral.payment_mode}` : ""}`
+                            : "Awaiting payout from admin"}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 999, backgroundColor: "#fff", color: referral.incentive_status === "paid" ? "#3B6D11" : "#C2410C", border: `1px solid ${referral.incentive_status === "paid" ? "#97C459" : "#FED7AA"}` }}>
+                        {referral.incentive_status === "paid" ? "Paid" : "Pending"}
+                      </span>
+                    </div>
+                  ) : (
+                    <div style={{ backgroundColor: "#F8FAFC", border: `1px solid ${BORDER}`, borderRadius: 12, padding: "14px 16px", fontSize: 13, color: "#64748b" }}>
+                      Incentive is credited once this referral is accepted. Current status: {statusLabel(referral.referral_status || referral.status)}.
+                    </div>
+                  )}
+                </div>
+
                 {/* Professional Information */}
                 <div style={{ marginBottom: 32 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
