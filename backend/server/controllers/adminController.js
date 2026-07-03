@@ -383,10 +383,16 @@ export const getAllReferrersWithIncentives = async (req, res) => {
     }
 
     const result = await pool.query(`
-      SELECT u.id, u.name, u.email, u.company, u.experience,
-             COALESCE(i.incentive_value, 500) as incentive_value
+      SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, u.joined_at,
+             COALESCE(i.incentive_value, 500) as incentive_value,
+             COALESCE(r.referral_count, 0) as referral_count
       FROM users u
       LEFT JOIN incentives i ON u.id = i.referrer_id
+      LEFT JOIN (
+        SELECT referrer_id, COUNT(*) as referral_count
+        FROM referrals
+        GROUP BY referrer_id
+      ) r ON r.referrer_id = u.id
       WHERE u.role='referrer'
       ORDER BY u.id DESC
     `);
@@ -395,6 +401,229 @@ export const getAllReferrersWithIncentives = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch referrers" });
+  }
+};
+
+// GET SINGLE REFERRER — FULL PROFILE + STATS + REFERRAL HISTORY + INCENTIVE HISTORY
+export const getReferrerFullDetails = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const { referrerId } = req.params;
+
+    const adminCheck = await pool.query("SELECT role FROM users WHERE id=$1", [adminId]);
+    if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin only." });
+    }
+
+    const referrerResult = await pool.query(
+      `SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, u.joined_at,
+              COALESCE(i.incentive_value, 500) as incentive_value
+       FROM users u
+       LEFT JOIN incentives i ON u.id = i.referrer_id
+       WHERE u.id=$1 AND u.role='referrer'`,
+      [referrerId]
+    );
+
+    if (referrerResult.rows.length === 0) {
+      return res.status(404).json({ message: "Referrer not found" });
+    }
+
+    const referrer = referrerResult.rows[0];
+    const incentiveValue = parseFloat(referrer.incentive_value) || 0;
+
+    const referralsResult = await pool.query(
+      `SELECT id, name, email, phone, company, experience, industry, department,
+              referral_status, status, created_at, candidate_accepted_at,
+              incentive_status, incentive_paid_at, payment_mode
+       FROM referrals WHERE referrer_id=$1 ORDER BY created_at DESC`,
+      [referrerId]
+    );
+    const referrals = referralsResult.rows;
+
+    const isAccepted = r => (r.referral_status || r.status) === "accepted";
+    const isRejected = r => (r.referral_status || r.status) === "rejected";
+    const isPending = r => (r.referral_status || r.status) === "pending";
+    const isAwaiting = r => (r.referral_status || r.status) === "pending_candidate_acceptance";
+
+    const acceptedReferrals = referrals.filter(isAccepted);
+    const paidReferrals = acceptedReferrals.filter(r => r.incentive_status === "paid");
+
+    const stats = {
+      totalReferrals: referrals.length,
+      accepted: acceptedReferrals.length,
+      pending: referrals.filter(isPending).length,
+      rejected: referrals.filter(isRejected).length,
+      awaitingCandidate: referrals.filter(isAwaiting).length,
+      totalIncentiveEarned: acceptedReferrals.length * incentiveValue,
+      totalIncentivePaid: paidReferrals.length * incentiveValue,
+    };
+
+    const referralHistory = referrals.map(r => ({
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      phone: r.phone,
+      company: r.company,
+      status: r.referral_status || r.status,
+      created_at: r.created_at,
+    }));
+
+    const incentiveHistory = acceptedReferrals.map(r => ({
+      referral_id: r.id,
+      candidate_name: r.name,
+      amount: incentiveValue,
+      status: r.incentive_status || "pending",
+      accepted_at: r.candidate_accepted_at,
+      paid_at: r.incentive_paid_at,
+      payment_mode: r.payment_mode,
+    }));
+
+    const recentActivity = [
+      ...referrals.map(r => ({
+        type: "referred",
+        message: `Referred ${r.name}`,
+        date: r.created_at,
+      })),
+      ...acceptedReferrals
+        .filter(r => r.candidate_accepted_at)
+        .map(r => ({
+          type: "accepted",
+          message: `${r.name}'s referral was accepted`,
+          date: r.candidate_accepted_at,
+        })),
+      ...acceptedReferrals
+        .filter(r => r.incentive_paid_at)
+        .map(r => ({
+          type: "paid",
+          message: `Incentive paid for ${r.name}`,
+          date: r.incentive_paid_at,
+        })),
+    ]
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 10);
+
+    const referralDates = referrals.map(r => new Date(r.created_at)).filter(d => !isNaN(d));
+    const accountTimeline = {
+      joined_at: referrer.joined_at,
+      first_referral_at: referralDates.length ? new Date(Math.min(...referralDates)) : null,
+      last_referral_at: referralDates.length ? new Date(Math.max(...referralDates)) : null,
+    };
+
+    res.json({
+      referrer,
+      stats,
+      referralHistory,
+      incentiveHistory,
+      recentActivity,
+      accountTimeline,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch referrer details" });
+  }
+};
+
+// MARK A REFERRAL'S INCENTIVE AS PAID / PENDING
+export const updateReferralIncentiveStatus = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const { referralId } = req.params;
+    const { status, payment_mode } = req.body;
+
+    const adminCheck = await pool.query("SELECT role FROM users WHERE id=$1", [adminId]);
+    if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin only." });
+    }
+
+    if (!["paid", "pending"].includes(status)) {
+      return res.status(400).json({ message: "Status must be 'paid' or 'pending'" });
+    }
+
+    const result = await pool.query(
+      `UPDATE referrals
+       SET incentive_status=$1,
+           incentive_paid_at=CASE WHEN $1='paid' THEN NOW() ELSE NULL END,
+           payment_mode=CASE WHEN $1='paid' THEN $2 ELSE NULL END
+       WHERE id=$3 RETURNING *`,
+      [status, payment_mode || null, referralId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Referral not found" });
+    }
+
+    res.json({ message: "Incentive status updated", data: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to update incentive status" });
+  }
+};
+
+// DELETE REFERRER (and their referrals + incentive record)
+export const deleteReferrer = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const { referrerId } = req.params;
+
+    const adminCheck = await pool.query("SELECT role FROM users WHERE id=$1", [adminId]);
+    if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin only." });
+    }
+
+    const referrer = await pool.query("SELECT * FROM users WHERE id=$1 AND role='referrer'", [referrerId]);
+    if (referrer.rows.length === 0) {
+      return res.status(404).json({ message: "Referrer not found" });
+    }
+
+    await pool.query("DELETE FROM incentives WHERE referrer_id=$1", [referrerId]);
+    await pool.query("DELETE FROM referrals WHERE referrer_id=$1", [referrerId]);
+    await pool.query("DELETE FROM users WHERE id=$1", [referrerId]);
+
+    res.json({ message: "Referrer removed successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to delete referrer" });
+  }
+};
+
+// SEND A DIRECT EMAIL TO A REFERRER
+export const sendReferrerEmail = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const { referrerId } = req.params;
+    const { subject, message } = req.body;
+
+    const adminCheck = await pool.query("SELECT role FROM users WHERE id=$1", [adminId]);
+    if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin only." });
+    }
+
+    if (!subject?.trim() || !message?.trim()) {
+      return res.status(400).json({ message: "Subject and message are required" });
+    }
+
+    const referrer = await pool.query("SELECT name, email FROM users WHERE id=$1 AND role='referrer'", [referrerId]);
+    if (referrer.rows.length === 0) {
+      return res.status(404).json({ message: "Referrer not found" });
+    }
+
+    const { sendEmail } = await import("../services/brevoService.js");
+    const htmlContent = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <p>Hi ${referrer.rows[0].name},</p>
+      <p>${message.replace(/\n/g, "<br/>")}</p>
+      <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+      <p style="color: #999; font-size: 12px;">PickYourHire Team</p>
+    </div>`;
+
+    const sent = await sendEmail(referrer.rows[0].email, subject, htmlContent, referrer.rows[0].name);
+    if (!sent) {
+      return res.status(502).json({ message: "Failed to send email. Please try again later." });
+    }
+
+    res.json({ message: "Email sent successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to send email" });
   }
 };
 
