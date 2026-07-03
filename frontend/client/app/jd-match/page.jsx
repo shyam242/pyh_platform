@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Upload, FileText, Search, Zap, X, ChevronRight,
   Users, Filter, CheckCircle2, TrendingUp, Award, Briefcase,
-  Building2, Clock, MessageSquare, Sparkles
+  Building2, Clock, MessageSquare, Sparkles, Download
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
@@ -29,6 +29,99 @@ const scoreColor = score => {
   if (score >= 75) return { bg: "#EAF3DE", color: "#3B6D11", border: "#97C459" };
   if (score >= 50) return { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" };
   return { bg: "#FEF2F2", color: "#dc2626", border: "#FECACA" };
+};
+
+// ─── CSV EXPORT HELPERS ────────────────────────────────────────
+const sanitizeFilename = s => (s || "").toString().trim().replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "candidate";
+
+const csvEscape = val => {
+  if (val === null || val === undefined) return "";
+  const str = String(val);
+  return /[",\n\r]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+};
+
+const downloadCSV = (filename, rows) => {
+  const csvContent = rows.map(row => row.map(csvEscape).join(",")).join("\r\n");
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+// Normalizes a result from either the live analysis flow or the match-history flow into one shape
+const normalizeResult = (item, isHistory) => {
+  if (isHistory) {
+    return {
+      id: item.id,
+      name: item.name,
+      source_type: item.source_type,
+      score: item.jd_match_score,
+      subscores: item.jd_match_data?.subscores || {},
+      matched_skills: item.jd_match_data?.matched_skills || [],
+      missing_skills: item.jd_match_data?.missing_skills || [],
+      why_shortlist: item.jd_match_data?.why_shortlist || [],
+      concerns: item.jd_match_data?.concerns || [],
+      analyzed_at: item.jd_match_at || null,
+    };
+  }
+  return {
+    id: item.candidate_id,
+    name: item.name,
+    source_type: item.source_type,
+    score: item.weighted_score,
+    subscores: item.subscores || {},
+    matched_skills: item.matched_skills || [],
+    missing_skills: item.missing_skills || [],
+    why_shortlist: item.why_shortlist || [],
+    concerns: item.concerns || [],
+    analyzed_at: null,
+  };
+};
+
+// Export a full list of candidate results (from a live match run or a past-results job group) as one CSV
+const exportResultsListCSV = (list, jdTitle, isHistory = false) => {
+  const subKeys = Object.keys(WEIGHT_LABELS);
+  const header = ["Candidate Name", "Source", "Overall Score", ...Object.values(WEIGHT_LABELS), "Matched Skills", "Missing Skills", "Why Shortlist", "Concerns", "Analyzed Date"];
+  const rows = [header];
+  list.forEach(item => {
+    const n = normalizeResult(item, isHistory);
+    rows.push([
+      n.name,
+      n.source_type === "bulk" ? "Bulk Uploaded" : "Referral",
+      n.score,
+      ...subKeys.map(k => (n.subscores[k] ?? "")),
+      n.matched_skills.join("; "),
+      n.missing_skills.join("; "),
+      n.why_shortlist.join(" | "),
+      n.concerns.join(" | "),
+      n.analyzed_at ? new Date(n.analyzed_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "",
+    ]);
+  });
+  downloadCSV(`JD_Match_${sanitizeFilename(jdTitle || "Results")}_${new Date().toISOString().slice(0, 10)}.csv`, rows);
+};
+
+// Export a single candidate's full match report as a readable key/value CSV
+const exportCandidateReportCSV = (item, jdTitle, isHistory = false) => {
+  const n = normalizeResult(item, isHistory);
+  const rows = [["Field", "Value"]];
+  rows.push(["Job Title", jdTitle || ""]);
+  rows.push(["Candidate Name", n.name || ""]);
+  rows.push(["Source", n.source_type === "bulk" ? "Bulk Uploaded" : "Referral"]);
+  rows.push(["Overall Match Score", `${n.score}/100`]);
+  Object.entries(WEIGHT_LABELS).forEach(([k, label]) => {
+    rows.push([label, n.subscores[k] != null ? `${n.subscores[k]}/100` : ""]);
+  });
+  rows.push(["Matched Skills", n.matched_skills.join("; ")]);
+  rows.push(["Missing Skills", n.missing_skills.join("; ")]);
+  rows.push(["Why Shortlist", n.why_shortlist.join(" | ")]);
+  rows.push(["Concerns", n.concerns.join(" | ")]);
+  if (n.analyzed_at) rows.push(["Analyzed Date", new Date(n.analyzed_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })]);
+  downloadCSV(`Candidate_Report_${sanitizeFilename(n.name)}_${new Date().toISOString().slice(0, 10)}.csv`, rows);
 };
 
 export default function JDMatchPage() {
@@ -253,6 +346,11 @@ export default function JDMatchPage() {
                       <Briefcase size={15} color={O} />
                       <span style={{ fontSize: 16, fontWeight: 700 }}>{jobTitle}</span>
                       <span style={{ fontSize: 12, color: "#94a3b8", backgroundColor: "#F1F5F9", padding: "2px 10px", borderRadius: 999 }}>{candidatesList.length} candidate{candidatesList.length !== 1 ? "s" : ""}</span>
+                      <button onClick={() => exportResultsListCSV(candidatesList, jobTitle, true)}
+                        title="Export all results for this job as CSV"
+                        style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", border: `1.5px solid ${O_MID}`, borderRadius: 8, backgroundColor: O_LITE, color: O, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                        <Download size={13} /> Export All
+                      </button>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       {candidatesList.map(r => {
@@ -294,10 +392,17 @@ export default function JDMatchPage() {
                                     {r.jd_match_data.why_shortlist.map((w, i) => <div key={i} style={{ fontSize: 12, color: "#475569", marginBottom: 4 }}>✓ {w}</div>)}
                                   </div>
                                 )}
-                                <button onClick={() => router.push(r.source_type === "bulk" ? `/bulk-candidates/${r.id}` : `/candidate-details/${r.id}`)}
-                                  style={{ padding: "7px 18px", backgroundColor: O, color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                                  View Full Profile
-                                </button>
+                                <div style={{ display: "flex", gap: 8 }}>
+                                  <button onClick={() => router.push(r.source_type === "bulk" ? `/bulk-candidates/${r.id}` : `/candidate-details/${r.id}`)}
+                                    style={{ padding: "7px 18px", backgroundColor: O, color: "#fff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                                    View Full Profile
+                                  </button>
+                                  <button onClick={e => { e.stopPropagation(); exportCandidateReportCSV(r, jobTitle, true); }}
+                                    title="Export this candidate's report as CSV"
+                                    style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 18px", border: `1.5px solid ${O_MID}`, borderRadius: 8, backgroundColor: "#fff", color: O, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                                    <Download size={13} /> Export
+                                  </button>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -505,6 +610,11 @@ export default function JDMatchPage() {
                       <option value="score">Sort: Score</option>
                       <option value="name">Sort: Name</option>
                     </select>
+                    <button onClick={() => exportResultsListCSV(filteredResults, jdParsed?.job_title, false)}
+                      title="Export all results as CSV"
+                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", border: `1.5px solid ${O_MID}`, borderRadius: 8, backgroundColor: O_LITE, color: O, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                      <Download size={14} /> Export All
+                    </button>
                   </div>
                 </div>
 
@@ -585,10 +695,17 @@ export default function JDMatchPage() {
                               </div>
                             )}
 
-                            <button onClick={() => router.push(r.source_type === "bulk" ? `/bulk-candidates/${r.candidate_id}` : `/candidate-details/${r.candidate_id}`)}
-                              style={{ padding: "8px 20px", backgroundColor: O, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                              View Full Profile
-                            </button>
+                            <div style={{ display: "flex", gap: 10 }}>
+                              <button onClick={() => router.push(r.source_type === "bulk" ? `/bulk-candidates/${r.candidate_id}` : `/candidate-details/${r.candidate_id}`)}
+                                style={{ padding: "8px 20px", backgroundColor: O, color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                                View Full Profile
+                              </button>
+                              <button onClick={e => { e.stopPropagation(); exportCandidateReportCSV(r, jdParsed?.job_title, false); }}
+                                title="Export this candidate's report as CSV"
+                                style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 20px", border: `1.5px solid ${O_MID}`, borderRadius: 8, backgroundColor: "#fff", color: O, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                                <Download size={14} /> Export
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
