@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, Mail, Phone, Briefcase, Award, Users, 
-  FileText, Linkedin, DollarSign, CheckCircle2, AlertCircle, 
+  FileText, DollarSign, CheckCircle2, AlertCircle, 
   Clock, ExternalLink, Download, Edit3, Save, X
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
@@ -472,7 +472,7 @@ export default function ReferralDetailsPage() {
                         fontWeight: 600,
                         fontSize: 14
                       }}>
-                      <Linkedin size={16} /> View on LinkedIn
+                      <ExternalLink size={16} /> View on LinkedIn
                     </a>
                   </div>
                 )}
