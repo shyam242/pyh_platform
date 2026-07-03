@@ -278,3 +278,95 @@ export const getReferralById = async (req, res) => {
     res.status(500).json({ message: "Failed to fetch referral" });
   }
 };
+
+// UPDATE REFERRAL DETAILS
+export const updateReferral = async (req, res) => {
+  try {
+    const { referralId } = req.params;
+    const { name, email, phone, linkedin, company, skills, experience, industry, department } = req.body;
+
+    if (!referralId) {
+      return res.status(400).json({ message: "Referral ID is required" });
+    }
+
+    // Validate required fields
+    if (!name?.trim() || !email?.trim() || !phone?.trim()) {
+      return res.status(400).json({ message: "Name, email, and phone are required" });
+    }
+
+    // Parse skills if it's a string
+    let skillsJson = skills;
+    if (typeof skills === "string") {
+      skillsJson = JSON.stringify(skills.split(",").map(s => s.trim()).filter(s => s));
+    } else if (Array.isArray(skills)) {
+      skillsJson = JSON.stringify(skills);
+    }
+
+    const result = await pool.query(
+      `UPDATE referrals 
+       SET name=$1,
+           email=$2,
+           phone=$3,
+           linkedin=$4,
+           company=$5,
+           skills=$6,
+           experience=$7,
+           industry=$8,
+           department=$9,
+           updated_at=NOW()
+       WHERE id=$10 RETURNING *`,
+      [
+        name,
+        email,
+        phone,
+        linkedin || null,
+        company || null,
+        skillsJson,
+        experience || null,
+        industry || null,
+        department || null,
+        referralId
+      ]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Referral not found" });
+    }
+
+    res.json({
+      message: "Referral updated successfully",
+      data: result.rows[0]
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to update referral" });
+  }
+};
+
+// GET REFERRER BY ID
+export const getReferrerById = async (req, res) => {
+  try {
+    const { referrerId } = req.params;
+
+    if (!referrerId) {
+      return res.status(400).json({ message: "Referrer ID is required" });
+    }
+
+    const result = await pool.query(
+      `SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, i.incentive_value 
+       FROM users u 
+       LEFT JOIN incentives i ON u.id = i.referrer_id 
+       WHERE u.id=$1`,
+      [referrerId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: "Referrer not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch referrer" });
+  }
+};
