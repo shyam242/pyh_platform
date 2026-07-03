@@ -237,7 +237,12 @@ export default function ReferrerDashboard() {
                 ) : referrals.slice(0, 5).map(r => {
                   const sc = STATUS_COLORS[r.referral_status || r.status] || STATUS_COLORS.pending;
                   return (
-                    <div key={r.id} style={{ padding: "16px 24px", borderBottom: `1px solid #F8FAFC`, display: "flex", alignItems: "center", gap: 16 }}>
+                    <div
+                      key={r.id}
+                      onClick={() => window.location.href = `/referral/${r.id}`}
+                      style={{ padding: "16px 24px", borderBottom: `1px solid #F8FAFC`, display: "flex", alignItems: "center", gap: 16, cursor: "pointer", transition: "background 0.2s", backgroundColor: "transparent" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}>
                       <div style={{ width: 40, height: 40, borderRadius: "50%", backgroundColor: O_LITE, color: O, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
                         {(r.name || "?").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
                       </div>
@@ -275,7 +280,18 @@ export default function ReferrerDashboard() {
                   {referrals.map(r => {
                     const sc = STATUS_COLORS[r.referral_status || r.status] || STATUS_COLORS.pending;
                     return (
-                      <div key={r.id} style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderLeft: `4px solid ${O}`, borderRadius: 14, padding: "20px 24px" }}>
+                      <div
+                        key={r.id}
+                        onClick={() => window.location.href = `/referral/${r.id}`}
+                        style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderLeft: `4px solid ${O}`, borderRadius: 14, padding: "20px 24px", cursor: "pointer", transition: "transform 0.2s, box-shadow 0.2s", transform: "translateY(0)", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = "translateY(-2px)";
+                          e.currentTarget.style.boxShadow = "0 8px 16px rgba(232,119,34,0.12)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = "translateY(0)";
+                          e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)";
+                        }}>
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                             <div style={{ width: 44, height: 44, borderRadius: "50%", backgroundColor: O_LITE, color: O, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700 }}>
