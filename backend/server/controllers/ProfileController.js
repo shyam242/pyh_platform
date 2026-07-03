@@ -716,3 +716,31 @@ export const deleteCandidateProfile = async (req, res) => {
     res.status(500).json({ error: "Failed to delete candidate profile" });
   }
 };
+
+// GET REFERRER PROFILE BY ID
+export const getReferrerProfile = async (req, res) => {
+  try {
+    const { referrerId } = req.params;
+
+    if (!referrerId) {
+      return res.status(400).json({ error: "Referrer ID is required" });
+    }
+
+    const result = await pool.query(
+      `SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, i.incentive_value 
+       FROM users u 
+       LEFT JOIN incentives i ON u.id = i.referrer_id 
+       WHERE u.id=$1 AND u.role='referrer'`,
+      [referrerId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Referrer not found" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error("Error fetching referrer profile:", error);
+    res.status(500).json({ error: "Failed to fetch referrer profile" });
+  }
+};
