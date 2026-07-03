@@ -4,8 +4,10 @@ import { showSuccess, showError } from "@/utils/toast";
 import {
   Upload, ArrowRight, Phone, Briefcase, Award, Users,
   TrendingUp, CheckCircle, Clock, Eye, Mail,
-  BarChart2, Plus, X, ChevronRight, LogOut, ExternalLink, Link2, Copy, Check
+  BarChart2, Plus, X, ChevronRight, LogOut, ExternalLink, Link2, Copy, Check,
+  UserCircle, DollarSign, IndianRupee
 } from "lucide-react";
+import Link from "next/link";
 import { API_BASE_URL } from "@/utils/api";
 
 const O = "#E87722", O_LITE = "#FFF3E8", O_MID = "#FBBF7A", BORDER = "#EBEBEB";
@@ -88,7 +90,7 @@ export default function ReferrerDashboard() {
   }, []);
 
   const fetchUser = async token => {
-    const r = await fetch(`${API_BASE_URL}/api/profile`, { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetch(`${API_BASE_URL}/api/profile/user`, { headers: { Authorization: `Bearer ${token}` } });
     if (r.ok) setUser(await r.json());
   };
 
@@ -188,6 +190,14 @@ export default function ReferrerDashboard() {
               <Icon size={16} /> {label}
             </button>
           ))}
+
+          {/* My Profile — lets the referrer edit their own information */}
+          <Link href="/edit-profile"
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderRadius: 10, border: "none", backgroundColor: "transparent", color: "#475569", fontSize: 14, fontWeight: 500, fontFamily: "inherit", borderLeft: "3px solid transparent", textDecoration: "none" }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = O_LITE; e.currentTarget.style.color = O; }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#475569"; }}>
+            <UserCircle size={16} /> My Profile
+          </Link>
         </div>
 
         {/* MAIN CONTENT */}
@@ -327,6 +337,24 @@ export default function ReferrerDashboard() {
                             <ExternalLink size={14} /> View LinkedIn
                           </a>
                         )}
+
+                        {/* Incentive card — click opens the full referral details page */}
+                        {(r.referral_status || r.status) === "accepted" && (
+                          <div
+                            onClick={(e) => { e.stopPropagation(); window.location.href = `/referral/${r.id}`; }}
+                            style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: r.incentive_status === "paid" ? "#EAF3DE" : O_LITE, border: `1px solid ${r.incentive_status === "paid" ? "#97C459" : O_MID}`, borderRadius: 10, padding: "10px 14px", cursor: "pointer" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <IndianRupee size={14} color={r.incentive_status === "paid" ? "#3B6D11" : O} />
+                              <span style={{ fontSize: 13, fontWeight: 700, color: r.incentive_status === "paid" ? "#3B6D11" : O }}>
+                                ₹{user?.incentive_value ? Number(user.incentive_value).toLocaleString("en-IN") : "500"} incentive
+                              </span>
+                            </div>
+                            <span style={{ fontSize: 12, fontWeight: 600, color: r.incentive_status === "paid" ? "#3B6D11" : "#C2410C" }}>
+                              {r.incentive_status === "paid" ? "Paid" : "Pending payout"}
+                            </span>
+                          </div>
+                        )}
+
                         <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 10 }}>Referred {timeAgo(r.created_at)}</div>
                       </div>
                     );
