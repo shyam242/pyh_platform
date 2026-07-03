@@ -64,6 +64,23 @@ const ensureInvitedByColumn = async () => {
   }
 };
 
+// Track incentive payment status per referral so admins can see an accurate
+// incentive history (date, amount, paid/pending, paid-on, payment mode)
+// instead of fabricated or blank values.
+const ensureIncentiveTrackingColumns = async () => {
+  try {
+    await pool.query(`
+      ALTER TABLE referrals
+      ADD COLUMN IF NOT EXISTS incentive_status VARCHAR(20) DEFAULT 'pending',
+      ADD COLUMN IF NOT EXISTS incentive_paid_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(50);
+    `);
+    console.log("✓ referrals.incentive_status / incentive_paid_at / payment_mode ready");
+  } catch (err) {
+    console.error("incentive tracking columns setup error:", err.message);
+  }
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -89,6 +106,6 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/jobs", jobRoutes);
 
 const PORT = process.env.PORT || 5000;
-Promise.all([ensureResumeViewsTable(), ensureInvitedByColumn()]).then(() => {
+Promise.all([ensureResumeViewsTable(), ensureInvitedByColumn(), ensureIncentiveTrackingColumns()]).then(() => {
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 });
