@@ -11,6 +11,10 @@ import {
   updateReferrerIncentive,
   getReferrerIncentive,
   getAllReferrersWithIncentives,
+  getReferrerFullDetails,
+  updateReferralIncentiveStatus,
+  deleteReferrer,
+  sendReferrerEmail,
   deleteCandidate,
   bulkUploadJobs,
   bulkUploadCandidates,
@@ -81,6 +85,10 @@ router.get("/recruiters/export", protect, exportRecruitersCSV);
 
 // INCENTIVE MANAGEMENT
 router.get("/referrers", protect, getAllReferrersWithIncentives);
+router.get("/referrers/:referrerId", protect, getReferrerFullDetails);
+router.delete("/referrers/:referrerId", protect, deleteReferrer);
+router.post("/referrers/:referrerId/email", protect, sendReferrerEmail);
+router.put("/referrals/:referralId/incentive-status", protect, updateReferralIncentiveStatus);
 router.get("/incentives/:referrerId", getReferrerIncentive);
 router.put("/incentives/:referrerId", protect, updateReferrerIncentive);
 router.delete("/incentives/:referrerId", protect, revokeReferrerIncentive);
