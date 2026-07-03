@@ -145,7 +145,8 @@ export default function AllReferrersPage() {
               </div>
               {filtered.map(r => (
                 <div key={r.id}
-                  style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1.5fr 1fr 1fr 1fr", gap: 12, padding: "14px 24px", borderBottom: `1px solid #F8FAFC`, alignItems: "center" }}
+                  onClick={() => router.push(`/admin/referrers/${r.id}`)}
+                  style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1.5fr 1fr 1fr 1fr", gap: 12, padding: "14px 24px", borderBottom: `1px solid #F8FAFC`, alignItems: "center", cursor: "pointer" }}
                   onMouseEnter={e => e.currentTarget.style.backgroundColor = "#FAFAFA"}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
