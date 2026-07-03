@@ -9,6 +9,8 @@ import {
   getReferrerStats,
   acceptReferral,
   getReferralById,
+  updateReferral,
+  getReferrerById,
 } from "../controllers/referralController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
@@ -61,6 +63,8 @@ router.post("/create", protect, upload.single("cv"), createReferral);
 router.get("/my", protect, getMyReferrals);
 router.get("/stats", protect, getReferrerStats);
 router.get("/:referralId", getReferralById);
+router.put("/:referralId/update", updateReferral);
 router.post("/:referralId/accept", acceptReferral);
+router.get("/referrer/:referrerId", getReferrerById);
 
 export default router;
