@@ -138,7 +138,11 @@ export const getUserProfile = async (req, res) => {
     const userId = req.user.id;
 
     const result = await pool.query(
-      "SELECT id, name, email, role, company, experience, skills, verified, resume, phone FROM users WHERE id=$1",
+      `SELECT u.id, u.name, u.email, u.role, u.company, u.experience, u.skills, u.verified,
+              u.resume, u.phone, u.joined_at, i.incentive_value
+       FROM users u
+       LEFT JOIN incentives i ON u.id = i.referrer_id
+       WHERE u.id=$1`,
       [userId]
     );
 
@@ -149,6 +153,7 @@ export const getUserProfile = async (req, res) => {
     const user = result.rows[0];
     res.json({
       ...user,
+      incentive_value: user.role === "referrer" ? parseFloat(user.incentive_value) || 500 : null,
       image_url: null,
     });
   } catch (error) {
