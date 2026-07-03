@@ -81,6 +81,17 @@ const ensureIncentiveTrackingColumns = async () => {
   }
 };
 
+// Ensure the users.image column exists so profile-picture uploads actually persist
+// instead of silently failing (previously this required a manual migration script).
+const ensureUserImageColumn = async () => {
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS image VARCHAR(255);`);
+    console.log("✓ users.image column ready");
+  } catch (err) {
+    console.error("user image column setup error:", err.message);
+  }
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -106,6 +117,6 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/jobs", jobRoutes);
 
 const PORT = process.env.PORT || 5000;
-Promise.all([ensureResumeViewsTable(), ensureInvitedByColumn(), ensureIncentiveTrackingColumns()]).then(() => {
+Promise.all([ensureResumeViewsTable(), ensureInvitedByColumn(), ensureIncentiveTrackingColumns(), ensureUserImageColumn()]).then(() => {
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 });
