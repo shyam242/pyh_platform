@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Save, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
@@ -42,7 +42,7 @@ const InputField = ({ label, name, value, onChange, placeholder, type = "text", 
   );
 };
 
-export default function EditProfilePage() {
+function EditProfilePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const referrerId = searchParams.get("referrer_id");
@@ -413,5 +413,17 @@ export default function EditProfilePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function EditProfilePage() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: "100vh", backgroundColor: "#F8FAFC", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: "#94a3b8" }}>
+        Loading profile...
+      </div>
+    }>
+      <EditProfilePageContent />
+    </Suspense>
   );
 }
