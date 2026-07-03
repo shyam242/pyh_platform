@@ -157,12 +157,15 @@ function EditProfilePageContent() {
       formDataImg.append("image", file);
 
       const res = await fetch(`${API_BASE_URL}/api/profile/avatar`, {
-        method: "POST",
+        method: "PUT",
         headers: { Authorization: `Bearer ${token}` },
         body: formDataImg
       });
 
-      if (!res.ok) throw new Error("Failed to upload image");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || errData.message || "Failed to upload image");
+      }
       const data = await res.json();
       setProfileImage(data.user?.image_url);
       showSuccess("Profile image updated successfully!");
