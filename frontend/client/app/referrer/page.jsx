@@ -137,8 +137,10 @@ export default function ReferrerDashboard() {
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           {user && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", backgroundColor: O_LITE, borderRadius: 999, border: `1px solid ${O_MID}` }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: O, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>
-                {(user.name || "U").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+              <div style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: O, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, overflow: "hidden", flexShrink: 0 }}>
+                {user.image_url
+                  ? <img src={user.image_url} alt={user.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : (user.name || "U").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
               </div>
               <span style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{user.name}</span>
             </div>
@@ -157,8 +159,10 @@ export default function ReferrerDashboard() {
           {/* Profile card */}
           {user && (
             <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "24px 20px", textAlign: "center", marginBottom: 8 }}>
-              <div style={{ width: 64, height: 64, borderRadius: "50%", backgroundColor: O, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, margin: "0 auto 12px" }}>
-                {(user.name || "U").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+              <div style={{ width: 64, height: 64, borderRadius: "50%", backgroundColor: O, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 700, margin: "0 auto 12px", overflow: "hidden" }}>
+                {user.image_url
+                  ? <img src={user.image_url} alt={user.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : (user.name || "U").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{user.name}</div>
               <div style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>Referrer</div>
