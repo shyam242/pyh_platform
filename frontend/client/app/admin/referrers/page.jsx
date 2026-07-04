@@ -150,8 +150,10 @@ export default function AllReferrersPage() {
                   onMouseEnter={e => e.currentTarget.style.backgroundColor = "#FAFAFA"}
                   onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", backgroundColor: O_LITE, color: O, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
-                      {getInitials(r.name)}
+                    <div style={{ width: 36, height: 36, borderRadius: "50%", backgroundColor: O_LITE, color: O, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0, overflow: "hidden" }}>
+                      {r.image_url
+                        ? <img src={r.image_url} alt={r.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        : getInitials(r.name)}
                     </div>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 600 }}>{r.name || "—"}</div>
