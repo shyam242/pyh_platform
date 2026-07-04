@@ -216,6 +216,7 @@ function EditProfilePageContent() {
         },
         body: JSON.stringify({
           name: formData.name,
+          email: formData.email,
           company: formData.company,
           experience: formData.experience,
           phone: formData.phone,
