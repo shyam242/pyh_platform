@@ -368,6 +368,12 @@ export const getReferrerIncentive = async (req, res) => {
 };
 
 // GET ALL REFERRERS WITH INCENTIVES
+const buildImageUrl = (filename) => {
+  if (!filename) return null;
+  if (/^https?:\/\//i.test(filename)) return filename;
+  return `${process.env.BACKEND_URL || "https://api.pickyourhire.com"}/uploads/profile_images/${filename}`;
+};
+
 export const getAllReferrersWithIncentives = async (req, res) => {
   try {
     const adminId = req.user.id;
@@ -382,8 +388,10 @@ export const getAllReferrersWithIncentives = async (req, res) => {
       return res.status(403).json({ message: "Access denied. Admin only." });
     }
 
+    await ensureUserProfileColumnsOnce();
+
     const result = await pool.query(`
-      SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, u.joined_at,
+      SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, u.joined_at, u.image,
              COALESCE(i.incentive_value, 500) as incentive_value,
              COALESCE(r.referral_count, 0) as referral_count
       FROM users u
@@ -397,7 +405,7 @@ export const getAllReferrersWithIncentives = async (req, res) => {
       ORDER BY u.id DESC
     `);
 
-    res.json(result.rows);
+    res.json(result.rows.map(r => ({ ...r, image_url: buildImageUrl(r.image) })));
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch referrers" });
@@ -427,6 +435,21 @@ const ensureIncentiveColumnsOnce = async () => {
   }
 };
 
+let _userProfileColumnsChecked = false;
+const ensureUserProfileColumnsOnce = async () => {
+  if (_userProfileColumnsChecked) return;
+  try {
+    await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS image VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS linkedin VARCHAR(500);
+    `);
+    _userProfileColumnsChecked = true;
+  } catch (err) {
+    console.error("ensureUserProfileColumnsOnce error:", err.message);
+  }
+};
+
 export const getReferrerFullDetails = async (req, res) => {
   try {
     const adminId = req.user.id;
@@ -438,9 +461,10 @@ export const getReferrerFullDetails = async (req, res) => {
     }
 
     await ensureIncentiveColumnsOnce();
+    await ensureUserProfileColumnsOnce();
 
     const referrerResult = await pool.query(
-      `SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, u.joined_at,
+      `SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, u.joined_at, u.linkedin, u.image,
               COALESCE(i.incentive_value, 500) as incentive_value
        FROM users u
        LEFT JOIN incentives i ON u.id = i.referrer_id
@@ -452,7 +476,7 @@ export const getReferrerFullDetails = async (req, res) => {
       return res.status(404).json({ message: "Referrer not found" });
     }
 
-    const referrer = referrerResult.rows[0];
+    const referrer = { ...referrerResult.rows[0], image_url: buildImageUrl(referrerResult.rows[0].image) };
     const incentiveValue = parseFloat(referrer.incentive_value) || 0;
 
     // Ordered by id (matches how the rest of the app orders referrals) since
