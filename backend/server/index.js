@@ -82,14 +82,20 @@ const ensureIncentiveTrackingColumns = async () => {
   }
 };
 
-// Ensure the users.image column exists so profile-picture uploads actually persist
-// instead of silently failing (previously this required a manual migration script).
+// Ensure users.image and users.linkedin exist so profile-picture uploads and
+// LinkedIn edits actually persist instead of silently failing (the edit-profile
+// form has always sent a "linkedin" field, but the users table never had the
+// column to store it in).
 const ensureUserImageColumn = async () => {
   try {
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS image VARCHAR(255);`);
-    console.log("✓ users.image column ready");
+    await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS image VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS linkedin VARCHAR(500);
+    `);
+    console.log("✓ users.image / users.linkedin columns ready");
   } catch (err) {
-    console.error("user image column setup error:", err.message);
+    console.error("user profile columns setup error:", err.message);
   }
 };
 
