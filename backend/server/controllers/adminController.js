@@ -2,7 +2,7 @@ import pool from "../config/db.js";
 import fs from "fs";
 import { parseCSVString, mapCandidateColumns } from "../services/csvParser.js";
 import { sendRecruiterApprovalEmail, sendRecruiterRejectionEmail } from "../services/brevoService.js";
-import { parseResumeFromURL } from "../services/resumeParserService.js";
+import { parseResumeFromURL } from "../services/resumeParserService.js"; // pure regex — no API key needed
 import { computeSuitabilityScore } from "../services/suitabilityScoreService.js";
 
 const ADMIN_EMAIL = "shyampickyourhire@gmail.com";
@@ -411,11 +411,15 @@ let _incentiveColumnsChecked = false;
 const ensureIncentiveColumnsOnce = async () => {
   if (_incentiveColumnsChecked) return;
   try {
+    // referrals never had a created_at column (the rest of the app orders by id
+    // instead) — add it here too since the referrer-detail view needs a real
+    // timestamp to build referral/incentive history and account timeline.
     await pool.query(`
       ALTER TABLE referrals
       ADD COLUMN IF NOT EXISTS incentive_status VARCHAR(20) DEFAULT 'pending',
       ADD COLUMN IF NOT EXISTS incentive_paid_at TIMESTAMPTZ,
-      ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(50);
+      ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(50),
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
     `);
     _incentiveColumnsChecked = true;
   } catch (err) {
@@ -451,11 +455,13 @@ export const getReferrerFullDetails = async (req, res) => {
     const referrer = referrerResult.rows[0];
     const incentiveValue = parseFloat(referrer.incentive_value) || 0;
 
+    // Ordered by id (matches how the rest of the app orders referrals) since
+    // created_at was only just backfilled and ties for pre-existing rows.
     const referralsResult = await pool.query(
       `SELECT id, name, email, phone, company, experience, industry, department,
               referral_status, status, created_at, candidate_accepted_at,
               incentive_status, incentive_paid_at, payment_mode
-       FROM referrals WHERE referrer_id=$1 ORDER BY created_at DESC`,
+       FROM referrals WHERE referrer_id=$1 ORDER BY id DESC`,
       [referrerId]
     );
     const referrals = referralsResult.rows;
