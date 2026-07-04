@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Mail, Phone, Briefcase, Award, Users, LogOut,
   CheckCircle2, Clock, XCircle, Eye, IndianRupee, TrendingUp,
-  Calendar, Send, Download, Trash2, X, Save, AlertCircle, ExternalLink, Linkedin
+  Calendar, Send, Download, Trash2, X, Save, AlertCircle, ExternalLink, Link2
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
@@ -334,7 +334,7 @@ export default function AdminReferrerDetailPage() {
                 <Field icon={Phone} label="Phone" value={referrer.phone} />
                 <Field icon={Briefcase} label="Company" value={referrer.company} />
                 <Field icon={Award} label="Experience" value={referrer.experience ? `${referrer.experience} years` : null} />
-                <Field icon={Linkedin} label="LinkedIn"
+                <Field icon={Link2} label="LinkedIn"
                   value={referrer.linkedin ? referrer.linkedin.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, "") : null}
                   href={referrer.linkedin ? (referrer.linkedin.startsWith("http") ? referrer.linkedin : `https://${referrer.linkedin}`) : null}
                   hint="Referrer hasn't added a LinkedIn profile yet" />
