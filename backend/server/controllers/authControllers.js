@@ -43,6 +43,11 @@ export const sendOtp = async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
+    // Admin emails sign in with a password — no OTP is generated or sent for them.
+    if (isAdminEmail(email)) {
+      return res.json({ requiresPassword: true, message: "Enter your admin password" });
+    }
+
     const otp = otpGenerator.generate(6, {
       upperCaseAlphabets: false,
       lowerCaseAlphabets: false,
@@ -174,5 +179,51 @@ export const verifyOtp = async (req, res) => {
   } catch (error) {
     console.error("❌ Error verifying OTP:", error.message);
     res.status(500).json({ message: "Failed to verify OTP", error: error.message });
+  }
+};
+
+// ── ADMIN PASSWORD LOGIN ────────────────────────────────────────────────────
+// Admin emails (see ADMIN_EMAILS env var, e.g. pickyourhire@gmail.com) sign in
+// with a fixed password instead of an OTP. All other emails keep the OTP flow
+// above untouched.
+export const adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    if (!isAdminEmail(email)) {
+      return res.status(403).json({ message: "This email is not registered as an admin. Please sign in with OTP instead." });
+    }
+
+    const adminPassword = process.env.ADMIN_PASSWORD || "pyh@0505";
+    if (password !== adminPassword) {
+      return res.status(401).json({ message: "Incorrect password" });
+    }
+
+    let user = await pool.query("SELECT * FROM users WHERE email=$1", [email]);
+
+    if (user.rows.length === 0) {
+      // First-time admin login → create the admin account
+      user = await pool.query(
+        "INSERT INTO users(name,email,role) VALUES($1,$2,$3) RETURNING *",
+        [email.split("@")[0], email, "admin"]
+      );
+    } else if (user.rows[0].role !== "admin") {
+      await pool.query("UPDATE users SET role='admin' WHERE email=$1", [email]);
+      user = await pool.query("SELECT * FROM users WHERE email=$1", [email]);
+    }
+
+    const token = jwt.sign(
+      { id: user.rows[0].id, role: "admin" },
+      process.env.JWT_SECRET
+    );
+
+    res.json({ token, user: { ...user.rows[0], role: "admin" }, isAdmin: true });
+  } catch (error) {
+    console.error("❌ Error during admin login:", error.message);
+    res.status(500).json({ message: "Failed to sign in", error: error.message });
   }
 };
