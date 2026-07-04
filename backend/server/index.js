@@ -73,9 +73,10 @@ const ensureIncentiveTrackingColumns = async () => {
       ALTER TABLE referrals
       ADD COLUMN IF NOT EXISTS incentive_status VARCHAR(20) DEFAULT 'pending',
       ADD COLUMN IF NOT EXISTS incentive_paid_at TIMESTAMPTZ,
-      ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(50);
+      ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(50),
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
     `);
-    console.log("✓ referrals.incentive_status / incentive_paid_at / payment_mode ready");
+    console.log("✓ referrals.incentive_status / incentive_paid_at / payment_mode / created_at ready");
   } catch (err) {
     console.error("incentive tracking columns setup error:", err.message);
   }
