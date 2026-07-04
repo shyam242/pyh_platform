@@ -278,8 +278,10 @@ export default function AdminReferrerDetailPage() {
         {/* Header card */}
         <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 18, padding: "26px 28px", marginBottom: 22, display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div style={{ width: 60, height: 60, borderRadius: "50%", backgroundColor: O_LITE, color: O, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700 }}>
-              {getInitials(referrer.name)}
+            <div style={{ width: 60, height: 60, borderRadius: "50%", backgroundColor: O_LITE, color: O, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, overflow: "hidden", flexShrink: 0 }}>
+              {referrer.image_url
+                ? <img src={referrer.image_url} alt={referrer.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                : getInitials(referrer.name)}
             </div>
             <div>
               <div style={{ fontSize: 20, fontWeight: 700 }}>{referrer.name}</div>
