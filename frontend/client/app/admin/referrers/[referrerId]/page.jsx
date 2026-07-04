@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Mail, Phone, Briefcase, Award, Users, LogOut,
   CheckCircle2, Clock, XCircle, Eye, IndianRupee, TrendingUp,
-  Calendar, Send, Download, Trash2, X, Save, AlertCircle
+  Calendar, Send, Download, Trash2, X, Save, AlertCircle, ExternalLink, Linkedin
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
@@ -56,14 +56,21 @@ function StatCard({ label, value, icon: Icon, color, bg }) {
   );
 }
 
-function Field({ icon: Icon, label, value, hint }) {
+function Field({ icon: Icon, label, value, hint, href }) {
   return (
     <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 0" }}>
       <Icon size={15} color={O} style={{ marginTop: 2, flexShrink: 0 }} />
       <div>
         <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
         {value ? (
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{value}</div>
+          href ? (
+            <a href={href} target="_blank" rel="noreferrer"
+              style={{ fontSize: 14, fontWeight: 600, color: "#1d4ed8", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 5 }}>
+              {value} <ExternalLink size={12} />
+            </a>
+          ) : (
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{value}</div>
+          )
         ) : (
           <div style={{ fontSize: 13, color: "#94a3b8", fontStyle: "italic" }}>{hint || "Not provided"}</div>
         )}
@@ -327,6 +334,10 @@ export default function AdminReferrerDetailPage() {
                 <Field icon={Phone} label="Phone" value={referrer.phone} />
                 <Field icon={Briefcase} label="Company" value={referrer.company} />
                 <Field icon={Award} label="Experience" value={referrer.experience ? `${referrer.experience} years` : null} />
+                <Field icon={Linkedin} label="LinkedIn"
+                  value={referrer.linkedin ? referrer.linkedin.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, "") : null}
+                  href={referrer.linkedin ? (referrer.linkedin.startsWith("http") ? referrer.linkedin : `https://${referrer.linkedin}`) : null}
+                  hint="Referrer hasn't added a LinkedIn profile yet" />
               </div>
               <div style={{ marginTop: 8, fontSize: 11, color: "#94a3b8", lineHeight: 1.5 }}>
                 Missing details can only be added by the referrer from their own "My Profile" page.
