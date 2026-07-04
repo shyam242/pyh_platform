@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Mail, ArrowRight, Shield, Zap, Users, CheckCircle, RefreshCw, HandCoins } from "lucide-react";
+import { Mail, ArrowRight, Shield, Zap, Users, CheckCircle, RefreshCw, HandCoins, Lock } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { validateEmail, validateOTP } from "@/utils/validation";
 import { API_BASE_URL } from "@/utils/api";
@@ -13,6 +13,9 @@ function SigninInner() {
   const [email, setEmail]     = useState("");
   const [otp, setOtp]         = useState(["","","","","",""]);
   const [otpSent, setOtpSent] = useState(false);
+  const [adminMode, setAdminMode] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordFocused, setPasswordFocused] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors]   = useState({});
   const [resendTimer, setResendTimer] = useState(0);
@@ -40,11 +43,36 @@ function SigninInner() {
         body: JSON.stringify({ email }),
       });
       if (!res.ok) throw new Error("Failed to send OTP");
+      const data = await res.json();
+      if (data.requiresPassword) {
+        // Admin email — sign in with a password instead of an OTP
+        setAdminMode(true);
+        setTimeout(() => document.getElementById("admin-password-input")?.focus(), 100);
+        return;
+      }
       setOtpSent(true);
       setResendTimer(60);
       showSuccess("OTP sent to your email");
       setTimeout(() => otpRefs.current[0]?.focus(), 100);
     } catch (err) { showError(err.message || "Failed to send OTP"); }
+    finally { setLoading(false); }
+  };
+
+  const adminLogin = async () => {
+    setErrors({});
+    if (!password) { setErrors({ password: "Password is required" }); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/admin-login`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.message || "Sign in failed");
+      localStorage.setItem("token", data.token);
+      showSuccess("Signed in successfully!");
+      window.location.href = "/admin";
+    } catch (err) { showError(err.message || "Sign in failed"); }
     finally { setLoading(false); }
   };
 
@@ -189,16 +217,19 @@ function SigninInner() {
           )}
           <div style={{ marginBottom: 36 }}>
             <h1 style={{ fontSize: 30, fontWeight: 700, color: "#0f172a", margin: "0 0 8px" }}>
-              {otpSent ? "Check your inbox" : magicToken ? "Create your account" : "Welcome back"}
+              {adminMode ? "Admin sign in" : otpSent ? "Check your inbox" : magicToken ? "Create your account" : "Welcome to PICKYOURHIRE"}
             </h1>
             <p style={{ fontSize: 15, color: "#64748b", margin: 0 }}>
-              {otpSent
+              {adminMode
+                ? `Enter the password for ${email}`
+                : otpSent
                 ? `We sent a 6-digit code to ${email}`
                 : "Sign in with your email. No password needed."}
             </p>
           </div>
 
           {/* step indicator */}
+          {!adminMode && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 32 }}>
             {[{ n: 1, label: "Email" }, { n: 2, label: "Verify" }, { n: 3, label: "Agree" }].map(({ n, label }, i) => {
               const active = !otpSent ? n === 1 : n === 2;
@@ -214,8 +245,54 @@ function SigninInner() {
               );
             })}
           </div>
+          )}
 
-          {!otpSent ? (
+          {adminMode ? (
+            // Admin password step
+            <div>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
+                Password
+              </label>
+              <div style={{ position: "relative", marginBottom: 8 }}>
+                <Lock size={17} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: passwordFocused ? O : "#94a3b8", pointerEvents: "none", transition: "color 0.15s" }} />
+                <input
+                  id="admin-password-input"
+                  type="password" value={password}
+                  onChange={e => { setPassword(e.target.value); setErrors({}); }}
+                  onKeyDown={e => e.key === "Enter" && adminLogin()}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
+                  placeholder="Enter admin password"
+                  style={{
+                    width: "100%", padding: "13px 14px 13px 42px",
+                    fontSize: 15, border: `1.5px solid ${errors.password ? "#ef4444" : passwordFocused ? O : "#E5E7EB"}`,
+                    borderRadius: 10, outline: "none", boxSizing: "border-box",
+                    backgroundColor: "#FAFAFA", color: "#0f172a", fontFamily: "inherit",
+                    transition: "border-color 0.15s",
+                  }}
+                />
+              </div>
+              {errors.password && <p style={{ fontSize: 12, color: "#ef4444", margin: "0 0 12px" }}>{errors.password}</p>}
+
+              <button
+                onClick={adminLogin} disabled={loading}
+                style={{ width: "100%", padding: "14px", marginTop: 8, backgroundColor: loading ? O_LITE : O, color: loading ? "#B35500" : "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "inherit", marginBottom: 12, transition: "background-color 0.15s" }}
+                onMouseEnter={e => { if (!loading) e.currentTarget.style.backgroundColor = "#C0601A"; }}
+                onMouseLeave={e => { if (!loading) e.currentTarget.style.backgroundColor = O; }}
+              >
+                {loading ? "Signing in..." : <><span>Sign in</span><ArrowRight size={17} /></>}
+              </button>
+
+              <button
+                onClick={() => { setAdminMode(false); setPassword(""); setErrors({}); }}
+                style={{ width: "100%", padding: "12px", backgroundColor: "#fff", color: "#475569", border: "1.5px solid #E5E7EB", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = O)}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = "#E5E7EB")}
+              >
+                Use a different email
+              </button>
+            </div>
+          ) : !otpSent ? (
             // Step 1: Email
             <div>
               <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>
