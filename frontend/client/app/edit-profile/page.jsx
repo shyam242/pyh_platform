@@ -115,7 +115,7 @@ function EditProfilePageContent() {
   };
 
   const calculateCompletedFields = (data) => {
-    const referrerFields = ["name", "email", "company", "experience", "phone"];
+    const referrerFields = ["name", "email", "company", "experience", "phone", "linkedin"];
     const otherFields = ["name", "email", "company", "phone"];
     const fieldsToCheck = isReferrer ? referrerFields : otherFields;
     
@@ -380,24 +380,24 @@ function EditProfilePageContent() {
               </button>
               <button
                 type="submit"
-                disabled={saving || !isComplete}
+                disabled={saving}
                 style={{
                   flex: 1,
                   padding: "12px 24px",
-                  backgroundColor: saving || !isComplete ? O_LITE : O,
-                  color: saving || !isComplete ? O : "#fff",
+                  backgroundColor: saving ? O_LITE : O,
+                  color: saving ? O : "#fff",
                   border: "none",
                   borderRadius: 10,
                   fontSize: 15,
                   fontWeight: 700,
-                  cursor: saving || !isComplete ? "not-allowed" : "pointer",
+                  cursor: saving ? "not-allowed" : "pointer",
                   fontFamily: "inherit",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 8,
-                  boxShadow: saving || !isComplete ? "none" : `0 4px 14px rgba(232,119,34,0.28)`,
-                  opacity: saving || !isComplete ? 0.6 : 1
+                  boxShadow: saving ? "none" : `0 4px 14px rgba(232,119,34,0.28)`,
+                  opacity: saving ? 0.6 : 1
                 }}>
                 <Save size={16} /> {saving ? "Saving..." : "Save Profile"}
               </button>
@@ -410,7 +410,7 @@ function EditProfilePageContent() {
             <AlertCircle size={18} color="#dc2626" style={{ flexShrink: 0, marginTop: 2 }} />
             <div>
               <div style={{ fontSize: 14, fontWeight: 600, color: "#dc2626", marginBottom: 4 }}>Complete your profile to save</div>
-              <div style={{ fontSize: 12, color: "#991b1b" }}>Fill in all required fields marked with * to enable the save button</div>
+              <div style={{ fontSize: 12, color: "#991b1b" }}>Fill in the fields marked with * — optional fields like LinkedIn can be added anytime</div>
             </div>
           </div>
         )}
