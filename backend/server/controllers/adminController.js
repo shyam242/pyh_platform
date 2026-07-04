@@ -391,7 +391,7 @@ export const getAllReferrersWithIncentives = async (req, res) => {
     await ensureUserProfileColumnsOnce();
 
     const result = await pool.query(`
-      SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, u.joined_at, u.image,
+      SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, u.joined_at, u.image, u.linkedin,
              COALESCE(i.incentive_value, 500) as incentive_value,
              COALESCE(r.referral_count, 0) as referral_count
       FROM users u
