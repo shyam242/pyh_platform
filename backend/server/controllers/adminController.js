@@ -2,7 +2,7 @@ import pool from "../config/db.js";
 import fs from "fs";
 import { parseCSVString, mapCandidateColumns } from "../services/csvParser.js";
 import { sendRecruiterApprovalEmail, sendRecruiterRejectionEmail } from "../services/brevoService.js";
-import { parseResumeFromURL } from "../services/resumeParserService.js"; // pure regex — no API key needed
+import { parseResumeFromURL } from "../services/resumeParserService.js";
 import { computeSuitabilityScore } from "../services/suitabilityScoreService.js";
 
 const ADMIN_EMAIL = "shyampickyourhire@gmail.com";
@@ -405,6 +405,24 @@ export const getAllReferrersWithIncentives = async (req, res) => {
 };
 
 // GET SINGLE REFERRER — FULL PROFILE + STATS + REFERRAL HISTORY + INCENTIVE HISTORY
+// Self-healing: guarantees the incentive-tracking columns exist on `referrals`
+// even if the server hasn't been restarted since these columns were introduced.
+let _incentiveColumnsChecked = false;
+const ensureIncentiveColumnsOnce = async () => {
+  if (_incentiveColumnsChecked) return;
+  try {
+    await pool.query(`
+      ALTER TABLE referrals
+      ADD COLUMN IF NOT EXISTS incentive_status VARCHAR(20) DEFAULT 'pending',
+      ADD COLUMN IF NOT EXISTS incentive_paid_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS payment_mode VARCHAR(50);
+    `);
+    _incentiveColumnsChecked = true;
+  } catch (err) {
+    console.error("ensureIncentiveColumnsOnce error:", err.message);
+  }
+};
+
 export const getReferrerFullDetails = async (req, res) => {
   try {
     const adminId = req.user.id;
@@ -414,6 +432,8 @@ export const getReferrerFullDetails = async (req, res) => {
     if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== "admin") {
       return res.status(403).json({ message: "Access denied. Admin only." });
     }
+
+    await ensureIncentiveColumnsOnce();
 
     const referrerResult = await pool.query(
       `SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, u.joined_at,
@@ -518,8 +538,8 @@ export const getReferrerFullDetails = async (req, res) => {
       accountTimeline,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to fetch referrer details" });
+    console.error("getReferrerFullDetails error:", err);
+    res.status(500).json({ message: err.message || "Failed to fetch referrer details" });
   }
 };
 
@@ -534,6 +554,8 @@ export const updateReferralIncentiveStatus = async (req, res) => {
     if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== "admin") {
       return res.status(403).json({ message: "Access denied. Admin only." });
     }
+
+    await ensureIncentiveColumnsOnce();
 
     if (!["paid", "pending"].includes(status)) {
       return res.status(400).json({ message: "Status must be 'paid' or 'pending'" });
