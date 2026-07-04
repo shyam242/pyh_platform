@@ -133,18 +133,60 @@ export const createProfile = async (req, res) => {
 };
 
 // GET USER PROFILE
+const buildImageUrl = (filename) => {
+  if (!filename) return null;
+  if (/^https?:\/\//i.test(filename)) return filename;
+  return `${process.env.BACKEND_URL || "https://api.pickyourhire.com"}/uploads/profile_images/${filename}`;
+};
+
+// Self-healing: guarantees users.image / users.linkedin exist even if the
+// server hasn't restarted since these columns were introduced.
+let _userProfileColumnsChecked = false;
+const ensureUserProfileColumnsOnce = async () => {
+  if (_userProfileColumnsChecked) return;
+  try {
+    await pool.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS image VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS linkedin VARCHAR(500);
+    `);
+    _userProfileColumnsChecked = true;
+  } catch (err) {
+    console.error("ensureUserProfileColumnsOnce error:", err.message);
+  }
+};
+
 export const getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
+    await ensureUserProfileColumnsOnce();
 
-    const result = await pool.query(
-      `SELECT u.id, u.name, u.email, u.role, u.company, u.experience, u.skills, u.verified,
-              u.resume, u.phone, u.joined_at, i.incentive_value
-       FROM users u
-       LEFT JOIN incentives i ON u.id = i.referrer_id
-       WHERE u.id=$1`,
-      [userId]
-    );
+    let imageColumnExists = true;
+    let result;
+    try {
+      result = await pool.query(
+        `SELECT u.id, u.name, u.email, u.role, u.company, u.experience, u.skills, u.verified,
+                u.resume, u.phone, u.joined_at, u.linkedin, u.image, i.incentive_value
+         FROM users u
+         LEFT JOIN incentives i ON u.id = i.referrer_id
+         WHERE u.id=$1`,
+        [userId]
+      );
+    } catch (err) {
+      if (err.code === "42703") {
+        imageColumnExists = false;
+        result = await pool.query(
+          `SELECT u.id, u.name, u.email, u.role, u.company, u.experience, u.skills, u.verified,
+                  u.resume, u.phone, u.joined_at, i.incentive_value
+           FROM users u
+           LEFT JOIN incentives i ON u.id = i.referrer_id
+           WHERE u.id=$1`,
+          [userId]
+        );
+      } else {
+        throw err;
+      }
+    }
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "User not found" });
@@ -154,7 +196,7 @@ export const getUserProfile = async (req, res) => {
     res.json({
       ...user,
       incentive_value: user.role === "referrer" ? parseFloat(user.incentive_value) || 500 : null,
-      image_url: null,
+      image_url: imageColumnExists ? buildImageUrl(user.image) : null,
     });
   } catch (error) {
     console.error("Error fetching profile:", error);
@@ -166,7 +208,19 @@ export const getUserProfile = async (req, res) => {
 export const updateUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { name, company, experience, phone } = req.body;
+    await ensureUserProfileColumnsOnce();
+    const { name, email, company, experience, phone, linkedin } = req.body;
+
+    // Email is unique — make sure no one else already owns it before updating
+    if (email !== undefined) {
+      const existing = await pool.query(
+        "SELECT id FROM users WHERE email=$1 AND id<>$2",
+        [email, userId]
+      );
+      if (existing.rows.length > 0) {
+        return res.status(400).json({ error: "This email is already in use by another account" });
+      }
+    }
 
     // Only update provided fields
     let query = "UPDATE users SET ";
@@ -176,6 +230,12 @@ export const updateUserProfile = async (req, res) => {
     if (name !== undefined) {
       query += `name=$${paramCount}, `;
       params.push(name);
+      paramCount++;
+    }
+
+    if (email !== undefined) {
+      query += `email=$${paramCount}, `;
+      params.push(email);
       paramCount++;
     }
 
@@ -197,6 +257,16 @@ export const updateUserProfile = async (req, res) => {
       paramCount++;
     }
 
+    if (linkedin !== undefined) {
+      query += `linkedin=$${paramCount}, `;
+      params.push(linkedin);
+      paramCount++;
+    }
+
+    if (params.length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
     // Remove trailing comma and space
     query = query.slice(0, -2);
     query += ` WHERE id=$${paramCount} RETURNING *`;
@@ -213,10 +283,13 @@ export const updateUserProfile = async (req, res) => {
       message: "Profile updated successfully",
       user: {
         ...user,
-        image_url: null,
+        image_url: buildImageUrl(user.image),
       }
     });
   } catch (error) {
+    if (error.code === "23505") {
+      return res.status(400).json({ error: "This email is already in use by another account" });
+    }
     console.error("Error updating profile:", error);
     res.status(500).json({ error: "Failed to update profile" });
   }
@@ -230,34 +303,24 @@ export const uploadProfileImage = async (req, res) => {
       return res.status(400).json({ error: "Profile image file is required" });
     }
 
-    // Try to update with image column, fallback to without if column doesn't exist
-    let result;
-    try {
-      result = await pool.query(
-        "UPDATE users SET image=$1 WHERE id=$2 RETURNING *",
-        [req.file.filename, userId]
-      );
-    } catch (err) {
-      if (err.code === '42703') {
-        // Column doesn't exist, just return success without storing
-        result = await pool.query("SELECT * FROM users WHERE id=$1", [userId]);
-      } else {
-        throw err;
-      }
-    }
+    await ensureUserProfileColumnsOnce();
+
+    const result = await pool.query(
+      "UPDATE users SET image=$1 WHERE id=$2 RETURNING *",
+      [req.file.filename, userId]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "User not found" });
     }
 
     const user = result.rows[0];
-    const imageUrl = req.file ? `${process.env.BACKEND_URL || "https://api.pickyourhire.com"}/uploads/profile_images/${req.file.filename}` : null;
-    
+
     res.json({
       message: "Profile image uploaded successfully",
       user: {
         ...user,
-        image_url: imageUrl,
+        image_url: buildImageUrl(user.image),
       }
     });
   } catch (error) {
@@ -731,8 +794,10 @@ export const getReferrerProfile = async (req, res) => {
       return res.status(400).json({ error: "Referrer ID is required" });
     }
 
+    await ensureUserProfileColumnsOnce();
+
     const result = await pool.query(
-      `SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, i.incentive_value 
+      `SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, u.linkedin, u.image, i.incentive_value 
        FROM users u 
        LEFT JOIN incentives i ON u.id = i.referrer_id 
        WHERE u.id=$1 AND u.role='referrer'`,
@@ -743,7 +808,7 @@ export const getReferrerProfile = async (req, res) => {
       return res.status(404).json({ error: "Referrer not found" });
     }
 
-    res.json(result.rows[0]);
+    res.json({ ...result.rows[0], image_url: buildImageUrl(result.rows[0].image) });
   } catch (error) {
     console.error("Error fetching referrer profile:", error);
     res.status(500).json({ error: "Failed to fetch referrer profile" });
