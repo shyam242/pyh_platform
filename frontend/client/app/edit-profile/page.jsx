@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Save, Upload, AlertCircle, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Save, Upload, AlertCircle, CheckCircle2, Landmark, Lock } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
 
@@ -52,7 +52,10 @@ function EditProfilePageContent() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [user, setUser] = useState(null);
   const [isReferrer, setIsReferrer] = useState(false);
+  const [isPublicView, setIsPublicView] = useState(false);
   const [profileImage, setProfileImage] = useState(null);
+  const [bankDetails, setBankDetails] = useState({ account_number: "", ifsc_code: "" });
+  const [savingBank, setSavingBank] = useState(false);
   const [completedFields, setCompletedFields] = useState(0);
   const [totalFields, setTotalFields] = useState(0);
   const [formData, setFormData] = useState({
@@ -77,7 +80,9 @@ function EditProfilePageContent() {
       }
 
       let userData;
-      if (referrerId && !token) {
+      const publicView = !!(referrerId && !token);
+      setIsPublicView(publicView);
+      if (publicView) {
         // Public referrer profile view (from referral details page)
         const res = await fetch(`${API_BASE_URL}/api/profile/referrer/${referrerId}`);
         if (!res.ok) throw new Error("Failed to fetch referrer profile");
@@ -94,6 +99,22 @@ function EditProfilePageContent() {
       setUser(userData);
       setIsReferrer(userData.role === "referrer");
       setProfileImage(userData.image_url || null);
+
+      // Bank details are only visible/editable in a genuine self-edit session
+      if (!publicView && userData.role === "referrer" && token) {
+        try {
+          const bankRes = await fetch(`${API_BASE_URL}/api/profile/bank-details`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (bankRes.ok) {
+            const bankData = await bankRes.json();
+            setBankDetails({
+              account_number: bankData.account_number || "",
+              ifsc_code: bankData.ifsc_code || ""
+            });
+          }
+        } catch { /* non-fatal — bank details are optional */ }
+      }
 
       const fields = userData.role === "referrer" ? ["name", "email", "company", "experience", "phone", "linkedin"] : ["name", "email", "company", "phone"];
       setTotalFields(fields.length);
@@ -133,6 +154,37 @@ function EditProfilePageContent() {
     const updated = { ...formData, [name]: value };
     setFormData(updated);
     calculateCompletedFields(updated);
+  };
+
+  const handleBankChange = (e) => {
+    const { name, value } = e.target;
+    setBankDetails(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSaveBankDetails = async () => {
+    if (!bankDetails.account_number?.trim() || !bankDetails.ifsc_code?.trim()) {
+      showError("Please fill in both the account number and IFSC code");
+      return;
+    }
+    setSavingBank(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/api/profile/bank-details`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          account_number: bankDetails.account_number.trim(),
+          ifsc_code: bankDetails.ifsc_code.trim().toUpperCase()
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to save bank details");
+      showSuccess("Bank details saved successfully!");
+    } catch (err) {
+      showError(err.message || "Failed to save bank details");
+    } finally {
+      setSavingBank(false);
+    }
   };
 
   const handleImageUpload = async (e) => {
@@ -405,6 +457,51 @@ function EditProfilePageContent() {
             </div>
           </div>
         </form>
+
+        {/* Bank Details — separate save action, shown only in a genuine self-edit session */}
+        {isReferrer && !isPublicView && (
+          <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 20, padding: 32, marginTop: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <Landmark size={18} color={O} />
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", margin: 0 }}>Bank Details</h3>
+            </div>
+            <p style={{ fontSize: 12, color: "#64748b", margin: "0 0 20px", display: "flex", alignItems: "center", gap: 6 }}>
+              <Lock size={11} /> Used only by the PickYourHire admin team to pay out your referral incentives.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+              <InputField
+                label="Account Number"
+                name="account_number"
+                value={bankDetails.account_number}
+                onChange={handleBankChange}
+                placeholder="e.g. 1234567890123"
+                helper="Your bank account number"
+              />
+              <InputField
+                label="IFSC Code"
+                name="ifsc_code"
+                value={bankDetails.ifsc_code}
+                onChange={handleBankChange}
+                placeholder="e.g. HDFC0001234"
+                helper="Your bank branch's IFSC code"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSaveBankDetails}
+              disabled={savingBank}
+              style={{
+                padding: "11px 22px", backgroundColor: savingBank ? O_LITE : "#fff",
+                color: savingBank ? O : O, border: `1.5px solid ${O_MID}`, borderRadius: 10,
+                fontSize: 14, fontWeight: 700, cursor: savingBank ? "not-allowed" : "pointer",
+                fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8
+              }}>
+              <Save size={15} /> {savingBank ? "Saving..." : "Save Bank Details"}
+            </button>
+          </div>
+        )}
 
         {!isComplete && (
           <div style={{ backgroundColor: "#FEF2F2", border: `1.5px solid #FECACA`, borderRadius: 16, padding: "16px 20px", marginTop: 20, display: "flex", gap: 10, alignItems: "flex-start" }}>
