@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Mail, Phone, Briefcase, Award, Users, LogOut,
   CheckCircle2, Clock, XCircle, Eye, IndianRupee, TrendingUp,
-  Calendar, Send, Download, Trash2, X, Save, AlertCircle, ExternalLink, Link2
+  Calendar, Send, Download, Trash2, X, Save, AlertCircle, ExternalLink, Link2, Landmark
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
@@ -341,6 +341,23 @@ export default function AdminReferrerDetailPage() {
               </div>
               <div style={{ marginTop: 8, fontSize: 11, color: "#94a3b8", lineHeight: 1.5 }}>
                 Missing details can only be added by the referrer from their own "My Profile" page.
+              </div>
+            </div>
+
+            {/* Bank Details — for processing incentive payouts */}
+            <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "20px 22px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <Landmark size={15} color={O} />
+                <div style={{ fontSize: 14, fontWeight: 700 }}>Bank Details</div>
+              </div>
+              <div style={{ borderTop: `1px solid ${BORDER}` }}>
+                <Field icon={Landmark} label="Account Number" value={referrer.account_number}
+                  hint="Referrer hasn't added their account number yet" />
+                <Field icon={Landmark} label="IFSC Code" value={referrer.ifsc_code}
+                  hint="Referrer hasn't added their IFSC code yet" />
+              </div>
+              <div style={{ marginTop: 8, fontSize: 11, color: "#94a3b8", lineHeight: 1.5 }}>
+                Provided by the referrer for incentive payouts — visible to admins only.
               </div>
             </div>
 
