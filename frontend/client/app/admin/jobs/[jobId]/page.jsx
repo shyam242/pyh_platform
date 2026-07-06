@@ -1,27 +1,27 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, MapPin, Briefcase, DollarSign, Clock, Bookmark, Share2, CheckCircle, AlertCircle, Users, Calendar } from "lucide-react";
+import { ArrowLeft, MapPin, Briefcase, DollarSign, Clock, Share2, Users, Calendar, Mail, Phone, ChevronRight } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
 
 const O = "#E87722"; const O_LITE = "#FFF3E8"; const O_MID = "#FBBF7A";
 
-export default function JobDetailsPage() {
+const getInitials = name => !name ? "?" : name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
+
+export default function AdminJobDetailsPage() {
   const router  = useRouter();
   const params  = useParams();
   const jobId   = params.jobId;
   const [job, setJob]         = useState(null);
   const [loading, setLoading] = useState(true);
-  const [applying, setApplying] = useState(false);
-  const [applied, setApplied] = useState(false);
-  const [saved, setSaved]     = useState(false);
+  const [applicants, setApplicants] = useState([]);
+  const [loadingApplicants, setLoadingApplicants] = useState(true);
 
   useEffect(() => {
     if (!jobId) return;
     fetchJob();
-    // check saved
-    try { const s = JSON.parse(localStorage.getItem("pyh_saved_jobs") || "[]"); setSaved(s.includes(jobId)); } catch {}
+    fetchApplicants();
   }, [jobId]);
 
   const fetchJob = async () => {
@@ -29,35 +29,24 @@ export default function JobDetailsPage() {
       const res = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`);
       if (!res.ok) throw new Error("Failed to fetch job");
       setJob(await res.json());
-    } catch (err) { showError(err.message); router.push("/dashboard"); }
+    } catch (err) { showError(err.message); router.push("/admin"); }
     finally { setLoading(false); }
   };
 
-  const handleApply = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) { router.push("/signin"); return; }
-    setApplying(true);
+  const fetchApplicants = async () => {
+    setLoadingApplicants(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/apply`, {
-        method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({}),
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/api/jobs/${jobId}/applications`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-      if (!res.ok) { const e = await res.json(); throw new Error(e.message || "Failed to apply"); }
-      setApplied(true);
-      showSuccess("Applied successfully!");
-      setTimeout(() => router.push("/dashboard"), 1600);
-    } catch (err) { showError(err.message); }
-    finally { setApplying(false); }
-  };
-
-  const toggleSave = () => {
-    const next = !saved;
-    setSaved(next);
-    try {
-      const s = JSON.parse(localStorage.getItem("pyh_saved_jobs") || "[]");
-      const updated = next ? [...s, jobId] : s.filter(x => x !== jobId);
-      localStorage.setItem("pyh_saved_jobs", JSON.stringify(updated));
-    } catch {}
-    showSuccess(next ? "Job saved!" : "Job unsaved");
+      if (!res.ok) throw new Error("Failed to fetch applicants");
+      setApplicants(await res.json());
+    } catch (err) {
+      showError(err.message || "Failed to load applicants");
+    } finally {
+      setLoadingApplicants(false);
+    }
   };
 
   const shareJob = () => {
@@ -69,6 +58,14 @@ export default function JobDetailsPage() {
     if (!v) return [];
     if (Array.isArray(v)) return v;
     return v.split(/\n|•|-/).map(s => s.trim()).filter(Boolean);
+  };
+
+  const timeAgo = iso => {
+    if (!iso) return "";
+    const d = Math.floor((Date.now() - new Date(iso)) / 86400000);
+    if (d === 0) return "Today";
+    if (d === 1) return "Yesterday";
+    return `${d}d ago`;
   };
 
   if (loading) return (
@@ -93,17 +90,16 @@ export default function JobDetailsPage() {
     <div style={{ minHeight: "100vh", backgroundColor: "#F8FAFC", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: "#0f172a" }}>
       {/* HEADER BAR */}
       <div style={{ backgroundColor: "#fff", padding: "0 48px", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1.5px solid #E5E7EB", position: "sticky", top: 0, zIndex: 100 }}>
-        <button onClick={() => router.back()} style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", color: "#475569", fontSize: 14, fontWeight: 600, fontFamily: "inherit", padding: "8px 0" }}
+        <button onClick={() => router.push("/admin")} style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", cursor: "pointer", color: "#475569", fontSize: 14, fontWeight: 600, fontFamily: "inherit", padding: "8px 0" }}
           onMouseEnter={e => (e.currentTarget.style.color = O)} onMouseLeave={e => (e.currentTarget.style.color = "#475569")}>
-          <ArrowLeft size={18} /> Back to dashboard
+          <ArrowLeft size={18} /> Back to admin
         </button>
-        <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: "0.04em" }}>PICK<span style={{ color: O }}>YOUR</span>HIRE</span>
+        <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: "0.04em" }}>PICK<span style={{ color: O }}>YOUR</span>HIRE
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#64748b", marginLeft: 8, background: "#F1F5F9", padding: "3px 9px", borderRadius: 6 }}>Admin</span>
+        </span>
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={shareJob} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", border: "1.5px solid #E5E7EB", borderRadius: 8, backgroundColor: "#fff", color: "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
             <Share2 size={14} /> Share
-          </button>
-          <button onClick={toggleSave} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", border: `1.5px solid ${saved ? O_MID : "#E5E7EB"}`, borderRadius: 8, backgroundColor: saved ? O_LITE : "#fff", color: saved ? "#B35500" : "#64748b", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-            <Bookmark size={14} fill={saved ? O : "none"} /> {saved ? "Saved" : "Save"}
           </button>
         </div>
       </div>
@@ -119,9 +115,9 @@ export default function JobDetailsPage() {
                 {job.department || "General"}
               </span>
               <h1 style={{ fontSize: 28, fontWeight: 800, margin: "0 0 6px", letterSpacing: "-0.02em" }}>{job.job_title || "Untitled Position"}</h1>
-              {job.posted_at && (
+              {job.created_at && (
                 <p style={{ fontSize: 13, color: "#94a3b8", display: "flex", alignItems: "center", gap: 5, margin: 0 }}>
-                  <Calendar size={13} /> Posted {job.posted_at}
+                  <Calendar size={13} /> Posted {new Date(job.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                 </p>
               )}
             </div>
@@ -175,34 +171,55 @@ export default function JobDetailsPage() {
         {/* RIGHT */}
         <div style={{ position: "sticky", top: 88, display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Apply card */}
-          <div style={{ backgroundColor: "#fff", borderRadius: 16, padding: "28px 24px", border: "1.5px solid #E5E7EB" }}>
-            {applied ? (
-              <div style={{ textAlign: "center", padding: "8px 0" }}>
-                <CheckCircle size={40} color="#3B6D11" style={{ margin: "0 auto 12px", display: "block" }} />
-                <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 6px", color: "#3B6D11" }}>Application submitted!</h3>
-                <p style={{ fontSize: 13, color: "#64748b", margin: 0, lineHeight: 1.6 }}>You will be redirected to your dashboard shortly.</p>
+          {/* Applicants card — admin only */}
+          <div style={{ backgroundColor: "#fff", borderRadius: 16, padding: "22px 20px", border: "1.5px solid #E5E7EB" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Users size={16} color={O} />
+                <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>Applicants</h3>
               </div>
+              <span style={{ fontSize: 12, fontWeight: 700, color: O, backgroundColor: O_LITE, padding: "3px 10px", borderRadius: 999 }}>
+                {applicants.length}
+              </span>
+            </div>
+            <p style={{ fontSize: 12, color: "#94a3b8", margin: "0 0 16px" }}>Click a candidate to view their full profile.</p>
+
+            {loadingApplicants ? (
+              <div style={{ padding: "24px 0", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>Loading applicants...</div>
+            ) : applicants.length === 0 ? (
+              <div style={{ padding: "24px 0", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No applications yet.</div>
             ) : (
-              <>
-                <h3 style={{ fontSize: 16, fontWeight: 700, margin: "0 0 8px" }}>Ready to apply?</h3>
-                <p style={{ fontSize: 13, color: "#64748b", lineHeight: 1.6, margin: "0 0 20px" }}>Submit your application and our team will review it soon.</p>
-                <button onClick={handleApply} disabled={applying} style={{ width: "100%", padding: "13px", backgroundColor: applying ? O_LITE : O, color: applying ? "#B35500" : "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: applying ? "not-allowed" : "pointer", fontFamily: "inherit", boxShadow: applying ? "none" : "0 4px 14px rgba(232,119,34,0.28)", transition: "background-color 0.15s" }}
-                  onMouseEnter={e => { if (!applying) e.currentTarget.style.backgroundColor = "#C0601A"; }}
-                  onMouseLeave={e => { if (!applying) e.currentTarget.style.backgroundColor = O; }}>
-                  {applying ? "Submitting..." : "Apply now"}
-                </button>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 14, fontSize: 12, color: "#94a3b8" }}>
-                  <AlertCircle size={12} /> Your profile info will be shared with the recruiter.
-                </div>
-              </>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 420, overflowY: "auto" }}>
+                {applicants.map(a => (
+                  <div key={a.id} onClick={() => router.push(`/admin/applicants/${a.candidate_id}`)}
+                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: "1.5px solid #F1F5F9", cursor: "pointer", transition: "background-color 0.12s" }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = "#F8FAFC"}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}>
+                    <div style={{ width: 36, height: 36, borderRadius: "50%", backgroundColor: O_LITE, color: O, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0, overflow: "hidden" }}>
+                      {a.image
+                        ? <img src={a.image.startsWith("http") ? a.image : `${API_BASE_URL}/uploads/profile_images/${a.image}`} alt={a.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        : getInitials(a.name)}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name || "Unnamed candidate"}</div>
+                      <div style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "flex", alignItems: "center", gap: 4 }}>
+                        <Mail size={10} /> {a.email}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2, flexShrink: 0 }}>
+                      <span style={{ fontSize: 10, color: "#94a3b8" }}>{timeAgo(a.applied_at)}</span>
+                      <ChevronRight size={13} color="#cbd5e1" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
-          {/* Similar info card */}
+          {/* About this role */}
           <div style={{ backgroundColor: O_LITE, borderRadius: 16, padding: "22px 22px", border: `1.5px solid ${O_MID}` }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <Users size={16} color={O} />
+              <Briefcase size={16} color={O} />
               <span style={{ fontSize: 14, fontWeight: 700, color: "#7A3600" }}>About this role</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -220,7 +237,7 @@ export default function JobDetailsPage() {
           </div>
 
           {/* Back button */}
-          <button onClick={() => router.push("/dashboard")} style={{ width: "100%", padding: "11px", border: "1.5px solid #E5E7EB", borderRadius: 10, backgroundColor: "#fff", color: "#475569", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+          <button onClick={() => router.push("/admin")} style={{ width: "100%", padding: "11px", border: "1.5px solid #E5E7EB", borderRadius: 10, backgroundColor: "#fff", color: "#475569", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = O; }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = "#E5E7EB"; e.currentTarget.style.color = "#475569"; }}>
             Back to all jobs
