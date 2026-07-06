@@ -91,9 +91,11 @@ const ensureUserImageColumn = async () => {
     await pool.query(`
       ALTER TABLE users
       ADD COLUMN IF NOT EXISTS image VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS linkedin VARCHAR(500);
+      ADD COLUMN IF NOT EXISTS linkedin VARCHAR(500),
+      ADD COLUMN IF NOT EXISTS account_number VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS ifsc_code VARCHAR(50);
     `);
-    console.log("✓ users.image / users.linkedin columns ready");
+    console.log("✓ users.image / linkedin / account_number / ifsc_code columns ready");
   } catch (err) {
     console.error("user profile columns setup error:", err.message);
   }
