@@ -148,7 +148,9 @@ const ensureUserProfileColumnsOnce = async () => {
     await pool.query(`
       ALTER TABLE users
       ADD COLUMN IF NOT EXISTS image VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS linkedin VARCHAR(500);
+      ADD COLUMN IF NOT EXISTS linkedin VARCHAR(500),
+      ADD COLUMN IF NOT EXISTS account_number VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS ifsc_code VARCHAR(50);
     `);
     _userProfileColumnsChecked = true;
   } catch (err) {
@@ -333,6 +335,7 @@ export const uploadProfileImage = async (req, res) => {
 export const getBankDetails = async (req, res) => {
   try {
     const userId = req.user.id;
+    await ensureUserProfileColumnsOnce();
 
     const result = await pool.query(
       "SELECT id, account_number, ifsc_code FROM users WHERE id=$1",
@@ -354,6 +357,7 @@ export const getBankDetails = async (req, res) => {
 export const updateBankDetails = async (req, res) => {
   try {
     const userId = req.user.id;
+    await ensureUserProfileColumnsOnce();
     const { account_number, ifsc_code } = req.body;
 
     // Verify user is a referrer
