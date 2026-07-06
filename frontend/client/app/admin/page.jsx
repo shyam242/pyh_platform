@@ -986,13 +986,13 @@ export default function AdminDashboard() {
                   <span style={{ fontSize:12, color:"#94a3b8" }}>Showing {(recPage-1)*recPerPage+1} to {Math.min(recPage*recPerPage,filtered.length)} of {filtered.length} recruiters</span>
                   <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                     <button onClick={()=>setRecPage(p=>Math.max(1,p-1))} disabled={recPage===1}
-                      style={{ padding:"5px 10px", border:`1.5px solid ${BORDER}`, borderRadius:7, backgroundColor:"#fff", color:recPage===1?"#d1d5db":"#374151", cursor:page===1?"not-allowed":"pointer", fontSize:13 }}>‹</button>
+                      style={{ padding:"5px 10px", border:`1.5px solid ${BORDER}`, borderRadius:7, backgroundColor:"#fff", color:recPage===1?"#d1d5db":"#374151", cursor:recPage===1?"not-allowed":"pointer", fontSize:13 }}>‹</button>
                     {Array.from({length:Math.min(totalPages,5)},(_,i)=>{
-                      const p = totalPages<=5 ? i+1 : page<=3 ? i+1 : page+i-2;
+                      const p = totalPages<=5 ? i+1 : recPage<=3 ? i+1 : recPage+i-2;
                       if(p<1||p>totalPages)return null;
                       return (
                         <button key={p} onClick={()=>setRecPage(p)}
-                          style={{ padding:"5px 10px", minWidth:32, border:`1.5px solid ${page===p?O:BORDER}`, borderRadius:7, backgroundColor:page===p?O:"#fff", color:recPage===p?"#fff":"#374151", cursor:"pointer", fontSize:12, fontWeight:page===p?700:400 }}>{p}</button>
+                          style={{ padding:"5px 10px", minWidth:32, border:`1.5px solid ${recPage===p?O:BORDER}`, borderRadius:7, backgroundColor:recPage===p?O:"#fff", color:recPage===p?"#fff":"#374151", cursor:"pointer", fontSize:12, fontWeight:recPage===p?700:400 }}>{p}</button>
                       );
                     })}
                     {totalPages>5 && <span style={{ color:"#94a3b8", fontSize:12 }}>… {totalPages}</span>}
