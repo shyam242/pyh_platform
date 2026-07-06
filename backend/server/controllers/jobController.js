@@ -179,7 +179,7 @@ export const updateJob = async (req, res) => {
     }
     if (status !== undefined) {
       const normalizedStatus = status.toLowerCase();
-      if (!["active", "inactive"].includes(normalizedStatus)) {
+      if (!["active", "inactive", "closed"].includes(normalizedStatus)) {
         return res.status(400).json({ message: "Invalid status value" });
       }
       query += `status=$${paramCount}, `;
@@ -300,8 +300,17 @@ export const getAdminJobs = async (req, res) => {
       return res.status(403).json({ message: "Access denied. Admin only." });
     }
 
+    // Includes a real applicant count per job (no placeholder numbers)
     const result = await pool.query(
-      "SELECT * FROM jobs WHERE created_by=$1 AND status != 'deleted' ORDER BY created_at DESC",
+      `SELECT j.*, COALESCE(a.applicant_count, 0) AS applicant_count
+       FROM jobs j
+       LEFT JOIN (
+         SELECT job_id, COUNT(*) AS applicant_count
+         FROM job_applications
+         GROUP BY job_id
+       ) a ON a.job_id = j.id
+       WHERE j.created_by=$1 AND j.status != 'deleted'
+       ORDER BY j.created_at DESC`,
       [req.user.id]
     );
 
