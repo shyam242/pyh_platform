@@ -442,7 +442,9 @@ const ensureUserProfileColumnsOnce = async () => {
     await pool.query(`
       ALTER TABLE users
       ADD COLUMN IF NOT EXISTS image VARCHAR(255),
-      ADD COLUMN IF NOT EXISTS linkedin VARCHAR(500);
+      ADD COLUMN IF NOT EXISTS linkedin VARCHAR(500),
+      ADD COLUMN IF NOT EXISTS account_number VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS ifsc_code VARCHAR(50);
     `);
     _userProfileColumnsChecked = true;
   } catch (err) {
@@ -465,6 +467,7 @@ export const getReferrerFullDetails = async (req, res) => {
 
     const referrerResult = await pool.query(
       `SELECT u.id, u.name, u.email, u.phone, u.company, u.experience, u.joined_at, u.linkedin, u.image,
+              u.account_number, u.ifsc_code,
               COALESCE(i.incentive_value, 500) as incentive_value
        FROM users u
        LEFT JOIN incentives i ON u.id = i.referrer_id
