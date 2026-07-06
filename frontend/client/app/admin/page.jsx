@@ -5,7 +5,9 @@ import {
   Users, Briefcase, UserCheck, LogOut, Trash2, Upload,
   ChevronDown, ChevronRight, X, Info, Megaphone, ShieldCheck,
   UserPlus, Zap, BarChart2, Home, Search, Filter, Eye,
-  Mail, Phone, Building2, Calendar, Award, MoreVertical, ExternalLink
+  Mail, Phone, Building2, Calendar, Award, MoreVertical, ExternalLink,
+  Pencil, Pause, Play, RotateCcw, MapPin, PlusCircle, Target, Sparkles, Plus,
+  CheckCircle2, XCircle
 } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
@@ -38,6 +40,13 @@ export default function AdminDashboard() {
   const [jobs, setJobs] = useState([]);
   const [selectedJobs, setSelectedJobs] = useState(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  const [jobSearch, setJobSearch] = useState("");
+  const [jobDeptFilter, setJobDeptFilter] = useState("All");
+  const [jobLocFilter, setJobLocFilter] = useState("All");
+  const [jobStatusFilter, setJobStatusFilter] = useState("All");
+  const [jobsPage, setJobsPage] = useState(1);
+  const [jobsPerPage] = useState(10);
+  const [openJobMenuId, setOpenJobMenuId] = useState(null);
   const [bulkCandidates, setBulkCandidates] = useState([]);
   const [candidateStatusStats, setCandidateStatusStats] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(null);
@@ -89,7 +98,7 @@ export default function AdminDashboard() {
     if (activeTab === "incentives") fetchReferrers();
     if (activeTab === "candidates") { fetchDashboardData(); fetchReferredCandidates(); }
     if (activeTab === "referred-candidates") fetchReferredCandidates();
-    if (activeTab === "jobs-list") fetchJobs();
+    if (activeTab === "jobs-list" || activeTab === "jobs") fetchJobs();
     if (activeTab === "manage-status") { fetchBulkCandidates(); fetchCandidateStatusStats(); }
   }, [activeTab]);
 
@@ -169,9 +178,20 @@ export default function AdminDashboard() {
     } catch { showError("Failed to delete jobs"); }
   };
   const handleJobStatusChange = async (id, status) => {
-    try { await axios.put(`${API_BASE_URL}/api/jobs/${id}`, { status }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); showSuccess(`Job updated`); fetchJobs(); }
+    try { await axios.put(`${API_BASE_URL}/api/jobs/${id}`, { status }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); showSuccess(`Job ${status==="closed"?"closed":status==="inactive"?"paused":"reactivated"}`); fetchJobs(); }
     catch { showError("Failed to update job"); }
   };
+  const handleDeleteJob = async (id) => {
+    if (!confirm("Delete this job? This cannot be undone.")) return;
+    try { await axios.delete(`${API_BASE_URL}/api/jobs/${id}`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); showSuccess("Job deleted"); fetchJobs(); }
+    catch { showError("Failed to delete job"); }
+  };
+  const jobCode = (job) => `PYH-JB-${String(job.id).padStart(3,"0")}`;
+  const jobStatusMeta = (status) => ({
+    active:   { label: "Active",  bg: "#DCFCE7", color: "#15803d", border: "#86efac", dot: "#15803d" },
+    inactive: { label: "Paused",  bg: "#FEF3C7", color: "#b45309", border: "#fde68a", dot: "#b45309" },
+    closed:   { label: "Closed",  bg: "#FEF2F2", color: "#dc2626", border: "#fecaca", dot: "#dc2626" },
+  }[status] || { label: status||"—", bg: "#F1F5F9", color: "#64748b", border: BORDER, dot: "#64748b" });
   const handleApproveRecruiter = async (id) => { try { await axios.put(`${API_BASE_URL}/api/admin/recruiters/${id}/approve`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); showSuccess("Approved"); fetchDashboardData(); } catch { showError("Failed"); } };
   const handleRejectRecruiter = async (id) => { try { await axios.put(`${API_BASE_URL}/api/admin/recruiters/${id}/reject`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); showSuccess("Rejected"); fetchDashboardData(); } catch { showError("Failed"); } };
   const handleUpdateIncentive = async (e) => {
@@ -306,7 +326,7 @@ export default function AdminDashboard() {
                     if(item.id==="incentives")fetchReferrers();
                     if(item.id==="recruiters")fetchApprovedRecruiters();
                     if(item.id==="pending-recruiters")fetchPendingRecruiters();
-                    if(item.id==="jobs-list")fetchJobs();
+                    if(item.id==="jobs-list"||item.id==="jobs")fetchJobs();
                     if(item.id==="referred-candidates")fetchReferredCandidates();
                     if(item.id==="manage-status"){fetchBulkCandidates();fetchCandidateStatusStats();}
                   }}
@@ -330,7 +350,7 @@ export default function AdminDashboard() {
 
       {/* ── CONTENT ────────────────────────────────────── */}
       <div style={{ maxWidth:1360, margin:"0 auto", padding:"32px 40px 64px" }}
-        onClick={()=>dropdownOpen&&setDropdownOpen(false)}>
+        onClick={()=>{ if(dropdownOpen) setDropdownOpen(false); if(openJobMenuId) setOpenJobMenuId(null); }}>
 
         {/* ═══════════════════════════════════════════════ */}
         {/* OVERVIEW                                        */}
@@ -1216,64 +1236,215 @@ export default function AdminDashboard() {
         {/* ═══════════════════════════════════════════════ */}
         {/* JOBS LIST                                       */}
         {/* ═══════════════════════════════════════════════ */}
-        {activeTab==="jobs-list" && (
-          <div>
-            <BackBtn/>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
-              <TabHeader title={`All Jobs (${jobs.length})`} subtitle="Manage and control job statuses"/>
-              {selectedJobs.size>0 && (
-                <button onClick={handleDeleteSelectedJobs} style={{ display:"flex", alignItems:"center", gap:6, padding:"9px 18px", backgroundColor:"#fef2f2", color:"#dc2626", border:"1.5px solid #fecaca", borderRadius:9, cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>
-                  <Trash2 size={14}/> Delete ({selectedJobs.size})
-                </button>
-              )}
-            </div>
-            <div style={{ ...CARD, padding:0, overflow:"hidden" }}>
-              {jobs.length===0 ? (
-                <div style={{ padding:"48px", textAlign:"center", color:"#94a3b8" }}>No jobs yet.</div>
-              ) : (
-                <div style={{ overflowX:"auto" }}>
-                  <table style={{ width:"100%", borderCollapse:"collapse" }}>
-                    <thead>
-                      <tr style={{ backgroundColor:"#F8FAFC", borderBottom:`1.5px solid ${BORDER}` }}>
-                        <th style={{ padding:"13px 16px", width:44 }}>
-                          <input type="checkbox" checked={selectAll} onChange={handleSelectAll} style={{ cursor:"pointer", width:16, height:16 }}/>
-                        </th>
-                        {["Job Title","Department","Location","Type","Experience","Salary","Status"].map(h=>(
-                          <th key={h} style={{ textAlign:"left", padding:"13px 16px", color:"#64748b", fontWeight:700, fontSize:11, textTransform:"uppercase", letterSpacing:"0.04em" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {jobs.map((job,i)=>(
-                        <tr key={job.id} onClick={()=>window.location.href=`/admin/jobs/${job.id}`}
-                          style={{ borderBottom:`1px solid ${BORDER}`, backgroundColor:selectedJobs.has(job.id)?"#EFF6FF":i%2===0?"#fff":"#FAFBFC", cursor:"pointer" }}
-                          onMouseEnter={e=>e.currentTarget.style.backgroundColor=O_LITE}
-                          onMouseLeave={e=>e.currentTarget.style.backgroundColor=selectedJobs.has(job.id)?"#EFF6FF":i%2===0?"#fff":"#FAFBFC"}>
-                          <td style={{ padding:"13px 16px" }} onClick={e=>e.stopPropagation()}>
-                            <input type="checkbox" checked={selectedJobs.has(job.id)} onChange={()=>handleSelectJob(job.id)} style={{ cursor:"pointer", width:16, height:16 }}/>
-                          </td>
-                          <td style={{ padding:"13px 16px", fontWeight:600 }}>{job.job_title}</td>
-                          <td style={{ padding:"13px 16px", color:"#475569", fontSize:13 }}>{job.department}</td>
-                          <td style={{ padding:"13px 16px", color:"#475569", fontSize:13 }}>{job.location}</td>
-                          <td style={{ padding:"13px 16px", color:"#475569", fontSize:13 }}>{job.job_type}</td>
-                          <td style={{ padding:"13px 16px", color:"#475569", fontSize:13 }}>{job.experience_required||"—"}</td>
-                          <td style={{ padding:"13px 16px", color:"#475569", fontSize:13 }}>{job.salary_range||"—"}</td>
-                          <td style={{ padding:"13px 16px" }} onClick={e=>e.stopPropagation()}>
-                            <select value={job.status||"active"} onChange={e=>handleJobStatusChange(job.id,e.target.value)}
-                              style={{ padding:"5px 10px", borderRadius:7, border:`1.5px solid ${BORDER}`, fontSize:12, color:job.status==="active"?"#15803d":"#64748b", backgroundColor:"#FAFBFC", cursor:"pointer", fontFamily:"inherit", fontWeight:600 }}>
-                              <option value="active">Active</option>
-                              <option value="inactive">Inactive</option>
-                            </select>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+        {activeTab==="jobs-list" && (() => {
+          const departments = ["All Departments", ...Array.from(new Set(jobs.map(j=>j.department).filter(Boolean)))];
+          const locations = ["All Locations", ...Array.from(new Set(jobs.map(j=>j.location).filter(Boolean)))];
+          const filtered = jobs.filter(j => {
+            const q = jobSearch.toLowerCase();
+            const matchQ = !q || [j.job_title,j.department,j.location].filter(Boolean).join(" ").toLowerCase().includes(q);
+            const matchD = jobDeptFilter==="All Departments" || j.department===jobDeptFilter;
+            const matchL = jobLocFilter==="All Locations" || j.location===jobLocFilter;
+            const matchS = jobStatusFilter==="All Status" || (j.status||"active")===jobStatusFilter;
+            return matchQ && matchD && matchL && matchS;
+          });
+          const totalPages = Math.max(1, Math.ceil(filtered.length/jobsPerPage));
+          const paginated = filtered.slice((jobsPage-1)*jobsPerPage, jobsPage*jobsPerPage);
+          const counts = {
+            total: jobs.length,
+            active: jobs.filter(j=>(j.status||"active")==="active").length,
+            paused: jobs.filter(j=>j.status==="inactive").length,
+            closed: jobs.filter(j=>j.status==="closed").length,
+          };
+          const resetFilters = () => { setJobSearch(""); setJobDeptFilter("All Departments"); setJobLocFilter("All Locations"); setJobStatusFilter("All Status"); setJobsPage(1); };
+
+          return (
+            <div>
+              <BackBtn/>
+              {/* Hero */}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20, flexWrap:"wrap", gap:12 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                  <div style={{ width:44, height:44, borderRadius:12, backgroundColor:O_LITE, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <Briefcase size={20} color={O}/>
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize:20, fontWeight:800, margin:0 }}>All Created Jobs</h2>
+                    <p style={{ fontSize:13, color:"#64748b", margin:"2px 0 0" }}>Manage and monitor all the jobs created on the platform.</p>
+                  </div>
                 </div>
-              )}
+                <div style={{ display:"flex", gap:10 }}>
+                  {selectedJobs.size>0 && (
+                    <button onClick={handleDeleteSelectedJobs} style={{ display:"flex", alignItems:"center", gap:6, padding:"11px 18px", backgroundColor:"#fef2f2", color:"#dc2626", border:"1.5px solid #fecaca", borderRadius:10, cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>
+                      <Trash2 size={14}/> Delete ({selectedJobs.size})
+                    </button>
+                  )}
+                  <button onClick={()=>setActiveTab("jobs")} style={{ display:"flex", alignItems:"center", gap:8, padding:"11px 20px", backgroundColor:O, color:"#fff", border:"none", borderRadius:10, cursor:"pointer", fontSize:14, fontWeight:700, fontFamily:"inherit", whiteSpace:"nowrap" }}>
+                    <Plus size={16}/> Create New Job
+                  </button>
+                </div>
+              </div>
+
+              {/* Stat cards */}
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
+                {[
+                  { label:"Total Jobs", value:counts.total, sub:"All time", icon:Briefcase, color:"#1d4ed8", bg:"#EFF6FF" },
+                  { label:"Active Jobs", value:counts.active, sub:"Currently running", icon:CheckCircle2, color:"#15803d", bg:"#DCFCE7" },
+                  { label:"Paused Jobs", value:counts.paused, sub:"On hold", icon:Pause, color:"#b45309", bg:"#FEF3C7" },
+                  { label:"Closed Jobs", value:counts.closed, sub:"No longer accepting", icon:XCircle, color:"#dc2626", bg:"#FEF2F2" },
+                ].map(s=>(
+                  <div key={s.label} style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderLeft:`4px solid ${s.color}`, borderRadius:14, padding:"16px 18px", display:"flex", alignItems:"flex-start", gap:12 }}>
+                    <div style={{ width:38, height:38, borderRadius:10, backgroundColor:s.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                      <s.icon size={17} color={s.color}/>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:22, fontWeight:800, lineHeight:1.1 }}>{s.value}</div>
+                      <div style={{ fontSize:12, fontWeight:600, color:"#374151", marginTop:2 }}>{s.label}</div>
+                      <div style={{ fontSize:11, color:"#94a3b8" }}>{s.sub}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Filters */}
+              <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
+                <div style={{ flex:1, minWidth:220, display:"flex", alignItems:"center", gap:8, padding:"10px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10 }}>
+                  <Search size={15} color="#94a3b8"/>
+                  <input value={jobSearch} onChange={e=>{setJobSearch(e.target.value);setJobsPage(1);}} placeholder="Search by job title, department or location..."
+                    style={{ flex:1, border:"none", outline:"none", fontSize:13, fontFamily:"inherit", background:"transparent" }}/>
+                  {jobSearch && <button onClick={()=>setJobSearch("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", display:"flex" }}><X size={13}/></button>}
+                </div>
+                <select value={jobDeptFilter} onChange={e=>{setJobDeptFilter(e.target.value);setJobsPage(1);}}
+                  style={{ padding:"10px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10, fontSize:13, color:"#374151", fontFamily:"inherit", cursor:"pointer" }}>
+                  {departments.map(d=><option key={d} value={d}>{d}</option>)}
+                </select>
+                <select value={jobLocFilter} onChange={e=>{setJobLocFilter(e.target.value);setJobsPage(1);}}
+                  style={{ padding:"10px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10, fontSize:13, color:"#374151", fontFamily:"inherit", cursor:"pointer" }}>
+                  {locations.map(l=><option key={l} value={l}>{l}</option>)}
+                </select>
+                <select value={jobStatusFilter} onChange={e=>{setJobStatusFilter(e.target.value);setJobsPage(1);}}
+                  style={{ padding:"10px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10, fontSize:13, color:"#374151", fontFamily:"inherit", cursor:"pointer" }}>
+                  {["All Status","active","inactive","closed"].map(s=><option key={s} value={s}>{s==="All Status"?s:jobStatusMeta(s).label}</option>)}
+                </select>
+                <button onClick={resetFilters} style={{ display:"flex", alignItems:"center", gap:6, padding:"10px 16px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10, fontSize:13, fontWeight:600, color:"#475569", cursor:"pointer", fontFamily:"inherit" }}>
+                  <RotateCcw size={13}/> Reset
+                </button>
+              </div>
+
+              {/* Table */}
+              <div style={{ ...CARD, padding:0, overflow:"hidden" }}>
+                {jobs.length===0 ? (
+                  <div style={{ padding:"48px", textAlign:"center", color:"#94a3b8" }}>
+                    <Briefcase size={36} color="#E5E7EB" style={{ display:"block", margin:"0 auto 12px" }}/>
+                    No jobs yet. Click "Create New Job" to post your first opening.
+                  </div>
+                ) : filtered.length===0 ? (
+                  <div style={{ padding:"48px", textAlign:"center", color:"#94a3b8" }}>No jobs match your filters.</div>
+                ) : (
+                  <div style={{ overflowX:"auto" }}>
+                    <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                      <thead>
+                        <tr style={{ backgroundColor:"#F8FAFC", borderBottom:`1.5px solid ${BORDER}` }}>
+                          <th style={{ padding:"13px 16px", width:40 }}>
+                            <input type="checkbox" checked={selectAll} onChange={handleSelectAll} style={{ cursor:"pointer", width:16, height:16 }}/>
+                          </th>
+                          <th style={{ textAlign:"left", padding:"13px 8px", color:"#94a3b8", fontWeight:700, fontSize:11, textTransform:"uppercase", letterSpacing:"0.04em", width:36 }}>#</th>
+                          {["Job Title","Department","Location","Applicants","Status","Created On","Actions"].map(h=>(
+                            <th key={h} style={{ textAlign:"left", padding:"13px 16px", color:"#64748b", fontWeight:700, fontSize:11, textTransform:"uppercase", letterSpacing:"0.04em" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginated.map((job,i)=>{
+                          const meta = jobStatusMeta(job.status||"active");
+                          return (
+                            <tr key={job.id}
+                              style={{ borderBottom:`1px solid ${BORDER}`, backgroundColor:selectedJobs.has(job.id)?"#EFF6FF":i%2===0?"#fff":"#FAFBFC" }}
+                              onMouseEnter={e=>e.currentTarget.style.backgroundColor=selectedJobs.has(job.id)?"#EFF6FF":O_LITE}
+                              onMouseLeave={e=>e.currentTarget.style.backgroundColor=selectedJobs.has(job.id)?"#EFF6FF":i%2===0?"#fff":"#FAFBFC"}>
+                              <td style={{ padding:"13px 16px" }}>
+                                <input type="checkbox" checked={selectedJobs.has(job.id)} onChange={()=>handleSelectJob(job.id)} style={{ cursor:"pointer", width:16, height:16 }}/>
+                              </td>
+                              <td style={{ padding:"13px 8px", color:"#94a3b8", fontSize:12 }}>{(jobsPage-1)*jobsPerPage+i+1}</td>
+                              <td style={{ padding:"13px 16px" }}>
+                                <div style={{ fontWeight:700, fontSize:13, color:"#1d4ed8", cursor:"pointer" }} onClick={()=>window.location.href=`/admin/jobs/${job.id}`}>{job.job_title}</div>
+                                <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{jobCode(job)}</div>
+                              </td>
+                              <td style={{ padding:"13px 16px", color:"#475569", fontSize:13 }}>{job.department||"—"}</td>
+                              <td style={{ padding:"13px 16px", color:"#475569", fontSize:13, display:"flex", alignItems:"center", gap:5 }}>
+                                <MapPin size={12} color="#94a3b8"/> {job.location||"—"}
+                              </td>
+                              <td style={{ padding:"13px 16px", color:"#374151", fontSize:13, fontWeight:600 }}>{job.applicant_count ?? 0}</td>
+                              <td style={{ padding:"13px 16px" }}>
+                                <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:11, fontWeight:700, padding:"4px 11px", borderRadius:999, backgroundColor:meta.bg, color:meta.color, border:`1px solid ${meta.border}` }}>
+                                  <span style={{ width:6, height:6, borderRadius:"50%", backgroundColor:meta.dot }}/> {meta.label}
+                                </span>
+                              </td>
+                              <td style={{ padding:"13px 16px", color:"#94a3b8", fontSize:12 }}>
+                                {job.created_at ? new Date(job.created_at).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}) : "—"}
+                              </td>
+                              <td style={{ padding:"13px 16px" }}>
+                                <div style={{ display:"flex", gap:6 }}>
+                                  <button title="View job" onClick={()=>window.location.href=`/admin/jobs/${job.id}`}
+                                    style={{ width:30, height:30, display:"flex", alignItems:"center", justifyContent:"center", border:`1.5px solid ${BORDER}`, borderRadius:8, backgroundColor:"#fff", color:"#1d4ed8", cursor:"pointer" }}>
+                                    <Eye size={14}/>
+                                  </button>
+                                  {job.status==="closed" ? (
+                                    <button title="Reactivate job" onClick={()=>handleJobStatusChange(job.id,"active")}
+                                      style={{ width:30, height:30, display:"flex", alignItems:"center", justifyContent:"center", border:`1.5px solid ${BORDER}`, borderRadius:8, backgroundColor:"#fff", color:"#15803d", cursor:"pointer" }}>
+                                      <RotateCcw size={14}/>
+                                    </button>
+                                  ) : job.status==="inactive" ? (
+                                    <button title="Resume job" onClick={()=>handleJobStatusChange(job.id,"active")}
+                                      style={{ width:30, height:30, display:"flex", alignItems:"center", justifyContent:"center", border:`1.5px solid ${BORDER}`, borderRadius:8, backgroundColor:"#fff", color:"#15803d", cursor:"pointer" }}>
+                                      <Play size={14}/>
+                                    </button>
+                                  ) : (
+                                    <button title="Pause job" onClick={()=>handleJobStatusChange(job.id,"inactive")}
+                                      style={{ width:30, height:30, display:"flex", alignItems:"center", justifyContent:"center", border:`1.5px solid ${BORDER}`, borderRadius:8, backgroundColor:"#fff", color:"#b45309", cursor:"pointer" }}>
+                                      <Pause size={14}/>
+                                    </button>
+                                  )}
+                                  <button title="Edit job" onClick={()=>window.location.href=`/admin/post-job?edit=${job.id}`}
+                                    style={{ width:30, height:30, display:"flex", alignItems:"center", justifyContent:"center", border:`1.5px solid ${BORDER}`, borderRadius:8, backgroundColor:"#fff", color:"#374151", cursor:"pointer" }}>
+                                    <Pencil size={13}/>
+                                  </button>
+                                  <button title="Delete job" onClick={()=>handleDeleteJob(job.id)}
+                                    style={{ width:30, height:30, display:"flex", alignItems:"center", justifyContent:"center", border:"1.5px solid #fecaca", borderRadius:8, backgroundColor:"#fff", color:"#dc2626", cursor:"pointer" }}>
+                                    <Trash2 size={13}/>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {filtered.length>0 && (
+                  <div style={{ padding:"12px 24px", borderTop:`1px solid ${BORDER}`, display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
+                    <span style={{ fontSize:12, color:"#94a3b8" }}>Showing {(jobsPage-1)*jobsPerPage+1} to {Math.min(jobsPage*jobsPerPage,filtered.length)} of {filtered.length} jobs</span>
+                    <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                      <button onClick={()=>setJobsPage(p=>Math.max(1,p-1))} disabled={jobsPage===1}
+                        style={{ padding:"5px 10px", border:`1.5px solid ${BORDER}`, borderRadius:7, backgroundColor:"#fff", color:jobsPage===1?"#d1d5db":"#374151", cursor:jobsPage===1?"not-allowed":"pointer", fontSize:13 }}>‹</button>
+                      {Array.from({length:Math.min(totalPages,5)},(_,idx)=>{
+                        const p = totalPages<=5 ? idx+1 : jobsPage<=3 ? idx+1 : jobsPage+idx-2;
+                        if(p<1||p>totalPages) return null;
+                        return (
+                          <button key={p} onClick={()=>setJobsPage(p)}
+                            style={{ padding:"5px 10px", minWidth:32, border:`1.5px solid ${jobsPage===p?O:BORDER}`, borderRadius:7, backgroundColor:jobsPage===p?O:"#fff", color:jobsPage===p?"#fff":"#374151", cursor:"pointer", fontSize:12, fontWeight:jobsPage===p?700:400 }}>{p}</button>
+                        );
+                      })}
+                      {totalPages>5 && <span style={{ color:"#94a3b8", fontSize:12 }}>… {totalPages}</span>}
+                      <button onClick={()=>setJobsPage(p=>Math.min(totalPages,p+1))} disabled={jobsPage===totalPages}
+                        style={{ padding:"5px 10px", border:`1.5px solid ${BORDER}`, borderRadius:7, backgroundColor:"#fff", color:jobsPage===totalPages?"#d1d5db":"#374151", cursor:jobsPage===totalPages?"not-allowed":"pointer", fontSize:13 }}>›</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ═══════════════════════════════════════════════ */}
         {/* BULK JOBS                                       */}
@@ -1322,19 +1493,197 @@ export default function AdminDashboard() {
         {/* ═══════════════════════════════════════════════ */}
         {/* POST JOB                                        */}
         {/* ═══════════════════════════════════════════════ */}
-        {activeTab==="jobs" && (
-          <div>
-            <BackBtn/>
-            <TabHeader title="Post New Job"/>
-            <div style={{ ...CARD }}>
-              <p style={{ color:"#475569", fontSize:14, marginBottom:16 }}>Create a new job posting on the platform.</p>
-              <button onClick={()=>window.location.href="/admin/post-job"}
-                style={{ padding:"11px 24px", backgroundColor:O, color:"#fff", border:"none", borderRadius:10, cursor:"pointer", fontWeight:700, fontSize:14, fontFamily:"inherit" }}>
-                Create New Job Posting →
-              </button>
+        {activeTab==="jobs" && (() => {
+          const recentJobs = [...jobs].sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0)).slice(0,5);
+          const deptIcon = (dept="") => {
+            const d = dept.toLowerCase();
+            if (d.includes("engineer")||d.includes("dev")) return { icon:"</>", bg:"#F3E8FF", color:"#7c3aed" };
+            if (d.includes("design")) return { icon:"✎", bg:"#FEE2E2", color:"#dc2626" };
+            if (d.includes("product")) return { icon:"◆", bg:"#F3E8FF", color:"#7c3aed" };
+            if (d.includes("data")||d.includes("analytic")) return { icon:"∞", bg:"#DBEAFE", color:"#1d4ed8" };
+            if (d.includes("market")) return { icon:"◎", bg:"#FEF3C7", color:"#b45309" };
+            return { icon:"✦", bg:O_LITE, color:O };
+          };
+          return (
+            <div>
+              <BackBtn/>
+
+              {/* Hero */}
+              <div style={{ ...CARD, display:"flex", alignItems:"center", justifyContent:"space-between", gap:24, marginBottom:24, flexWrap:"wrap" }}>
+                <div style={{ flex:"1 1 360px" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:14 }}>
+                    <div style={{ width:44, height:44, borderRadius:12, backgroundColor:O_LITE, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                      <Briefcase size={20} color={O}/>
+                    </div>
+                    <div>
+                      <h2 style={{ fontSize:20, fontWeight:800, margin:0 }}>Post New Job</h2>
+                      <p style={{ fontSize:13, color:"#64748b", margin:"2px 0 0" }}>Create job openings and attract the best talent for your team.</p>
+                    </div>
+                  </div>
+
+                  <div style={{ display:"flex", gap:22, marginBottom:20, flexWrap:"wrap" }}>
+                    {[
+                      { icon:Target, label:"Reach the right talent", sub:"Your job will be visible to active job seekers." },
+                      { icon:Zap, label:"Quick & Easy", sub:"Create and publish a job in just a few minutes." },
+                      { icon:Sparkles, label:"Better Matches", sub:"Get quality applications from relevant candidates." },
+                    ].map(f=>(
+                      <div key={f.label} style={{ display:"flex", gap:10, alignItems:"flex-start", maxWidth:170 }}>
+                        <div style={{ width:30, height:30, borderRadius:8, backgroundColor:O_LITE, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                          <f.icon size={14} color={O}/>
+                        </div>
+                        <div>
+                          <div style={{ fontSize:12, fontWeight:700, color:"#0f172a" }}>{f.label}</div>
+                          <div style={{ fontSize:11, color:"#94a3b8", marginTop:2, lineHeight:1.4 }}>{f.sub}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button onClick={()=>window.location.href="/admin/post-job"}
+                    style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 24px", backgroundColor:O, color:"#fff", border:"none", borderRadius:10, cursor:"pointer", fontWeight:700, fontSize:14, fontFamily:"inherit" }}>
+                    <Plus size={16}/> Create New Job Posting
+                  </button>
+                </div>
+
+                {/* Illustration */}
+                <div style={{ flex:"0 0 220px", display:"flex", justifyContent:"center" }}>
+                  <svg width="200" height="160" viewBox="0 0 200 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <ellipse cx="100" cy="145" rx="80" ry="10" fill="#FFF3E8"/>
+                    <rect x="35" y="35" width="130" height="85" rx="8" fill="#fff" stroke={BORDER} strokeWidth="2"/>
+                    <rect x="35" y="35" width="130" height="16" rx="8" fill="#FFF3E8"/>
+                    <circle cx="43" cy="43" r="3" fill={O}/>
+                    <circle cx="52" cy="43" r="3" fill="#FBBF7A"/>
+                    <circle cx="61" cy="43" r="3" fill="#FDE8D2"/>
+                    <circle cx="70" cy="80" r="14" fill="#FFF3E8"/>
+                    <circle cx="70" cy="75" r="6" fill={O}/>
+                    <path d="M58 92c0-7 5-12 12-12s12 5 12 12" fill={O}/>
+                    <rect x="95" y="65" width="55" height="7" rx="3.5" fill="#F1F5F9"/>
+                    <rect x="95" y="78" width="55" height="7" rx="3.5" fill="#F1F5F9"/>
+                    <rect x="95" y="91" width="35" height="7" rx="3.5" fill="#F1F5F9"/>
+                    <path d="M97 67l3 3 5-6" stroke="#15803d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M97 80l3 3 5-6" stroke="#15803d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <rect x="20" y="120" width="160" height="10" rx="5" fill="#F1F5F9"/>
+                    <circle cx="152" cy="108" r="20" fill="#fff" stroke={O} strokeWidth="3"/>
+                    <line x1="166" y1="122" x2="178" y2="134" stroke={O} strokeWidth="4" strokeLinecap="round"/>
+                  </svg>
+                </div>
+              </div>
+
+              {/* Recent Job Postings */}
+              <div style={{ ...CARD, padding:0, overflow:"visible" }}>
+                <div style={{ padding:"18px 22px", borderBottom:`1px solid ${BORDER}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:15 }}>Recent Job Postings</div>
+                    <div style={{ fontSize:12, color:"#94a3b8", marginTop:2 }}>Overview of your recently created job openings.</div>
+                  </div>
+                  <button onClick={()=>setActiveTab("jobs-list")} style={{ background:"none", border:"none", color:O, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 }}>
+                    View All Jobs <ChevronRight size={14}/>
+                  </button>
+                </div>
+
+                {recentJobs.length===0 ? (
+                  <div style={{ padding:"48px", textAlign:"center", color:"#94a3b8" }}>No jobs posted yet.</div>
+                ) : (
+                  <div style={{ overflowX:"auto" }}>
+                    <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                      <thead>
+                        <tr style={{ backgroundColor:"#F8FAFC", borderBottom:`1.5px solid ${BORDER}` }}>
+                          {["Job Title","Department","Location","Applicants","Status","Created On","Actions"].map(h=>(
+                            <th key={h} style={{ textAlign:"left", padding:"12px 16px", color:"#64748b", fontWeight:700, fontSize:11, textTransform:"uppercase", letterSpacing:"0.04em" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recentJobs.map((job,i)=>{
+                          const meta = jobStatusMeta(job.status||"active");
+                          const di = deptIcon(job.department);
+                          return (
+                            <tr key={job.id} style={{ borderBottom: i<recentJobs.length-1?`1px solid ${BORDER}`:"none" }}>
+                              <td style={{ padding:"13px 16px" }}>
+                                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                                  <div style={{ width:30, height:30, borderRadius:8, backgroundColor:di.bg, color:di.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0 }}>{di.icon}</div>
+                                  <div>
+                                    <div style={{ fontWeight:700, fontSize:13 }}>{job.job_title}</div>
+                                    <div style={{ fontSize:11, color:"#94a3b8" }}>{jobCode(job)}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td style={{ padding:"13px 16px", color:"#475569", fontSize:13 }}>{job.department||"—"}</td>
+                              <td style={{ padding:"13px 16px", color:"#475569", fontSize:13 }}>{job.location||"—"}</td>
+                              <td style={{ padding:"13px 16px", color:"#374151", fontSize:13, fontWeight:600 }}>{job.applicant_count ?? 0}</td>
+                              <td style={{ padding:"13px 16px" }}>
+                                <span style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:11, fontWeight:700, padding:"4px 11px", borderRadius:999, backgroundColor:meta.bg, color:meta.color, border:`1px solid ${meta.border}` }}>
+                                  <span style={{ width:6, height:6, borderRadius:"50%", backgroundColor:meta.dot }}/> {meta.label}
+                                </span>
+                              </td>
+                              <td style={{ padding:"13px 16px", color:"#94a3b8", fontSize:12 }}>
+                                {job.created_at ? new Date(job.created_at).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}) : "—"}
+                              </td>
+                              <td style={{ padding:"13px 16px", position:"relative" }}>
+                                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                                  <button title="View job" onClick={()=>window.location.href=`/admin/jobs/${job.id}`}
+                                    style={{ width:30, height:30, display:"flex", alignItems:"center", justifyContent:"center", border:`1.5px solid ${BORDER}`, borderRadius:8, backgroundColor:"#fff", color:"#1d4ed8", cursor:"pointer" }}>
+                                    <Eye size={14}/>
+                                  </button>
+                                  <button title="More actions" onClick={e=>{e.stopPropagation();setOpenJobMenuId(openJobMenuId===job.id?null:job.id);}}
+                                    style={{ width:30, height:30, display:"flex", alignItems:"center", justifyContent:"center", border:`1.5px solid ${BORDER}`, borderRadius:8, backgroundColor:"#fff", color:"#374151", cursor:"pointer" }}>
+                                    <MoreVertical size={14}/>
+                                  </button>
+                                </div>
+                                {openJobMenuId===job.id && (
+                                  <div onClick={e=>e.stopPropagation()} style={{ position:"absolute", right:16, top:"calc(100% + 4px)", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10, boxShadow:"0 12px 32px rgba(0,0,0,0.12)", zIndex:20, minWidth:170, overflow:"hidden" }}>
+                                    <button onClick={()=>{setOpenJobMenuId(null);window.location.href=`/admin/post-job?edit=${job.id}`;}}
+                                      style={{ width:"100%", padding:"10px 16px", border:"none", background:"none", textAlign:"left", fontSize:13, color:"#374151", cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:8 }}
+                                      onMouseEnter={e=>e.currentTarget.style.backgroundColor="#F8FAFC"} onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
+                                      <Pencil size={13}/> Edit Job
+                                    </button>
+                                    {job.status==="inactive" || job.status==="closed" ? (
+                                      <button onClick={()=>{setOpenJobMenuId(null);handleJobStatusChange(job.id,"active");}}
+                                        style={{ width:"100%", padding:"10px 16px", border:"none", background:"none", textAlign:"left", fontSize:13, color:"#15803d", cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:8 }}
+                                        onMouseEnter={e=>e.currentTarget.style.backgroundColor="#F8FAFC"} onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
+                                        <Play size={13}/> Reactivate
+                                      </button>
+                                    ) : (
+                                      <button onClick={()=>{setOpenJobMenuId(null);handleJobStatusChange(job.id,"inactive");}}
+                                        style={{ width:"100%", padding:"10px 16px", border:"none", background:"none", textAlign:"left", fontSize:13, color:"#b45309", cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:8 }}
+                                        onMouseEnter={e=>e.currentTarget.style.backgroundColor="#F8FAFC"} onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
+                                        <Pause size={13}/> Pause Job
+                                      </button>
+                                    )}
+                                    {job.status!=="closed" && (
+                                      <button onClick={()=>{setOpenJobMenuId(null);handleJobStatusChange(job.id,"closed");}}
+                                        style={{ width:"100%", padding:"10px 16px", border:"none", background:"none", textAlign:"left", fontSize:13, color:"#dc2626", cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:8 }}
+                                        onMouseEnter={e=>e.currentTarget.style.backgroundColor="#F8FAFC"} onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
+                                        <XCircle size={13}/> Close Job
+                                      </button>
+                                    )}
+                                    <button onClick={()=>{setOpenJobMenuId(null);handleDeleteJob(job.id);}}
+                                      style={{ width:"100%", padding:"10px 16px", border:"none", borderTop:`1px solid ${BORDER}`, background:"none", textAlign:"left", fontSize:13, color:"#dc2626", cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:8 }}
+                                      onMouseEnter={e=>e.currentTarget.style.backgroundColor="#FEF2F2"} onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
+                                      <Trash2 size={13}/> Delete Job
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {jobs.length>5 && (
+                  <div style={{ padding:"14px", textAlign:"center", borderTop:`1px solid ${BORDER}` }}>
+                    <button onClick={()=>setActiveTab("jobs-list")} style={{ background:"none", border:"none", color:O, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit", display:"inline-flex", alignItems:"center", gap:4 }}>
+                      View All Jobs ({jobs.length}) <ChevronRight size={14}/>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ═══════════════════════════════════════════════ */}
         {/* MANAGE STATUS                                   */}
