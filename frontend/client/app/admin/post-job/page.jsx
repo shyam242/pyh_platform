@@ -1,16 +1,22 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { ArrowLeft } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
 
-export default function PostJobPage() {
+function PostJobPageContent() {
+  const searchParams = useSearchParams();
+  const editJobId = searchParams.get("edit");
+  const isEditMode = !!editJobId;
+  const [loadingJob, setLoadingJob] = useState(isEditMode);
   const [form, setForm] = useState({
     job_title: "",
     department: "",
     location: "",
     job_type: "full-time",
+    status: "active",
     salary_range: "",
     experience_required: "",
     job_description: "",
@@ -20,6 +26,34 @@ export default function PostJobPage() {
   });
 
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!editJobId) return;
+    (async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/api/jobs/${editJobId}`);
+        const job = res.data;
+        setForm({
+          job_title: job.job_title || "",
+          department: job.department || "",
+          location: job.location || "",
+          job_type: job.job_type || "full-time",
+          status: job.status || "active",
+          salary_range: job.salary_range || "",
+          experience_required: job.experience_required || "",
+          job_description: job.job_description || "",
+          responsibilities: job.responsibilities || "",
+          qualifications: job.qualifications || "",
+          benefits: job.benefits || ""
+        });
+      } catch {
+        showError("Failed to load job for editing");
+      } finally {
+        setLoadingJob(false);
+      }
+    })();
+  }, [editJobId]);
+
   const descriptionRef = useRef(null);
   const responsibilitiesRef = useRef(null);
   const qualificationsRef = useRef(null);
@@ -101,17 +135,23 @@ export default function PostJobPage() {
       }
 
       const token = localStorage.getItem("token");
-      await axios.post(`${API_BASE_URL}/api/jobs`, form, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      showSuccess("Job posting created successfully!");
+      if (isEditMode) {
+        await axios.put(`${API_BASE_URL}/api/jobs/${editJobId}`, form, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        showSuccess("Job posting updated successfully!");
+      } else {
+        await axios.post(`${API_BASE_URL}/api/jobs`, form, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        showSuccess("Job posting created successfully!");
+      }
       setTimeout(() => {
         window.location.href = "/admin";
       }, 1500);
     } catch (error) {
       console.error("Error posting job:", error);
-      showError(error.response?.data?.message || "Failed to post job");
+      showError(error.response?.data?.message || (isEditMode ? "Failed to update job" : "Failed to post job"));
     } finally {
       setLoading(false);
     }
@@ -154,7 +194,7 @@ export default function PostJobPage() {
             <ArrowLeft style={{ width: "1rem", height: "1rem" }} />
             Back
           </button>
-          <h1 style={{ fontSize: "1.25rem", fontWeight: "700", margin: 0, color: "#1f2937" }}>Create New Job Posting</h1>
+          <h1 style={{ fontSize: "1.25rem", fontWeight: "700", margin: 0, color: "#1f2937" }}>{isEditMode ? "Edit Job Posting" : "Create New Job Posting"}</h1>
         </div>
       </nav>
 
@@ -262,6 +302,33 @@ export default function PostJobPage() {
                 <option value="internship" style={{ color: "#0f172a", backgroundColor: "#ffffff" }}>Internship</option>
               </select>
             </div>
+
+            {/* STATUS — only shown when editing an existing job */}
+            {isEditMode && (
+              <div>
+                <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", color: "#333" }}>
+                  Status
+                </label>
+                <select
+                  name="status"
+                  value={form.status}
+                  onChange={handleChange}
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem",
+                    border: "1px solid #ddd",
+                    borderRadius: "0.5rem",
+                    fontSize: "1rem",
+                    color: "#0f172a",
+                    boxSizing: "border-box"
+                  }}
+                >
+                  <option value="active" style={{ color: "#0f172a", backgroundColor: "#ffffff" }}>Active</option>
+                  <option value="inactive" style={{ color: "#0f172a", backgroundColor: "#ffffff" }}>Paused</option>
+                  <option value="closed" style={{ color: "#0f172a", backgroundColor: "#ffffff" }}>Closed</option>
+                </select>
+              </div>
+            )}
 
             {/* SALARY RANGE */}
             <div>
@@ -457,7 +524,7 @@ export default function PostJobPage() {
                 if (!loading) e.currentTarget.style.backgroundColor = "#f97316";
               }}
             >
-              {loading ? "Posting..." : "Post Job"}
+              {loading ? (isEditMode ? "Saving..." : "Posting...") : (isEditMode ? "Save Changes" : "Post Job")}
             </button>
             <button
               type="button"
@@ -481,5 +548,13 @@ export default function PostJobPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function PostJobPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8" }}>Loading...</div>}>
+      <PostJobPageContent />
+    </Suspense>
   );
 }
