@@ -283,27 +283,23 @@ export default function AdminDashboard() {
   );
 
   const NAV_ITEMS = [
-    { id:"overview", label:"🏠 Overview" },
-    { id:"candidates", label:"👥 Candidates" },
-    { id:"referred-candidates", label:"🔗 Referred Candidates" },
-    { id:"manage-status", label:"📋 Candidate Status" },
-    { id:"pending-recruiters", label:"⏳ Pending Recruiters" },
-    { id:"recruiters", label:"✅ Approved Recruiters" },
-    { id:"incentives", label:"💰 Incentives" },
-    { id:"jobs-list", label:"💼 All Jobs" },
-    { id:"jobs", label:"➕ Post Job" },
-    { id:"bulk-jobs", label:"📤 Bulk Jobs" },
-    { id:"bulk-candidates", label:"📂 Bulk Candidates" },
-    { id:"resume-parse", label:"🤖 AI Resume Parser" },
-    { id:"resume-views", label:"📊 Resume Analytics", isLink:"/admin/resume-views" },
+    { id:"overview", label:"Overview" },
+    { id:"candidates", label:"Candidates" },
+    { id:"referred-candidates", label:"Referred Candidates" },
+    { id:"manage-status", label:"Candidate Status" },
+    { id:"pending-recruiters", label:"Pending Recruiters" },
+    { id:"recruiters", label:"Approved Recruiters" },
+    { id:"incentives", label:"Incentives" },
+    { id:"jobs-list", label:"All Jobs" },
+    { id:"jobs", label:"Post Job" },
+    { id:"bulk-jobs", label:"Bulk Jobs" },
+    { id:"bulk-candidates", label:"Bulk Candidates" },
+    { id:"resume-parse", label:"Resume Parser" },
+    { id:"resume-views", label:"Resume Analytics", isLink:"/admin/resume-views" },
   ];
-
-  // ─────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight:"100vh", backgroundColor:"#F8FAFC", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", color:"#0f172a" }}>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} @keyframes slideDown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}} @keyframes fadeIn{from{opacity:0}to{opacity:1}}`}</style>
-
-      {/* ── NAVBAR ─────────────────────────────────────── */}
       <nav style={{ position:"sticky", top:0, zIndex:300, backgroundColor:"#fff", borderBottom:`1.5px solid ${BORDER}`, padding:"0 40px", height:68, display:"flex", alignItems:"center", justifyContent:"space-between", boxShadow:"0 1px 8px rgba(0,0,0,0.05)" }}>
         <button onClick={()=>setActiveTab("overview")} style={{ background:"none", border:"none", cursor:"pointer", padding:0 }}>
           <span style={{ fontSize:19, fontWeight:800, letterSpacing:"0.03em", color:"#0f172a" }}>
@@ -447,7 +443,7 @@ export default function AdminDashboard() {
                     { label:"Add Candidates", desc:"Add new candidates to the platform", icon:UserPlus, shortcut:"Alt + C", bg:"#EFF6FF", color:"#1d4ed8", action:()=>setActiveTab("candidates") },
                     { label:"Post Jobs", desc:"Create and publish new job openings", icon:Briefcase, shortcut:"Alt + J", bg:"#DCFCE7", color:"#15803d", action:()=>{window.location.href="/admin/post-job";} },
                     { label:"Recruiter", desc:"Manage recruiters and approvals", icon:UserCheck, shortcut:"Alt + R", bg:"#F3E8FF", color:"#7c3aed", action:()=>{setActiveTab("pending-recruiters");fetchPendingRecruiters();} },
-                    { label:"AI Resume Parser", desc:"Parse resumes using AI technology", icon:Zap, shortcut:"Alt + P", bg:"#FFF7ED", color:O, action:()=>setActiveTab("resume-parse") },
+                    { label:"Resume Parser", desc:"Parse resumes using AI technology", icon:Zap, shortcut:"Alt + P", bg:"#FFF7ED", color:O, action:()=>setActiveTab("resume-parse") },
                     { label:"CV Add", desc:"Upload and manage CVs", icon:Upload, shortcut:"Alt + V", bg:"#ECFDF5", color:"#059669", action:()=>{window.location.href="/admin/bulk-candidates";} },
                   ].map(s=>{
                     const Icon=s.icon;
@@ -1877,18 +1873,17 @@ export default function AdminDashboard() {
         })()}
 
         {/* ═══════════════════════════════════════════════ */}
-        {/* AI RESUME PARSER                                */}
+        {/*    RESUME PARSER                                */}
         {/* ═══════════════════════════════════════════════ */}
         {activeTab==="resume-parse" && (
           <div>
             <BackBtn/>
-            <TabHeader title="AI Resume Parser" subtitle="Paste resume PDF links — Claude AI extracts candidate data automatically"/>
+            <TabHeader title="Resume Parser" subtitle="Paste resume PDF links — Claude AI extracts candidate data automatically"/>
             <div style={{ ...CARD, marginBottom:20 }}>
               <div style={{ backgroundColor:"#FEF3C7", border:"1px solid #FDE68A", borderRadius:12, padding:"14px 18px", marginBottom:22, display:"flex", gap:12 }}>
-                <span style={{ fontSize:22, flexShrink:0 }}>🤖</span>
                 <div>
                   <div style={{ fontWeight:700, fontSize:13, color:"#92400e", marginBottom:4 }}>How it works</div>
-                  <div style={{ fontSize:12, color:"#78350f", lineHeight:1.7 }}>Paste one PDF URL per line · Click Parse · Claude AI extracts: <strong>Name, Email, Phone, Location, Qualification, Experience, Company, Skills</strong> · Candidates auto-added with unique <strong>RES-YYYY-NNNNN</strong> ID.</div>
+                  <div style={{ fontSize:12, color:"#78350f", lineHeight:1.7 }}>Paste one PDF URL per line · Click Parse · System will extracts: <strong>Name, Email, Phone, Location, Qualification, Experience, Company, Skills</strong> · Candidates auto-added with unique <strong>RES-YYYY-NNNNN</strong> ID.</div>
                 </div>
               </div>
               <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#374151", marginBottom:8 }}>Resume PDF URLs <span style={{ fontWeight:400, color:"#94a3b8" }}>(one per line, max 50)</span></label>
