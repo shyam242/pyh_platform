@@ -1,4 +1,5 @@
 import pool from "../config/db.js";
+import { upsertJobOnPublicSite, removeJobFromPublicSite } from "../services/publicSiteSync.js";
 export const createJob = async (req, res) => {
   try {
     const {
@@ -54,6 +55,9 @@ export const createJob = async (req, res) => {
       message: "Job posting created successfully",
       job: result.rows[0]
     });
+
+    // Mirror the new listing on the public site (best-effort, never blocks the response above)
+    upsertJobOnPublicSite(result.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to create job posting" });
@@ -200,6 +204,14 @@ export const updateJob = async (req, res) => {
       message: "Job updated successfully",
       job: result.rows[0]
     });
+
+    // Keep the public site in sync (best-effort, never blocks the response above)
+    const updatedJob = result.rows[0];
+    if ((updatedJob.status || "active") === "active") {
+      upsertJobOnPublicSite(updatedJob);
+    } else {
+      removeJobFromPublicSite(updatedJob.id);
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to update job" });
@@ -234,6 +246,9 @@ export const deleteJob = async (req, res) => {
       message: "Job deleted successfully",
       job: result.rows[0]
     });
+
+    // Remove the mirror from the public site (best-effort, never blocks the response above)
+    removeJobFromPublicSite(result.rows[0].id);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to delete job" });
@@ -281,6 +296,9 @@ export const bulkDeleteJobs = async (req, res) => {
       deletedCount: result.rows.length,
       jobs: result.rows
     });
+
+    // Remove each mirror from the public site (best-effort, never blocks the response above)
+    result.rows.forEach(job => removeJobFromPublicSite(job.id));
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to delete jobs" });
