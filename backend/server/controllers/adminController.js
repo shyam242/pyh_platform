@@ -4,6 +4,7 @@ import { parseCSVString, mapCandidateColumns } from "../services/csvParser.js";
 import { sendRecruiterApprovalEmail, sendRecruiterRejectionEmail } from "../services/brevoService.js";
 import { parseResumeFromURL } from "../services/resumeParserService.js"; // pure regex — no API key needed
 import { computeSuitabilityScore } from "../services/suitabilityScoreService.js";
+import { upsertJobOnPublicSite } from "../services/publicSiteSync.js";
 
 const ADMIN_EMAIL = "shyampickyourhire@gmail.com";
 
@@ -782,6 +783,9 @@ export const bulkUploadJobs = async (req, res) => {
       createdJobs,
       errors: errors.length > 0 ? errors : undefined
     });
+
+    // Mirror each newly created job on the public site (best-effort, never blocks the response above)
+    createdJobs.forEach(job => upsertJobOnPublicSite(job));
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to upload jobs" });
