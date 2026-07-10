@@ -305,8 +305,8 @@ export default function AdminDashboard() {
     { id:"jobs", label:"Post Job" },
     { id:"bulk-jobs", label:"Bulk Jobs" },
     { id:"bulk-candidates", label:"Bulk Candidates" },
-    { id:"resume-parse", label:"Resume Parser" },
-    { id:"resume-views", label:"Candidate Upload", isLink:"/admin/resume-views" },
+    { id:"resume-parse", label:"Candidate upload" },
+    { id:"resume-views", label:"Resume views", isLink:"/admin/resume-views" },
   ];
   return (
     <div style={{ minHeight:"100vh", backgroundColor:"#F8FAFC", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", color:"#0f172a" }}>
