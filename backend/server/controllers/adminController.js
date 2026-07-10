@@ -368,6 +368,40 @@ export const getReferrerIncentive = async (req, res) => {
   }
 };
 
+// workflow status admin assigns to a referral (pending/shortlist/reject/hold)
+const referralWorkflowStatusLabel = (status) => {
+  const map = { pending: "Pending", shortlist: "Shortlisted", reject: "Rejected", hold: "On Hold" };
+  return map[(status || "pending").toLowerCase()] || "Pending";
+};
+
+// GET /api/admin/referrals — all candidates referred by referrers, for the "Referred Candidates" directory
+export const getReferralsForAdmin = async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const rows = (await pool.query(
+      `SELECT r.id, r.name, r.email, r.phone, r.skills, r.experience, r.company, r.department,
+              r.referral_status, r.status, r.created_at, r.referrer_id, r.cv_file,
+              u.name AS referrer_name
+       FROM referrals r
+       LEFT JOIN users u ON u.id = r.referrer_id
+       ORDER BY r.id DESC`
+    )).rows;
+
+    const referrals = rows.map(r => ({
+      ...r,
+      skills: normalizeReferralSkills(r.skills),
+      status: referralWorkflowStatusLabel(r.status),
+      acceptance_status: referralStatusLabel(r.referral_status),
+    }));
+
+    res.json({ referrals });
+  } catch (err) {
+    console.error("getReferralsForAdmin error:", err);
+    res.status(500).json({ message: "Failed to fetch referrals" });
+  }
+};
+
 // GET ALL REFERRERS WITH INCENTIVES
 const buildImageUrl = (filename) => {
   if (!filename) return null;
@@ -1379,11 +1413,55 @@ export const updateCandidateDetails = async (req, res) => {
 };
 
 // ════════════════════════════════════════════════════════════════
-// UNIFIED CANDIDATE STATUS MANAGEMENT (Portal users + Bulk uploads)
+// UNIFIED CANDIDATE STATUS MANAGEMENT (Portal users + Bulk uploads + Referrals)
 // ════════════════════════════════════════════════════════════════
 
+// referrals.skills is stored as a JSON-stringified array — normalize to a comma string
+const normalizeReferralSkills = (raw) => {
+  if (!raw) return "";
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.join(", ") : String(raw);
+  } catch {
+    return String(raw);
+  }
+};
+
+// referrals don't use the hiring-pipeline status vocabulary (Contacted/Hired/etc) —
+// map their referral_status into a readable label for display purposes
+const referralStatusLabel = (referral_status) => {
+  const map = {
+    pending_candidate_acceptance: "Awaiting Candidate",
+    pending: "Pending Review",
+    accepted: "Accepted",
+    shortlist: "Shortlisted",
+    reject: "Rejected",
+    hold: "On Hold",
+  };
+  return map[referral_status] || "Referred";
+};
+
+const fetchReferredRowsForStatus = async () => {
+  const rows = (await pool.query(
+    `SELECT id, name, email, phone AS contact, company, department, skills, experience,
+            referral_status, status, created_at, cv_file
+     FROM referrals ORDER BY id DESC`
+  )).rows;
+  return rows.map(r => ({
+    ...r,
+    _source: "referred",
+    job_role: r.company || r.department || null,
+    skills: normalizeReferralSkills(r.skills),
+    current_location: null,
+    candidate_status: referralStatusLabel(r.referral_status),
+    status_updated_at: null,
+    ai_suitability_score: null,
+    ai_score_breakdown: null,
+  }));
+};
+
 // GET /api/admin/candidate-status/list
-// Query: search, status, source(all|portal|bulk), location, page, limit
+// Query: search, status, source(all|portal|bulk|referred), location, page, limit
 export const getUnifiedCandidateStatusList = async (req, res) => {
   try {
     if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
@@ -1406,7 +1484,9 @@ export const getUnifiedCandidateStatusList = async (req, res) => {
        FROM bulk_candidates ORDER BY id DESC`
     )).rows.map(r => ({ ...r, _source: "bulk" }));
 
-    let merged = [...portalRows, ...bulkRows];
+    const referredRows = await fetchReferredRowsForStatus();
+
+    let merged = [...portalRows, ...bulkRows, ...referredRows];
 
     // Live-compute AI suitability score for anyone never scored (or stale > skills changed) — cheap, deterministic
     merged = merged.map((c) => {
@@ -1444,7 +1524,7 @@ export const getUnifiedCandidateStatusList = async (req, res) => {
     const paged = merged.slice((page - 1) * limit, page * limit);
 
     // Distinct filter options for dropdowns (computed from the FULL dataset, not just current page)
-    const allForOptions = [...portalRows, ...bulkRows];
+    const allForOptions = [...portalRows, ...bulkRows, ...referredRows];
     const locations = [...new Set(allForOptions.map(c => c.current_location).filter(Boolean))].sort();
     const skillsSet = new Set();
     allForOptions.forEach(c => (c.skills || "").split(",").map(x => x.trim()).filter(Boolean).forEach(x => skillsSet.add(x)));
@@ -1455,6 +1535,7 @@ export const getUnifiedCandidateStatusList = async (req, res) => {
       totalAll: allForOptions.length,
       portalCount: portalRows.length,
       bulkCount: bulkRows.length,
+      referredCount: referredRows.length,
       page, limit,
       totalPages: Math.max(1, Math.ceil(totalFiltered / limit)),
       filters: { locations, skills: [...skillsSet].sort(), statuses: CANDIDATE_STATUSES },
@@ -1472,7 +1553,9 @@ export const getUnifiedCandidateStatusOverview = async (req, res) => {
 
     const portal = (await pool.query("SELECT candidate_status FROM users WHERE role='candidate'")).rows;
     const bulk = (await pool.query("SELECT candidate_status FROM bulk_candidates")).rows;
-    const all = [...portal, ...bulk];
+    const referred = (await pool.query("SELECT referral_status FROM referrals")).rows
+      .map(r => ({ candidate_status: referralStatusLabel(r.referral_status) }));
+    const all = [...portal, ...bulk, ...referred];
 
     const bucket = (s) => {
       const v = (s || "New").toLowerCase();
@@ -1492,7 +1575,7 @@ export const getUnifiedCandidateStatusOverview = async (req, res) => {
     all.forEach(c => { const k = c.candidate_status || "New"; byStatusMap[k] = (byStatusMap[k] || 0) + 1; });
     const byStatus = Object.entries(byStatusMap).map(([candidate_status, count]) => ({ candidate_status, count }));
 
-    res.json({ total: all.length, counts, byStatus, portalTotal: portal.length, bulkTotal: bulk.length });
+    res.json({ total: all.length, counts, byStatus, portalTotal: portal.length, bulkTotal: bulk.length, referredTotal: referred.length });
   } catch (err) {
     console.error("getUnifiedCandidateStatusOverview error:", err);
     res.status(500).json({ message: "Failed to fetch overview" });
@@ -1542,7 +1625,19 @@ export const exportUnifiedCandidateStatusCSV = async (req, res) => {
        FROM bulk_candidates ORDER BY id DESC`
     )).rows.map(r => ({ ...r, _source: "Bulk" }));
 
-    let merged = [...portalRows, ...bulkRows];
+    const referredRows = (await pool.query(
+      `SELECT id, name, email, phone AS contact, company, department, skills, experience, referral_status, created_at
+       FROM referrals ORDER BY id DESC`
+    )).rows.map(r => ({
+      ...r,
+      _source: "Referred",
+      job_role: r.company || r.department || null,
+      skills: normalizeReferralSkills(r.skills),
+      current_location: null,
+      candidate_status: referralStatusLabel(r.referral_status),
+    }));
+
+    let merged = [...portalRows, ...bulkRows, ...referredRows];
     const { search = "", status = "all", source = "all" } = req.query;
     const s = search.trim().toLowerCase();
     if (s) merged = merged.filter(c => (c.name || "").toLowerCase().includes(s) || (c.email || "").toLowerCase().includes(s));
