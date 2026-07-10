@@ -69,6 +69,9 @@ export default function AdminDashboard() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [statusFilter2, setStatusFilter2] = useState("all");
   const [locationFilter, setLocationFilter] = useState("All");
+  const [statusCandidates, setStatusCandidates] = useState([]); // unified: portal + bulk + referred
+  const [statusListLoading, setStatusListLoading] = useState(false);
+  const [exportingStatus, setExportingStatus] = useState(false);
   const [incPage, setIncPage] = useState(1);
   const [incSearch, setIncSearch] = useState("");
   const clickTimers = useRef({});
@@ -99,7 +102,7 @@ export default function AdminDashboard() {
     if (activeTab === "candidates") { fetchDashboardData(); fetchReferredCandidates(); }
     if (activeTab === "referred-candidates") fetchReferredCandidates();
     if (activeTab === "jobs-list" || activeTab === "jobs") fetchJobs();
-    if (activeTab === "manage-status") { fetchBulkCandidates(); fetchCandidateStatusStats(); }
+    if (activeTab === "manage-status") { fetchCandidateStatusList(); }
   }, [activeTab]);
 
   // ── Fetchers ───────────────────────────────────────────────
@@ -145,6 +148,14 @@ export default function AdminDashboard() {
       setBulkCandidates(r.data);
     } catch { showError("Failed to load candidates"); }
   };
+  // Unified candidate-status list: merges portal signups + bulk uploads + referred candidates
+  const fetchCandidateStatusList = async () => {
+    try {
+      setStatusListLoading(true);
+      const r = await axios.get(`${API_BASE_URL}/api/admin/candidate-status/list?limit=5000`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+      setStatusCandidates(r.data.candidates || []);
+    } catch { showError("Failed to load candidate status list"); } finally { setStatusListLoading(false); }
+  };
   const fetchCandidateStatusStats = async () => {
     try {
       const r = await axios.get(`${API_BASE_URL}/api/admin/candidate-status-stats`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
@@ -159,11 +170,11 @@ export default function AdminDashboard() {
   };
 
   // ── Actions ────────────────────────────────────────────────
-  const handleUpdateCandidateStatus = async (id, status) => {
+  const handleUpdateCandidateStatus = async (source, id, status) => {
     try {
       setUpdatingStatus(id);
-      await axios.put(`${API_BASE_URL}/api/admin/bulk-candidates/${id}/status`, { candidate_status: status }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
-      showSuccess(`Status updated`); fetchBulkCandidates(); fetchCandidateStatusStats();
+      await axios.put(`${API_BASE_URL}/api/admin/candidate-status/${source}/${id}`, { candidate_status: status }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+      showSuccess(`Status updated`); fetchCandidateStatusList();
     } catch { showError("Failed to update status"); } finally { setUpdatingStatus(null); }
   };
   const handleSelectJob = (id) => { const n = new Set(selectedJobs); n.has(id) ? n.delete(id) : n.add(id); setSelectedJobs(n); setSelectAll(n.size === jobs.length && jobs.length > 0); };
@@ -284,7 +295,7 @@ export default function AdminDashboard() {
 
   const NAV_ITEMS = [
     { id:"overview", label:"Overview" },
-    { id:"candidates", label:"Candidates" },
+    { id:"candidates", label:"Total Candidates" },
     { id:"referred-candidates", label:"Referred Candidates" },
     { id:"manage-status", label:"Candidate Status" },
     { id:"pending-recruiters", label:"Pending Recruiters" },
@@ -295,7 +306,7 @@ export default function AdminDashboard() {
     { id:"bulk-jobs", label:"Bulk Jobs" },
     { id:"bulk-candidates", label:"Bulk Candidates" },
     { id:"resume-parse", label:"Resume Parser" },
-    { id:"resume-views", label:"Resume Analytics", isLink:"/admin/resume-views" },
+    { id:"resume-views", label:"Candidate Upload", isLink:"/admin/resume-views" },
   ];
   return (
     <div style={{ minHeight:"100vh", backgroundColor:"#F8FAFC", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", color:"#0f172a" }}>
@@ -324,7 +335,7 @@ export default function AdminDashboard() {
                     if(item.id==="pending-recruiters")fetchPendingRecruiters();
                     if(item.id==="jobs-list"||item.id==="jobs")fetchJobs();
                     if(item.id==="referred-candidates")fetchReferredCandidates();
-                    if(item.id==="manage-status"){fetchBulkCandidates();fetchCandidateStatusStats();}
+                    if(item.id==="manage-status"){fetchCandidateStatusList();}
                   }}
                     style={{ width:"100%", padding:"11px 20px", border:"none", borderLeft:`3px solid ${activeTab===item.id?O:"transparent"}`, backgroundColor:activeTab===item.id?O_LITE:"#fff", color:activeTab===item.id?O:"#374151", textAlign:"left", cursor:"pointer", fontSize:13, fontWeight:activeTab===item.id?700:400, fontFamily:"inherit", transition:"all 0.1s" }}
                     onMouseEnter={e=>{if(activeTab!==item.id)e.currentTarget.style.backgroundColor="#F8FAFC";}}
@@ -1685,16 +1696,11 @@ export default function AdminDashboard() {
         {/* MANAGE STATUS                                   */}
         {/* ═══════════════════════════════════════════════ */}
         {activeTab==="manage-status" && (() => {
-          const withSource = bulkCandidates.map(c => ({
-            ...c,
-            _source: c.candidate_id && c.candidate_id.startsWith("RES-") ? "resume" : "csv"
-          }));
+          const locations = ["All", ...Array.from(new Set(statusCandidates.map(c=>c.current_location).filter(Boolean)))];
 
-          const locations = ["All", ...Array.from(new Set(withSource.map(c=>c.current_location).filter(Boolean)))];
-
-          const filtered = withSource.filter(c => {
+          const filtered = statusCandidates.filter(c => {
             const q = statusSearch.toLowerCase();
-            const matchQ = !q || [c.name,c.email,c.contact,c.skills,c.role].filter(Boolean).join(" ").toLowerCase().includes(q);
+            const matchQ = !q || [c.name,c.email,c.contact,c.skills,c.job_role].filter(Boolean).join(" ").toLowerCase().includes(q);
             const matchSrc = sourceFilter==="all" || c._source===sourceFilter;
             const matchSt = statusFilter2==="all" || (c.candidate_status||"Contacted")===statusFilter2;
             const matchLoc = locationFilter==="All" || c.current_location===locationFilter;
@@ -1702,9 +1708,8 @@ export default function AdminDashboard() {
           });
 
           // Status counts for top bar
-          const STATUS_LIST = ["Contacted","Interview Scheduled","Offered","Hired","Rejected","On Hold"];
           const statusCounts = {};
-          withSource.forEach(c => {
+          statusCandidates.forEach(c => {
             const s = c.candidate_status||"Contacted";
             statusCounts[s] = (statusCounts[s]||0)+1;
           });
@@ -1714,13 +1719,47 @@ export default function AdminDashboard() {
               "Hired":["#DCFCE7","#15803d"],"Offered":["#EFF6FF","#1d4ed8"],"Interview Scheduled":["#F3E8FF","#7c3aed"],
               "Shortlisted":["#ECFDF5","#059669"],"Contacted":["#F8FAFC","#64748b"],"In Review":["#FFF7ED",O],
               "Rejected":["#FEF2F2","#dc2626"],"On Hold":["#FEF3C7","#d97706"],"Interested":["#DCFCE7","#15803d"],
-              "Not Interested":["#FEF2F2","#dc2626"],"No Response":["#F8FAFC","#94a3b8"]
+              "Not Interested":["#FEF2F2","#dc2626"],"No Response":["#F8FAFC","#94a3b8"],
+              "Awaiting Candidate":["#FFF7ED",O],"Accepted":["#DCFCE7","#15803d"],"Pending Review":["#F8FAFC","#64748b"],
+              "Referred":["#F3E8FF","#7c3aed"],
             };
             return map[s]||["#F8FAFC","#64748b"];
           };
-          const sourceTag = (src) => src==="resume"
-            ? { label:"AI Parsed", bg:"#F3E8FF", color:"#7c3aed", border:"#d8b4fe" }
-            : { label:"CSV Upload", bg:"#EFF6FF", color:"#1d4ed8", border:"#BFDBFE" };
+          const sourceTag = (src) => ({
+            referred: { label:"Referred", bg:"#F3E8FF", color:"#7c3aed", border:"#d8b4fe" },
+            bulk: { label:"Bulk Upload", bg:"#EFF6FF", color:"#1d4ed8", border:"#BFDBFE" },
+            portal: { label:"Portal", bg:"#DCFCE7", color:"#15803d", border:"#86efac" },
+          }[src] || { label:src, bg:"#F8FAFC", color:"#64748b", border:BORDER });
+
+          const handleExport = async () => {
+            try {
+              setExportingStatus(true);
+              const params = new URLSearchParams();
+              if (statusSearch) params.set("search", statusSearch);
+              if (statusFilter2 !== "all") params.set("status", statusFilter2);
+              if (sourceFilter !== "all") params.set("source", sourceFilter);
+              const res = await axios.get(`${API_BASE_URL}/api/admin/candidate-status/export?${params.toString()}`, {
+                headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+                responseType: "blob",
+              });
+              const url = window.URL.createObjectURL(new Blob([res.data]));
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `candidate-status-${Date.now()}.csv`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              window.URL.revokeObjectURL(url);
+              showSuccess("Export downloaded");
+            } catch { showError("Failed to export CSV"); } finally { setExportingStatus(false); }
+          };
+
+          const handleViewCV = (c) => {
+            if (c._source === "bulk") { window.open(`/bulk-candidates/${c.id}`, "_blank"); return; }
+            if (c._source === "portal" && c.resume_link) { window.open(c.resume_link, "_blank"); return; }
+            if (c._source === "referred" && c.cv_file) { window.open(`${API_BASE_URL}/uploads/cv/${c.cv_file}`, "_blank"); return; }
+            setSelectedCandidate({ ...c, _type:c._source==="referred"?"referred":c._source, status:c.candidate_status });
+          };
 
           return (
             <div>
@@ -1733,13 +1772,13 @@ export default function AdminDashboard() {
                 </div>
                 <div style={{ display:"flex", gap:12 }}>
                   <div style={{ textAlign:"center", padding:"12px 20px", backgroundColor:"#fff", borderRadius:12, border:`1.5px solid ${BORDER}` }}>
-                    <div style={{ fontSize:28, fontWeight:800, color:"#0f172a" }}>{withSource.length}</div>
+                    <div style={{ fontSize:28, fontWeight:800, color:"#0f172a" }}>{statusCandidates.length}</div>
                     <div style={{ fontSize:11, color:"#64748b", fontWeight:600 }}>Total</div>
                   </div>
                 </div>
               </div>
 
-              {/* Overview stat pills */}
+              {/* Overview stat cards */}
               <div style={{ ...CARD, padding:"16px 24px", marginBottom:20 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
                   <span style={{ fontWeight:700, fontSize:14 }}>Overview</span>
@@ -1747,18 +1786,21 @@ export default function AdminDashboard() {
                     <option>All Jobs</option>
                   </select>
                 </div>
-                <div style={{ display:"flex", gap:20, flexWrap:"wrap" }}>
+                <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
                   {[
-                    { icon:"👥", label:"Total Candidates", value:withSource.length, color:"#1d4ed8" },
-                    { icon:"📞", label:"Contacted", value:statusCounts["Contacted"]||0, color:"#64748b" },
-                    { icon:"📅", label:"Interview Scheduled", value:statusCounts["Interview Scheduled"]||0, color:"#7c3aed" },
-                    { icon:"💼", label:"Offered", value:statusCounts["Offered"]||0, color:O },
-                    { icon:"✅", label:"Hired", value:statusCounts["Hired"]||0, color:"#15803d" },
-                    { icon:"❌", label:"Rejected", value:statusCounts["Rejected"]||0, color:"#dc2626" },
-                    { icon:"⏸️", label:"On Hold", value:statusCounts["On Hold"]||0, color:"#d97706" },
+                    { Icon:Users, label:"Total Candidates", value:statusCandidates.length, color:"#1d4ed8", bg:"#EFF6FF" },
+                    { Icon:Phone, label:"Contacted", value:statusCounts["Contacted"]||0, color:"#64748b", bg:"#F8FAFC" },
+                    { Icon:Calendar, label:"Interview Scheduled", value:statusCounts["Interview Scheduled"]||0, color:"#7c3aed", bg:"#F3E8FF" },
+                    { Icon:Briefcase, label:"Offered", value:statusCounts["Offered"]||0, color:O, bg:O_LITE },
+                    { Icon:CheckCircle2, label:"Hired", value:statusCounts["Hired"]||0, color:"#15803d", bg:"#DCFCE7" },
+                    { Icon:XCircle, label:"Rejected", value:statusCounts["Rejected"]||0, color:"#dc2626", bg:"#FEF2F2" },
+                    { Icon:Pause, label:"On Hold", value:statusCounts["On Hold"]||0, color:"#d97706", bg:"#FEF3C7" },
                   ].map(s=>(
-                    <div key={s.label} onClick={()=>setStatusFilter2(f=>f===s.label?"all":s.label)} style={{ cursor:"pointer", textAlign:"center", opacity: statusFilter2!=="all"&&statusFilter2!==s.label?0.5:1, transition:"opacity 0.15s" }}>
-                      <div style={{ fontSize:20 }}>{s.icon}</div>
+                    <div key={s.label} onClick={()=>setStatusFilter2(f=>f===s.label?"all":s.label)}
+                      style={{ cursor:"pointer", textAlign:"center", minWidth:110, padding:"12px 14px", borderRadius:12, border:`1.5px solid ${statusFilter2===s.label?s.color:BORDER}`, backgroundColor:statusFilter2===s.label?s.bg:"#fff", opacity: statusFilter2!=="all"&&statusFilter2!==s.label?0.55:1, transition:"all 0.15s" }}>
+                      <div style={{ width:32, height:32, borderRadius:9, backgroundColor:s.bg, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 8px" }}>
+                        <s.Icon size={16} color={s.color}/>
+                      </div>
                       <div style={{ fontSize:20, fontWeight:800, color:statusFilter2===s.label?s.color:"#0f172a" }}>{s.value}</div>
                       <div style={{ fontSize:11, color:"#64748b", fontWeight:600, whiteSpace:"nowrap" }}>{s.label}</div>
                     </div>
@@ -1776,7 +1818,7 @@ export default function AdminDashboard() {
                 </div>
                 {/* Source filter */}
                 <div style={{ display:"flex", gap:6 }}>
-                  {[{id:"all",label:"All Sources"},{id:"csv",label:"CSV Upload"},{id:"resume",label:"AI Parsed"}].map(f=>(
+                  {[{id:"all",label:"All Sources"},{id:"referred",label:"Referred"},{id:"bulk",label:"Bulk Upload"},{id:"portal",label:"Portal"}].map(f=>(
                     <button key={f.id} onClick={()=>setSourceFilter(f.id)}
                       style={{ padding:"8px 14px", border:`1.5px solid ${sourceFilter===f.id?O:BORDER}`, borderRadius:9, backgroundColor:sourceFilter===f.id?O_LITE:"#fff", color:sourceFilter===f.id?O:"#475569", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>
                       {f.label}
@@ -1787,16 +1829,17 @@ export default function AdminDashboard() {
                 <select value={statusFilter2} onChange={e=>setStatusFilter2(e.target.value)}
                   style={{ padding:"8px 14px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:12, fontFamily:"inherit", color:"#374151", backgroundColor:"#fff", cursor:"pointer" }}>
                   <option value="all">All Status</option>
-                  {["Contacted","Interested","Not Interested","No Response","Follow-up Required","In Review","Shortlisted","Interview Scheduled","Interview Cleared","Offered","Hired","Rejected","On Hold"].map(s=><option key={s}>{s}</option>)}
+                  {["Contacted","Interested","Not Interested","No Response","Follow-up Required","In Review","Shortlisted","Interview Scheduled","Interview Cleared","Offered","Hired","Rejected","On Hold","Awaiting Candidate","Accepted","Pending Review","Referred"].map(s=><option key={s}>{s}</option>)}
                 </select>
                 {/* Location filter */}
                 <select value={locationFilter} onChange={e=>setLocationFilter(e.target.value)}
                   style={{ padding:"8px 14px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:12, fontFamily:"inherit", color:"#374151", backgroundColor:"#fff", cursor:"pointer" }}>
                   {locations.map(l=><option key={l}>{l}</option>)}
                 </select>
-                {/* Export stub */}
-                <button style={{ padding:"8px 16px", border:`1.5px solid ${BORDER}`, borderRadius:9, backgroundColor:"#fff", color:"#475569", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}>
-                  ↓ Export
+                {/* Export */}
+                <button onClick={handleExport} disabled={exportingStatus}
+                  style={{ padding:"8px 16px", border:`1.5px solid ${BORDER}`, borderRadius:9, backgroundColor:"#fff", color:"#475569", fontSize:12, fontWeight:600, cursor:exportingStatus?"not-allowed":"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:6, opacity:exportingStatus?0.6:1 }}>
+                  <ExternalLink size={13} style={{ transform:"rotate(90deg)" }}/> {exportingStatus?"Exporting…":"Export"}
                 </button>
               </div>
 
@@ -1807,7 +1850,11 @@ export default function AdminDashboard() {
                   <span>Candidate</span><span>Contact</span><span>Location</span><span>Role</span><span>Source</span><span>Current Status</span><span>Updated At</span><span>Actions</span>
                 </div>
 
-                {filtered.length===0 ? (
+                {statusListLoading ? (
+                  <div style={{ padding:"60px", textAlign:"center", color:"#94a3b8" }}>
+                    <p style={{ margin:0, fontWeight:600 }}>Loading candidates…</p>
+                  </div>
+                ) : filtered.length===0 ? (
                   <div style={{ padding:"60px", textAlign:"center", color:"#94a3b8" }}>
                     <Users size={44} color="#E5E7EB" style={{ display:"block", margin:"0 auto 14px" }}/>
                     <p style={{ margin:0, fontWeight:600 }}>No candidates match your filters</p>
@@ -1816,8 +1863,9 @@ export default function AdminDashboard() {
                   const [bg,fg]=avatarColor(c.name);
                   const [ssBg,ssFg]=statusStyle(c.candidate_status||"Contacted");
                   const src=sourceTag(c._source);
+                  const editable = c._source==="portal" || c._source==="bulk";
                   return (
-                    <div key={c.id}
+                    <div key={`${c._source}-${c.id}`}
                       style={{ display:"grid", gridTemplateColumns:"2.2fr 1.6fr 1.2fr 1.2fr 1.2fr 1.4fr 1.2fr 1fr", gap:8, padding:"14px 20px", borderBottom:i<filtered.length-1?`1px solid ${BORDER}`:"none", alignItems:"center", transition:"background 0.12s" }}
                       onMouseEnter={e=>e.currentTarget.style.backgroundColor="#F8FAFC"}
                       onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
@@ -1833,37 +1881,41 @@ export default function AdminDashboard() {
                       <div style={{ fontSize:12, color:"#475569" }}>{c.contact||"—"}</div>
                       {/* Location */}
                       <div style={{ fontSize:12, color:"#64748b", display:"flex", alignItems:"center", gap:4 }}>
-                        {c.current_location ? <><span style={{ fontSize:11 }}>📍</span>{c.current_location}</> : "—"}
+                        {c.current_location ? <><MapPin size={11}/>{c.current_location}</> : "—"}
                       </div>
                       {/* Role */}
-                      <div style={{ fontSize:12, color:"#475569" }}>{c.role||"—"}</div>
+                      <div style={{ fontSize:12, color:"#475569" }}>{c.job_role||"—"}</div>
                       {/* Source tag */}
                       <div>
                         <span style={{ fontSize:10, fontWeight:700, padding:"3px 9px", borderRadius:999, backgroundColor:src.bg, color:src.color, border:`1px solid ${src.border}` }}>{src.label}</span>
                       </div>
-                      {/* Status dropdown */}
+                      {/* Status dropdown / badge */}
                       <div>
-                        <select value={c.candidate_status||"Contacted"}
-                          onChange={e=>handleUpdateCandidateStatus(c.id,e.target.value)}
-                          disabled={updatingStatus===c.id}
-                          style={{ padding:"5px 10px", border:`1.5px solid ${ssBg==="transparent"?BORDER:BORDER}`, borderRadius:8, fontSize:11, fontWeight:700, color:ssFg, backgroundColor:ssBg, cursor:updatingStatus===c.id?"not-allowed":"pointer", fontFamily:"inherit", opacity:updatingStatus===c.id?0.5:1, outline:"none" }}>
-                          {["Contacted","Interested","Not Interested","No Response","Follow-up Required","In Review","Shortlisted","Interview Scheduled","Interview Cleared","Offered","Hired","Rejected","On Hold"].map(s=><option key={s} value={s}>{s}</option>)}
-                        </select>
+                        {editable ? (
+                          <select value={c.candidate_status||"Contacted"}
+                            onChange={e=>handleUpdateCandidateStatus(c._source,c.id,e.target.value)}
+                            disabled={updatingStatus===c.id}
+                            style={{ padding:"5px 10px", border:`1.5px solid ${BORDER}`, borderRadius:8, fontSize:11, fontWeight:700, color:ssFg, backgroundColor:ssBg, cursor:updatingStatus===c.id?"not-allowed":"pointer", fontFamily:"inherit", opacity:updatingStatus===c.id?0.5:1, outline:"none" }}>
+                            {["Contacted","Interested","Not Interested","No Response","Follow-up Required","In Review","Shortlisted","Interview Scheduled","Interview Cleared","Offered","Hired","Rejected","On Hold"].map(s=><option key={s} value={s}>{s}</option>)}
+                          </select>
+                        ) : (
+                          <span title="Referral status is managed on the Referred Candidates page" style={{ padding:"5px 10px", borderRadius:8, fontSize:11, fontWeight:700, color:ssFg, backgroundColor:ssBg, border:`1.5px solid ${BORDER}` }}>{c.candidate_status||"Referred"}</span>
+                        )}
                       </div>
                       {/* Updated at */}
                       <div style={{ fontSize:11, color:"#94a3b8" }}>{c.status_updated_at?new Date(c.status_updated_at).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}):"—"}</div>
                       {/* Actions */}
                       <div style={{ display:"flex", gap:6 }}>
-                        <button onClick={()=>window.open(`/admin/bulk-candidates/${c.id}`,"_blank")}
+                        <button onClick={()=>handleViewCV(c)}
                           style={{ padding:"5px 12px", border:`1.5px solid ${BORDER}`, borderRadius:7, backgroundColor:"#fff", color:"#374151", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>View CV</button>
                       </div>
                     </div>
                   );
                 })}
                 <div style={{ padding:"12px 20px", borderTop:`1px solid ${BORDER}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <span style={{ fontSize:12, color:"#94a3b8" }}>Showing 1 to {filtered.length} of {withSource.length} candidates</span>
+                  <span style={{ fontSize:12, color:"#94a3b8" }}>Showing 1 to {filtered.length} of {statusCandidates.length} candidates</span>
                   <div style={{ display:"flex", gap:6 }}>
-                    {sourceFilter!=="all" && <button onClick={()=>setSourceFilter("all")} style={{ fontSize:11, padding:"3px 10px", border:`1px solid ${BORDER}`, borderRadius:6, cursor:"pointer", background:"#fff", color:"#475569", fontFamily:"inherit" }}>✕ {sourceFilter==="csv"?"CSV Upload":"AI Parsed"}</button>}
+                    {sourceFilter!=="all" && <button onClick={()=>setSourceFilter("all")} style={{ fontSize:11, padding:"3px 10px", border:`1px solid ${BORDER}`, borderRadius:6, cursor:"pointer", background:"#fff", color:"#475569", fontFamily:"inherit" }}>✕ {sourceTag(sourceFilter).label}</button>}
                     {statusFilter2!=="all" && <button onClick={()=>setStatusFilter2("all")} style={{ fontSize:11, padding:"3px 10px", border:`1px solid ${BORDER}`, borderRadius:6, cursor:"pointer", background:"#fff", color:"#475569", fontFamily:"inherit" }}>✕ {statusFilter2}</button>}
                   </div>
                 </div>
@@ -1923,7 +1975,7 @@ export default function AdminDashboard() {
                       <div style={{ fontWeight:700, color:O, marginBottom:2 }}>{c.candidate_id}</div>
                       <div>{c.current_location||"—"} · {c.experience?`${c.experience} yrs`:"—"}</div>
                     </div>
-                    <button onClick={()=>window.open(`/admin/bulk-candidates/${c.id}`,"_blank")}
+                    <button onClick={()=>window.open(`/bulk-candidates/${c.id}`,"_blank")}
                       style={{ padding:"6px 14px", backgroundColor:O, color:"#fff", border:"none", borderRadius:7, fontSize:12, fontWeight:700, cursor:"pointer" }}>View</button>
                   </div>
                 ))}
