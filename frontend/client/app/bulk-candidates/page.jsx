@@ -243,7 +243,7 @@ export default function BulkCandidatesPage() {
               return (
                 <div
                   key={candidate.id}
-                  onClick={() => router.push(`/admin/bulk-candidates/${candidate.id}`)}
+                  onClick={() => router.push(`/bulk-candidates/${candidate.id}`)}
                   style={{
                     background: "#fff",
                     border: `1px solid ${isSelected ? "#fed7aa" : "#e5e7eb"}`,
