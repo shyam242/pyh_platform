@@ -1797,7 +1797,6 @@ export default function AdminDashboard() {
               "Rejected":["#FEF2F2","#dc2626"],"On Hold":["#FEF3C7","#d97706"],"Interested":["#DCFCE7","#15803d"],
               "Not Interested":["#FEF2F2","#dc2626"],"No Response":["#F8FAFC","#94a3b8"],
               "Awaiting Candidate":["#FFF7ED",O],"Accepted":["#DCFCE7","#15803d"],
-              "Referred":["#F3E8FF","#7c3aed"],
             };
             return map[s]||["#F8FAFC","#64748b"];
           };
@@ -1878,7 +1877,6 @@ export default function AdminDashboard() {
                     { Icon:Pause, label:"On Hold", value:statusCounts["On Hold"]||0, color:"#d97706", bg:"#FEF3C7" },
                     { Icon:Clock, label:"Awaiting Candidate", value:statusCounts["Awaiting Candidate"]||0, color:O, bg:O_LITE },
                     { Icon:UserCheck, label:"Accepted", value:statusCounts["Accepted"]||0, color:"#15803d", bg:"#DCFCE7" },
-                    { Icon:Megaphone, label:"Referred", value:statusCounts["Referred"]||0, color:"#7c3aed", bg:"#F3E8FF" },
                   ].map(s=>(
                     <div key={s.label} onClick={()=>setStatusFilter2(f=>f===s.label?"all":s.label)}
                       style={{ cursor:"pointer", textAlign:"center", minWidth:110, padding:"12px 14px", borderRadius:12, border:`1.5px solid ${statusFilter2===s.label?s.color:BORDER}`, backgroundColor:statusFilter2===s.label?s.bg:"#fff", opacity: statusFilter2!=="all"&&statusFilter2!==s.label?0.55:1, transition:"all 0.15s" }}>
