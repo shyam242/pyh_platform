@@ -33,11 +33,21 @@ const STATUS = {
   default:   { bg: "#F1F5F9", color: "#475569", border: "#CBD5E1", label: "New" },
 };
 
+// Private per-recruiter pipeline status — only this recruiter (and admin) can see it.
+const PRIVATE_STATUS_OPTIONS = ["Shortlisted", "In Process", "On Hold", "Offer Given"];
+const PRIVATE_STATUS_COLORS = {
+  "Shortlisted": { bg: "#EFF6FF", color: "#1d4ed8", border: "#BFDBFE" },
+  "In Process":  { bg: "#F3E8FF", color: "#7c3aed", border: "#DDD6FE" },
+  "On Hold":     { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" },
+  "Offer Given": { bg: "#DCFCE7", color: "#15803d", border: "#86efac" },
+};
+
 export default function RecruiterDashboard() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [data, setData] = useState([]);
   const [bulkCandidates, setBulkCandidates] = useState([]);
+  const [myStatuses, setMyStatuses] = useState({}); // private status tags this recruiter has set, keyed "source:id"
   const [loading, setLoading] = useState(true);
   const [isApproved, setIsApproved] = useState(null);
   const [tab, setTab] = useState("dashboard");
@@ -76,7 +86,7 @@ export default function RecruiterDashboard() {
   }, []);
 
   const fetchAll = async token => {
-    await Promise.all([fetchApprovalStatus(token), fetchUser(token), fetchData(token), fetchBulkCandidates(token)]);
+    await Promise.all([fetchApprovalStatus(token), fetchUser(token), fetchData(token), fetchBulkCandidates(token), fetchMyStatuses(token)]);
     setLoading(false);
   };
 
@@ -109,6 +119,33 @@ export default function RecruiterDashboard() {
       const d = await r.json();
       setBulkCandidates(Array.isArray(d) ? d : (d.data || []));
     } catch { setBulkCandidates([]); }
+  };
+
+  const fetchMyStatuses = async token => {
+    try {
+      const r = await fetch(`${API_BASE_URL}/api/recruiter/candidate-statuses`, { headers: { Authorization: `Bearer ${token}` } });
+      const d = await r.json();
+      const map = {};
+      (d.statuses || []).forEach(s => { map[`${s.source}:${s.candidate_id}`] = s.status; });
+      setMyStatuses(map);
+    } catch { setMyStatuses({}); }
+  };
+
+  // Private status only this recruiter sees — separate from the shared shortlist/hold/reject pipeline above.
+  // If the candidate was referred, the referrer is emailed automatically.
+  const setPrivateStatus = async (e, source, id, status) => {
+    e.stopPropagation();
+    try {
+      const token = localStorage.getItem("token");
+      const r = await fetch(`${API_BASE_URL}/api/recruiter/candidate-status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ source, candidateId: id, status }),
+      });
+      if (!r.ok) throw new Error("Update failed");
+      setMyStatuses(prev => ({ ...prev, [`${source}:${id}`]: status }));
+      showSuccess(`Marked as ${status}`);
+    } catch (err) { showError(err.message); }
   };
 
   const updateStatus = async (e, id, status) => {
@@ -539,7 +576,7 @@ export default function RecruiterDashboard() {
                           </div>
                         )}
 
-                        <div style={{ display: "flex", gap: 8, marginTop: 12 }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }} onClick={e => e.stopPropagation()}>
                           {[
                             { status: "shortlist", label: "Shortlist", color: "#1d4ed8", activeBg: "#EFF6FF" },
                             { status: "hold", label: "Hold", color: "#C2410C", activeBg: "#FFF7ED" },
@@ -557,6 +594,32 @@ export default function RecruiterDashboard() {
                             </button>
                           )}
                         </div>
+
+                        {/* Private status — only visible to you, not other recruiters. Admin can see it. */}
+                        {(() => {
+                          const src = c.is_bulk ? "bulk" : "referred";
+                          const myKey = `${src}:${c.id}`;
+                          const mine = myStatuses[myKey];
+                          return (
+                            <div onClick={e => e.stopPropagation()} style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${BORDER}` }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+                                My Status <span style={{ fontWeight: 500, textTransform: "none", color: "#cbd5e1" }}>(private — only visible to you & admin)</span>
+                              </div>
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                {PRIVATE_STATUS_OPTIONS.map(opt => {
+                                  const sc = PRIVATE_STATUS_COLORS[opt];
+                                  const active = mine === opt;
+                                  return (
+                                    <button key={opt} onClick={e => setPrivateStatus(e, src, c.id, opt)}
+                                      style={{ padding: "6px 14px", borderRadius: 8, border: `1.5px solid ${sc.color}`, backgroundColor: active ? sc.bg : "#fff", color: sc.color, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                                      {opt}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })}
