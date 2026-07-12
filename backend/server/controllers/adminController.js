@@ -11,8 +11,7 @@ const ADMIN_EMAIL = "shyampickyourhire@gmail.com";
 // Shared list of valid candidate pipeline statuses (portal + bulk candidates)
 export const CANDIDATE_STATUSES = [
   'New', 'Contacted', 'Interested', 'Not Interested', 'No Response',
-  'Follow-up Required', 'In Review', 'Shortlisted',
-  'Interview Scheduled', 'Interview Cleared', 'Offered',
+  'Shortlisted', 'Interview Scheduled', 'Interview Cleared', 'Offered',
   'Hired', 'Rejected', 'On Hold'
 ];
 
@@ -370,8 +369,8 @@ export const getReferrerIncentive = async (req, res) => {
 
 // workflow status admin assigns to a referral (pending/shortlist/reject/hold)
 const referralWorkflowStatusLabel = (status) => {
-  const map = { pending: "Pending", shortlist: "Shortlisted", reject: "Rejected", hold: "On Hold" };
-  return map[(status || "pending").toLowerCase()] || "Pending";
+  const map = { pending: "Referred", shortlist: "Shortlisted", reject: "Rejected", hold: "On Hold" };
+  return map[(status || "pending").toLowerCase()] || "Referred";
 };
 
 // GET /api/admin/referrals — all candidates referred by referrers, for the "Referred Candidates" directory
@@ -399,6 +398,48 @@ export const getReferralsForAdmin = async (req, res) => {
   } catch (err) {
     console.error("getReferralsForAdmin error:", err);
     res.status(500).json({ message: "Failed to fetch referrals" });
+  }
+};
+
+// GET /api/admin/recruiter-candidate-statuses — admin-only view of every recruiter's
+// private candidate status tags (Shortlisted / In Process / On Hold / Offer Given).
+// Individual recruiters never see each other's tags — only admin sees this list.
+export const getRecruiterCandidateStatuses = async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const rows = (await pool.query(
+      `SELECT rcs.id, rcs.source, rcs.candidate_id, rcs.status, rcs.updated_at,
+              rc.name AS recruiter_name, rc.email AS recruiter_email, rc.id AS recruiter_id
+       FROM recruiter_candidate_status rcs
+       LEFT JOIN users rc ON rc.id = rcs.recruiter_id
+       ORDER BY rcs.updated_at DESC`
+    )).rows;
+
+    // Resolve candidate name/email per source in bulk
+    const bySource = { portal: [], bulk: [], referred: [] };
+    rows.forEach(r => bySource[r.source]?.push(r.candidate_id));
+
+    const nameMaps = {};
+    for (const source of ["portal", "bulk", "referred"]) {
+      const ids = [...new Set(bySource[source])];
+      if (!ids.length) { nameMaps[source] = {}; continue; }
+      const table = source === "portal" ? "users" : source === "bulk" ? "bulk_candidates" : "referrals";
+      const roleClause = source === "portal" ? "AND role='candidate'" : "";
+      const r = await pool.query(`SELECT id, name, email FROM ${table} WHERE id = ANY($1) ${roleClause}`, [ids]);
+      nameMaps[source] = Object.fromEntries(r.rows.map(x => [x.id, x]));
+    }
+
+    const enriched = rows.map(r => ({
+      ...r,
+      candidate_name: nameMaps[r.source]?.[r.candidate_id]?.name || "Unknown",
+      candidate_email: nameMaps[r.source]?.[r.candidate_id]?.email || "",
+    }));
+
+    res.json({ statuses: enriched });
+  } catch (err) {
+    console.error("getRecruiterCandidateStatuses error:", err);
+    res.status(500).json({ message: "Failed to fetch recruiter candidate statuses" });
   }
 };
 
@@ -1432,7 +1473,6 @@ const normalizeReferralSkills = (raw) => {
 const referralStatusLabel = (referral_status) => {
   const map = {
     pending_candidate_acceptance: "Awaiting Candidate",
-    pending: "Pending Review",
     accepted: "Accepted",
     shortlist: "Shortlisted",
     reject: "Rejected",
