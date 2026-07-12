@@ -32,6 +32,7 @@ import {
   updateUnifiedCandidateStatus,
   exportUnifiedCandidateStatusCSV,
   getReferralsForAdmin,
+  getRecruiterCandidateStatuses,
   getRecruiterApprovalCenter,
   getRecruiterDetails,
   exportRecruitersCSV,
@@ -114,6 +115,7 @@ router.get("/candidate-status/overview", protect, getUnifiedCandidateStatusOverv
 router.get("/candidate-status/export", protect, exportUnifiedCandidateStatusCSV);
 router.put("/candidate-status/:source/:id", protect, updateUnifiedCandidateStatus);
 router.get("/referrals", protect, getReferralsForAdmin);
+router.get("/recruiter-candidate-statuses", protect, getRecruiterCandidateStatuses);
 
 // PROJECT PARSING (admin can trigger for any candidate)
 router.post("/candidates/:userId/parse-projects", protect, adminParseProjects);
