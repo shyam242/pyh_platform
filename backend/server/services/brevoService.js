@@ -144,6 +144,56 @@ export const sendCandidateReferralEmail = async (
 };
 
 /**
+ * Notify a referrer that the candidate they referred has moved to a new status
+ * (Shortlisted / In Process / On Hold / Offer Given)
+ */
+export const sendReferralStatusUpdateEmail = async (
+  referrerEmail,
+  referrerName,
+  candidateName,
+  newStatus
+) => {
+  const statusColors = {
+    "Shortlisted": "#1d4ed8",
+    "In Process": "#7c3aed",
+    "On Hold": "#C2410C",
+    "Offer Given": "#15803d",
+  };
+  const color = statusColors[newStatus] || "#007bff";
+
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #333;">Update on Your Referral</h2>
+
+      <p>Hi ${referrerName || "there"},</p>
+
+      <p>Good news — there's an update on <strong>${candidateName}</strong>, the candidate you referred.</p>
+
+      <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+        <p style="margin: 0 0 8px; color: #666; font-size: 13px;">Current Status</p>
+        <p style="margin: 0; font-size: 20px; font-weight: bold; color: ${color};">${newStatus}</p>
+      </div>
+
+      <p>Thanks for referring great talent to us. Log in to your referrer dashboard to see full details.</p>
+
+      <p style="color: #666; font-size: 14px; margin-top: 30px;">
+        If you have any questions, feel free to reach out to our team.
+      </p>
+
+      <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+      <p style="color: #999; font-size: 11px; text-align: center;">PYH Consultants Recruiter Platform</p>
+    </div>
+  `;
+
+  return sendEmail(
+    referrerEmail,
+    `Update: ${candidateName}'s status is now "${newStatus}"`,
+    htmlContent,
+    referrerName
+  );
+};
+
+/**
  * Send admin notification for pending recruiter approval
  */
 export const sendAdminRecruiterApprovalEmail = async (
