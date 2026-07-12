@@ -30,8 +30,6 @@ const scoreColor = score => {
   if (score >= 50) return { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" };
   return { bg: "#FEF2F2", color: "#dc2626", border: "#FECACA" };
 };
-
-// ─── CSV EXPORT HELPERS ────────────────────────────────────────
 const sanitizeFilename = s => (s || "").toString().trim().replace(/[^a-z0-9]+/gi, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "candidate";
 
 const csvEscape = val => {
@@ -415,10 +413,8 @@ export default function JDMatchPage() {
             )}
           </div>
         )}
-
         {viewMode === "new" && (
         <>
-        {/* ─── STEP 1: Upload JD ─── */}
         {step === 1 && (
           <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "28px 32px" }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
@@ -456,8 +452,6 @@ export default function JDMatchPage() {
             </button>
           </div>
         )}
-
-        {/* ─── STEP 2: Filters ─── */}
         {step === 2 && jdParsed && (
           <div>
             {/* JD summary card */}
@@ -527,8 +521,6 @@ export default function JDMatchPage() {
             </div>
           </div>
         )}
-
-        {/* ─── STEP 3: Candidate selection ─── */}
         {step === 3 && (
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -582,8 +574,6 @@ export default function JDMatchPage() {
             </button>
           </div>
         )}
-
-        {/* ─── STEP 4: Results ─── */}
         {step === 4 && (
           <div>
             {analyzing && (
@@ -633,7 +623,6 @@ export default function JDMatchPage() {
                             <div style={{ fontSize: 15, fontWeight: 700 }}>{r.name}</div>
                             <div style={{ fontSize: 12, color: "#94a3b8" }}>{r.source_type === "bulk" ? "Bulk uploaded" : "Referral"}</div>
                           </div>
-                          {/* Score on right */}
                           <div style={{ textAlign: "center" }}>
                             <div style={{ fontSize: 24, fontWeight: 700, color: sc.color, lineHeight: 1 }}>{r.weighted_score}</div>
                             <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase" }}>Score</div>
@@ -643,7 +632,6 @@ export default function JDMatchPage() {
 
                         {isExpanded && (
                           <div style={{ padding: "0 20px 20px", borderTop: `1px solid #F8FAFC` }}>
-                            {/* Subscores */}
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, margin: "16px 0" }}>
                               {Object.entries(r.subscores).map(([key, val]) => (
                                 <div key={key} style={{ backgroundColor: "#F8FAFC", borderRadius: 10, padding: "10px 12px" }}>
@@ -652,8 +640,6 @@ export default function JDMatchPage() {
                                 </div>
                               ))}
                             </div>
-
-                            {/* Matched/missing skills */}
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
                               <div>
                                 <div style={{ fontSize: 11, fontWeight: 700, color: "#3B6D11", textTransform: "uppercase", marginBottom: 6 }}>Matched Skills</div>
@@ -681,8 +667,6 @@ export default function JDMatchPage() {
                                 ))}
                               </div>
                             )}
-
-                            {/* Concerns */}
                             {r.concerns?.length > 0 && (
                               <div style={{ marginBottom: 14 }}>
                                 <div style={{ fontSize: 11, fontWeight: 700, color: "#C2410C", textTransform: "uppercase", marginBottom: 8 }}>Concerns</div>
