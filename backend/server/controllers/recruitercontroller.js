@@ -2,6 +2,7 @@ import pool from "../config/db.js";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { sendReferralStatusUpdateEmail } from "../services/emailService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,6 +62,91 @@ export const updateStatus = async (req, res) => {
   );
 
   res.json({ message: "Updated" });
+};
+
+// ════════════════════════════════════════════════════════════════
+// PRIVATE PER-RECRUITER CANDIDATE STATUS
+// A recruiter can tag ANY candidate (portal / bulk / referred) with one of
+// these 4 pipeline statuses. It is private to that recruiter — other
+// recruiters never see it. Admin can see every recruiter's tags.
+// If the candidate was referred, the referrer gets an email on change.
+// ════════════════════════════════════════════════════════════════
+export const RECRUITER_CANDIDATE_STATUSES = ["Shortlisted", "In Process", "On Hold", "Offer Given"];
+
+const getCandidateNameForSource = async (source, candidateId) => {
+  if (source === "portal") {
+    const r = await pool.query("SELECT name, email FROM users WHERE id=$1 AND role='candidate'", [candidateId]);
+    return r.rows[0] || null;
+  }
+  if (source === "bulk") {
+    const r = await pool.query("SELECT name, email FROM bulk_candidates WHERE id=$1", [candidateId]);
+    return r.rows[0] || null;
+  }
+  if (source === "referred") {
+    const r = await pool.query(
+      `SELECT r.name, r.email, r.referrer_id, u.name AS referrer_name, u.email AS referrer_email
+       FROM referrals r LEFT JOIN users u ON u.id = r.referrer_id WHERE r.id=$1`,
+      [candidateId]
+    );
+    return r.rows[0] || null;
+  }
+  return null;
+};
+
+// PUT /api/recruiter/candidate-status  { source, candidateId, status }
+export const setCandidateStatus = async (req, res) => {
+  try {
+    const recruiterId = req.user.id;
+    const { source, candidateId, status } = req.body;
+
+    if (!["portal", "bulk", "referred"].includes(source)) {
+      return res.status(400).json({ message: "Invalid source" });
+    }
+    if (!candidateId) {
+      return res.status(400).json({ message: "candidateId is required" });
+    }
+    if (!RECRUITER_CANDIDATE_STATUSES.includes(status)) {
+      return res.status(400).json({ message: "Invalid status. Valid: " + RECRUITER_CANDIDATE_STATUSES.join(", ") });
+    }
+
+    const candidate = await getCandidateNameForSource(source, candidateId);
+    if (!candidate) return res.status(404).json({ message: "Candidate not found" });
+
+    const result = await pool.query(
+      `INSERT INTO recruiter_candidate_status (recruiter_id, source, candidate_id, status, updated_at)
+       VALUES ($1,$2,$3,$4,NOW())
+       ON CONFLICT (recruiter_id, source, candidate_id)
+       DO UPDATE SET status=$4, updated_at=NOW()
+       RETURNING *`,
+      [recruiterId, source, candidateId, status]
+    );
+
+    // Notify the referrer by email, if this candidate came through a referral
+    if (source === "referred" && candidate.referrer_email) {
+      sendReferralStatusUpdateEmail(candidate.referrer_email, candidate.referrer_name, candidate.name, status)
+        .catch(err => console.error("Failed to send referral status update email:", err));
+    }
+
+    res.json({ message: "Status updated", data: result.rows[0] });
+  } catch (error) {
+    console.error("Error setting candidate status:", error);
+    res.status(500).json({ error: "Failed to update status" });
+  }
+};
+
+// GET /api/recruiter/candidate-statuses — this recruiter's own private status tags
+export const getMyCandidateStatuses = async (req, res) => {
+  try {
+    const recruiterId = req.user.id;
+    const result = await pool.query(
+      "SELECT source, candidate_id, status, updated_at FROM recruiter_candidate_status WHERE recruiter_id=$1",
+      [recruiterId]
+    );
+    res.json({ statuses: result.rows });
+  } catch (error) {
+    console.error("Error fetching candidate statuses:", error);
+    res.status(500).json({ error: "Failed to fetch statuses" });
+  }
 };
 
 export const verifyProfile = async (req, res) => {
