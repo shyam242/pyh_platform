@@ -12,7 +12,9 @@ import {
   getReferralDetails,
   getApprovalStatus,
   trackResumeView,
-  getResumeViewStats
+  getResumeViewStats,
+  setCandidateStatus,
+  getMyCandidateStatuses
 } from "../controllers/recruitercontroller.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { analyzeCandidate, matchJD } from "../controllers/aiController.js";
@@ -47,6 +49,10 @@ router.get("/:referralId/cv/download", protect, checkRecruiterApproved, download
 router.get("/candidate/:userId/resume/download", protect, checkRecruiterApproved, downloadCandidateResume);
 router.post("/track-view", protect, trackResumeView);
 router.get("/resume-view-stats", protect, getResumeViewStats);
+
+// Private per-recruiter candidate status (not visible to other recruiters)
+router.put("/candidate-status", protect, checkRecruiterApproved, setCandidateStatus);
+router.get("/candidate-statuses", protect, checkRecruiterApproved, getMyCandidateStatuses);
 
 router.post("/ai/analyze/:referralId", protect, checkRecruiterApproved, analyzeCandidate);
 router.post("/ai/match-jd/:referralId", protect, checkRecruiterApproved, matchJD);
