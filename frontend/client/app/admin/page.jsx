@@ -7,7 +7,7 @@ import {
   UserPlus, Zap, BarChart2, Home, Search, Filter, Eye,
   Mail, Phone, Building2, Calendar, Award, MoreVertical, ExternalLink,
   Pencil, Pause, Play, RotateCcw, MapPin, PlusCircle, Target, Sparkles, Plus,
-  CheckCircle2, XCircle
+  CheckCircle2, XCircle, Clock, ThumbsUp, ThumbsDown, PhoneOff, Star
 } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
@@ -27,6 +27,7 @@ export default function AdminDashboard() {
   const [dashboardData, setDashboardData] = useState(null);
   const [candidates, setCandidates] = useState([]);          // portal-registered (users table)
   const [referredCandidates, setReferredCandidates] = useState([]); // referrals table
+  const [recruiterStatuses, setRecruiterStatuses] = useState([]); // private per-recruiter candidate status tags (admin-only view)
   const [referrers, setReferrers] = useState([]);
   const [pendingRecruiters, setPendingRecruiters] = useState([]);
   const [approvedRecruiters, setApprovedRecruiters] = useState([]);
@@ -101,6 +102,7 @@ export default function AdminDashboard() {
     if (activeTab === "incentives") fetchReferrers();
     if (activeTab === "candidates") { fetchDashboardData(); fetchReferredCandidates(); }
     if (activeTab === "referred-candidates") fetchReferredCandidates();
+    if (activeTab === "recruiter-status") fetchRecruiterStatuses();
     if (activeTab === "jobs-list" || activeTab === "jobs") fetchJobs();
     if (activeTab === "manage-status") { fetchCandidateStatusList(); }
   }, [activeTab]);
@@ -121,7 +123,19 @@ export default function AdminDashboard() {
     try {
       const r = await axios.get(`${API_BASE_URL}/api/admin/referrals`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
       setReferredCandidates(Array.isArray(r.data) ? r.data : (r.data.referrals || []));
-    } catch { /* silently fail — endpoint may not exist yet */ }
+    } catch (err) {
+      console.error("Failed to load referred candidates:", err);
+      showError("Failed to load referred candidates");
+    }
+  };
+  const fetchRecruiterStatuses = async () => {
+    try {
+      const r = await axios.get(`${API_BASE_URL}/api/admin/recruiter-candidate-statuses`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+      setRecruiterStatuses(r.data.statuses || []);
+    } catch (err) {
+      console.error("Failed to load recruiter candidate statuses:", err);
+      showError("Failed to load recruiter statuses");
+    }
   };
   const fetchReferrers = async () => {
     try {
@@ -298,6 +312,7 @@ export default function AdminDashboard() {
     { id:"candidates", label:"Total Candidates" },
     { id:"referred-candidates", label:"Referred Candidates" },
     { id:"manage-status", label:"Candidate Status" },
+    { id:"recruiter-status", label:"Recruiter Status" },
     { id:"pending-recruiters", label:"Pending Recruiters" },
     { id:"recruiters", label:"Approved Recruiters" },
     { id:"incentives", label:"Incentives" },
@@ -368,7 +383,7 @@ export default function AdminDashboard() {
             { id:"candidates", label:"Total Candidates", value:dashboardData.totalCandidates, change:"+20%", icon:Users, iconBg:"#EFF6FF", iconColor:"#1d4ed8", viewLabel:"View all candidates", viewHref:()=>setActiveTab("candidates"), details:[{label:"Active",value:candidates.filter(c=>c.status!=="rejected").length},{label:"New This Month",value:dashboardData.newCandidatesThisMonth??"—"},{label:"Shortlisted",value:dashboardData.shortlistedCandidates??"—"},{label:"Rejected",value:dashboardData.rejectedCandidates??"—"}], labelColor:"#1d4ed8" },
             { id:"referrers", label:"Total Referrers", value:dashboardData.totalReferrers, change:"+25%", icon:Users, iconBg:"#DCFCE7", iconColor:"#15803d", viewLabel:"View all referrers", viewHref:()=>{window.location.href="/admin/referrers";}, details:[{label:"Active Referrers",value:referrers.filter(r=>(r.referral_count||0)>0).length||"—"},{label:"New This Month",value:dashboardData.newReferrersThisMonth??"—"},{label:"Inactive",value:referrers.filter(r=>!(r.referral_count>0)).length||"—"},{label:"Top Referrer",value:topRef?.name?.split(" ")[0]||"—"}], labelColor:"#15803d" },
             { id:"recruiters", label:"Recruiters (Approved)", value:dashboardData.approvedRecruiters, change:"+100%", icon:ShieldCheck, iconBg:"#F3E8FF", iconColor:"#7c3aed", viewLabel:"View all recruiters", viewHref:()=>setActiveTab("recruiters"), details:[{label:"Pending Approval",value:pendingRecruiters.length},{label:"Approved",value:dashboardData.approvedRecruiters},{label:"Rejected",value:dashboardData.rejectedRecruiters??"—"},{label:"Total",value:(pendingRecruiters.length||0)+(dashboardData.approvedRecruiters||0)}], labelColor:"#7c3aed" },
-            { id:"referrals", label:"Total Referrals", value:dashboardData.totalReferrals, change:"+30%", icon:Megaphone, iconBg:"#FFF7ED", iconColor:O, viewLabel:"View referred candidates", viewHref:()=>setActiveTab("referred-candidates"), details:[{label:"Successful",value:dashboardData.successfulReferrals??"—"},{label:"Pending",value:dashboardData.pendingReferrals??"—"},{label:"Expired",value:dashboardData.expiredReferrals??"—"},{label:"Conversion Rate",value:dashboardData.conversionRate?`${dashboardData.conversionRate}%`:"—"}], labelColor:O },
+            { id:"referrals", label:"Total Referrals", value:referredCandidates.length, change:"+30%", icon:Megaphone, iconBg:"#FFF7ED", iconColor:O, viewLabel:"View referred candidates", viewHref:()=>setActiveTab("referred-candidates"), details:[{label:"Successful",value:dashboardData.successfulReferrals??"—"},{label:"Pending",value:dashboardData.pendingReferrals??"—"},{label:"Expired",value:dashboardData.expiredReferrals??"—"},{label:"Conversion Rate",value:dashboardData.conversionRate?`${dashboardData.conversionRate}%`:"—"}], labelColor:O },
           ];
           return (
             <div>
@@ -689,6 +704,66 @@ export default function AdminDashboard() {
             </div>
           );
         })()}
+
+        {/* ═══════════════════════════════════════════════ */}
+        {/* RECRUITER STATUS (admin-only, private tags)      */}
+        {/* ═══════════════════════════════════════════════ */}
+        {activeTab==="recruiter-status" && (() => {
+          const searched = recruiterStatuses.filter(s =>
+            !candidateSearch || [s.candidate_name, s.candidate_email, s.recruiter_name, s.status].filter(Boolean).join(" ").toLowerCase().includes(candidateSearch.toLowerCase())
+          );
+          const statusColor = { "Shortlisted":{c:"#1d4ed8",bg:"#EFF6FF",b:"#BFDBFE"}, "In Process":{c:"#7c3aed",bg:"#F3E8FF",b:"#DDD6FE"}, "On Hold":{c:"#C2410C",bg:"#FFF7ED",b:"#FED7AA"}, "Offer Given":{c:"#15803d",bg:"#DCFCE7",b:"#86efac"} };
+          return (
+            <div>
+              <BackBtn/>
+              <TabHeader title={`Recruiter Candidate Statuses (${recruiterStatuses.length})`} subtitle="Private status tags each recruiter has set on candidates — visible only to admin, never to other recruiters"/>
+              <div style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:16, overflow:"hidden" }}>
+                <div style={{ padding:"16px 24px", borderBottom:`1.5px solid ${BORDER}`, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <ShieldCheck size={16} color={O}/>
+                    <span style={{ fontWeight:700, fontSize:15 }}>Recruiter Status Log</span>
+                    <span style={{ fontSize:12, color:"#94a3b8", marginLeft:4 }}>{searched.length} shown</span>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, backgroundColor:"#F8FAFC" }}>
+                    <Search size={14} color="#94a3b8"/>
+                    <input value={candidateSearch} onChange={e=>setCandidateSearch(e.target.value)} placeholder="Search..."
+                      style={{ border:"none", outline:"none", fontSize:13, background:"transparent", fontFamily:"inherit", width:160 }}/>
+                    {candidateSearch && <button onClick={()=>setCandidateSearch("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", display:"flex" }}><X size={13}/></button>}
+                  </div>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1.5fr 1.5fr", gap:8, padding:"10px 24px", backgroundColor:"#F8FAFC", borderBottom:`1px solid ${BORDER}`, fontSize:11, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                  <span>Candidate</span><span>Recruiter</span><span>Source</span><span>Status</span><span>Updated</span>
+                </div>
+                {searched.length===0 ? (
+                  <div style={{ padding:"60px", textAlign:"center" }}>
+                    <ShieldCheck size={40} color="#E5E7EB" style={{ display:"block", margin:"0 auto 12px" }}/>
+                    <p style={{ color:"#94a3b8", margin:0 }}>No recruiter status tags yet</p>
+                  </div>
+                ) : searched.map(s=>{
+                  const sc = statusColor[s.status] || { c:"#475569", bg:"#F1F5F9", b:"#CBD5E1" };
+                  return (
+                    <div key={s.id}
+                      style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr 1.5fr 1.5fr", gap:8, padding:"14px 24px", borderBottom:`1px solid #F8FAFC`, alignItems:"center" }}
+                      onMouseEnter={e=>e.currentTarget.style.backgroundColor=O_LITE}
+                      onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
+                      <div>
+                        <div style={{ fontSize:14, fontWeight:600 }}>{s.candidate_name||"—"}</div>
+                        <div style={{ fontSize:12, color:"#94a3b8" }}>{s.candidate_email||""}</div>
+                      </div>
+                      <div style={{ fontSize:13, color:"#475569" }}>{s.recruiter_name||"—"}</div>
+                      <div><Badge label={s.source} color="#475569" bg="#F1F5F9" border="#CBD5E1"/></div>
+                      <div><Badge label={s.status} color={sc.c} bg={sc.bg} border={sc.b}/></div>
+                      <div style={{ fontSize:12, color:"#64748b", display:"flex", alignItems:"center", gap:5 }}>
+                        <Calendar size={12}/> {fmtDate(s.updated_at)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
 
         {/* ═══════════════════════════════════════════════ */}
         {/* PENDING RECRUITERS                              */}
@@ -1717,10 +1792,11 @@ export default function AdminDashboard() {
           const statusStyle = (s) => {
             const map = {
               "Hired":["#DCFCE7","#15803d"],"Offered":["#EFF6FF","#1d4ed8"],"Interview Scheduled":["#F3E8FF","#7c3aed"],
-              "Shortlisted":["#ECFDF5","#059669"],"Contacted":["#F8FAFC","#64748b"],"In Review":["#FFF7ED",O],
+              "Interview Cleared":["#ECFEFF","#0891b2"],
+              "Shortlisted":["#ECFDF5","#059669"],"Contacted":["#F8FAFC","#64748b"],
               "Rejected":["#FEF2F2","#dc2626"],"On Hold":["#FEF3C7","#d97706"],"Interested":["#DCFCE7","#15803d"],
               "Not Interested":["#FEF2F2","#dc2626"],"No Response":["#F8FAFC","#94a3b8"],
-              "Awaiting Candidate":["#FFF7ED",O],"Accepted":["#DCFCE7","#15803d"],"Pending Review":["#F8FAFC","#64748b"],
+              "Awaiting Candidate":["#FFF7ED",O],"Accepted":["#DCFCE7","#15803d"],
               "Referred":["#F3E8FF","#7c3aed"],
             };
             return map[s]||["#F8FAFC","#64748b"];
@@ -1790,11 +1866,19 @@ export default function AdminDashboard() {
                   {[
                     { Icon:Users, label:"Total Candidates", value:statusCandidates.length, color:"#1d4ed8", bg:"#EFF6FF" },
                     { Icon:Phone, label:"Contacted", value:statusCounts["Contacted"]||0, color:"#64748b", bg:"#F8FAFC" },
+                    { Icon:ThumbsUp, label:"Interested", value:statusCounts["Interested"]||0, color:"#15803d", bg:"#DCFCE7" },
+                    { Icon:ThumbsDown, label:"Not Interested", value:statusCounts["Not Interested"]||0, color:"#dc2626", bg:"#FEF2F2" },
+                    { Icon:PhoneOff, label:"No Response", value:statusCounts["No Response"]||0, color:"#94a3b8", bg:"#F8FAFC" },
+                    { Icon:Star, label:"Shortlisted", value:statusCounts["Shortlisted"]||0, color:"#059669", bg:"#ECFDF5" },
                     { Icon:Calendar, label:"Interview Scheduled", value:statusCounts["Interview Scheduled"]||0, color:"#7c3aed", bg:"#F3E8FF" },
+                    { Icon:CheckCircle2, label:"Interview Cleared", value:statusCounts["Interview Cleared"]||0, color:"#0891b2", bg:"#ECFEFF" },
                     { Icon:Briefcase, label:"Offered", value:statusCounts["Offered"]||0, color:O, bg:O_LITE },
                     { Icon:CheckCircle2, label:"Hired", value:statusCounts["Hired"]||0, color:"#15803d", bg:"#DCFCE7" },
                     { Icon:XCircle, label:"Rejected", value:statusCounts["Rejected"]||0, color:"#dc2626", bg:"#FEF2F2" },
                     { Icon:Pause, label:"On Hold", value:statusCounts["On Hold"]||0, color:"#d97706", bg:"#FEF3C7" },
+                    { Icon:Clock, label:"Awaiting Candidate", value:statusCounts["Awaiting Candidate"]||0, color:O, bg:O_LITE },
+                    { Icon:UserCheck, label:"Accepted", value:statusCounts["Accepted"]||0, color:"#15803d", bg:"#DCFCE7" },
+                    { Icon:Megaphone, label:"Referred", value:statusCounts["Referred"]||0, color:"#7c3aed", bg:"#F3E8FF" },
                   ].map(s=>(
                     <div key={s.label} onClick={()=>setStatusFilter2(f=>f===s.label?"all":s.label)}
                       style={{ cursor:"pointer", textAlign:"center", minWidth:110, padding:"12px 14px", borderRadius:12, border:`1.5px solid ${statusFilter2===s.label?s.color:BORDER}`, backgroundColor:statusFilter2===s.label?s.bg:"#fff", opacity: statusFilter2!=="all"&&statusFilter2!==s.label?0.55:1, transition:"all 0.15s" }}>
@@ -1829,7 +1913,7 @@ export default function AdminDashboard() {
                 <select value={statusFilter2} onChange={e=>setStatusFilter2(e.target.value)}
                   style={{ padding:"8px 14px", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:12, fontFamily:"inherit", color:"#374151", backgroundColor:"#fff", cursor:"pointer" }}>
                   <option value="all">All Status</option>
-                  {["Contacted","Interested","Not Interested","No Response","Follow-up Required","In Review","Shortlisted","Interview Scheduled","Interview Cleared","Offered","Hired","Rejected","On Hold","Awaiting Candidate","Accepted","Pending Review","Referred"].map(s=><option key={s}>{s}</option>)}
+                  {["Contacted","Interested","Not Interested","No Response","Shortlisted","Interview Scheduled","Interview Cleared","Offered","Hired","Rejected","On Hold","Awaiting Candidate","Accepted","Referred"].map(s=><option key={s}>{s}</option>)}
                 </select>
                 {/* Location filter */}
                 <select value={locationFilter} onChange={e=>setLocationFilter(e.target.value)}
@@ -1896,7 +1980,7 @@ export default function AdminDashboard() {
                             onChange={e=>handleUpdateCandidateStatus(c._source,c.id,e.target.value)}
                             disabled={updatingStatus===c.id}
                             style={{ padding:"5px 10px", border:`1.5px solid ${BORDER}`, borderRadius:8, fontSize:11, fontWeight:700, color:ssFg, backgroundColor:ssBg, cursor:updatingStatus===c.id?"not-allowed":"pointer", fontFamily:"inherit", opacity:updatingStatus===c.id?0.5:1, outline:"none" }}>
-                            {["Contacted","Interested","Not Interested","No Response","Follow-up Required","In Review","Shortlisted","Interview Scheduled","Interview Cleared","Offered","Hired","Rejected","On Hold"].map(s=><option key={s} value={s}>{s}</option>)}
+                            {["Contacted","Interested","Not Interested","No Response","Shortlisted","Interview Scheduled","Interview Cleared","Offered","Hired","Rejected","On Hold"].map(s=><option key={s} value={s}>{s}</option>)}
                           </select>
                         ) : (
                           <span title="Referral status is managed on the Referred Candidates page" style={{ padding:"5px 10px", borderRadius:8, fontSize:11, fontWeight:700, color:ssFg, backgroundColor:ssBg, border:`1.5px solid ${BORDER}` }}>{c.candidate_status||"Referred"}</span>
