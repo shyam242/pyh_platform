@@ -1,6 +1,7 @@
 import express from "express";
 import multer from "multer";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { protect } from "../middleware/authMiddleware.js";
 import {
@@ -25,6 +26,7 @@ import {
   updateBulkCandidateStatus,
   getCandidateStatusStats,
   bulkUploadResumeLinks,
+  bulkUploadResumeFiles,
   updateBulkCandidateDetails,
   updateCandidateDetails,
   getUnifiedCandidateStatusList,
@@ -66,6 +68,30 @@ const upload = multer({
   },
 });
 
+// Setup multer for direct resume file uploads (PDFs, up to 50 at once)
+const resumeUploadDir = path.join(__dirname, "../../uploads/resumes/bulk");
+if (!fs.existsSync(resumeUploadDir)) fs.mkdirSync(resumeUploadDir, { recursive: true });
+
+const resumeStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, resumeUploadDir),
+  filename: (req, file, cb) => {
+    const uniqueName = `resume-${Date.now()}-${Math.round(Math.random() * 1e9)}-${file.originalname.replace(/\s+/g, "_")}`;
+    cb(null, uniqueName);
+  },
+});
+
+const uploadResumes = multer({
+  storage: resumeStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB per file
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === "application/pdf" || file.originalname.toLowerCase().endsWith(".pdf")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only PDF files are allowed"));
+    }
+  },
+});
+
 // DASHBOARD
 router.get("/dashboard", protect, getDashboardData);
 
@@ -100,6 +126,7 @@ router.post("/bulk-upload/jobs", protect, bulkUploadJobs);
 router.post("/bulk-upload/candidates", protect, bulkUploadCandidates);
 router.post("/bulk-upload/csv", protect, upload.single("csvFile"), uploadCandidatesCSV);
 router.post("/bulk-upload/resume-links", protect, bulkUploadResumeLinks);
+router.post("/bulk-upload/resume-files", protect, uploadResumes.array("resumes", 50), bulkUploadResumeFiles);
 router.get("/bulk-candidates", protect, getBulkUploadedCandidates);
 router.delete("/bulk-candidates/:candidateId", protect, deleteBulkCandidate);
 
