@@ -4,6 +4,22 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { sendReferralStatusUpdateEmail } from "../services/emailService.js";
 
+// Proxy-download a remote file (e.g. Supabase storage URL) through our own API instead of
+// issuing a 302 redirect. A redirect hands control to the browser, which can fail silently
+// (shows as a generic "Download failed") if the storage bucket doesn't send the right CORS/
+// content-disposition headers back to a fetch()/blob() call. Streaming it ourselves guarantees
+// a normal 200 response with the filename we want, from our own origin.
+const streamRemoteFile = async (url, res, filename) => {
+  const upstream = await fetch(url);
+  if (!upstream.ok || !upstream.body) {
+    throw new Error(`Upstream file fetch failed (${upstream.status})`);
+  }
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.setHeader("Content-Type", upstream.headers.get("content-type") || "application/octet-stream");
+  const buffer = Buffer.from(await upstream.arrayBuffer());
+  res.send(buffer);
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -195,9 +211,16 @@ export const downloadReferralCv = async (req, res) => {
       return res.status(404).json({ error: "No CV uploaded for this candidate" });
     }
 
-    // If cv_file is a URL (Supabase or external), redirect to it
+    // If cv_file is a URL (Supabase or external), proxy-download it instead of redirecting,
+    // so the browser always gets a clean 200 response with the right filename/headers.
     if (cv_file.startsWith("http://") || cv_file.startsWith("https://")) {
-      return res.redirect(cv_file);
+      try {
+        await streamRemoteFile(cv_file, res, `${name}-CV.pdf`);
+      } catch (e) {
+        console.error("Error proxying CV download:", e);
+        res.status(502).json({ error: "Could not fetch the CV from storage. Please try again or ask the referrer to re-upload." });
+      }
+      return;
     }
 
     const filePath = path.join(__dirname, "../../uploads/cv", cv_file);
@@ -237,6 +260,16 @@ export const downloadCandidateResume = async (req, res) => {
 
     if (!resume) {
       return res.status(404).json({ error: "Resume not found for this user" });
+    }
+
+    if (resume.startsWith("http://") || resume.startsWith("https://")) {
+      try {
+        await streamRemoteFile(resume, res, `${name}-Resume.pdf`);
+      } catch (e) {
+        console.error("Error proxying resume download:", e);
+        res.status(502).json({ error: "Could not fetch the resume from storage. Please try again." });
+      }
+      return;
     }
 
     const filePath = path.join(__dirname, "../../uploads/resumes", resume);
