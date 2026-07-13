@@ -272,3 +272,16 @@ export const parseResumeFromURL = async (resumeUrl) => {
   const parsed = parseResumeText(text);
   return { ...parsed, resume_link: resumeUrl };
 };
+
+// Same pipeline, but for a PDF buffer already on our server (direct file upload)
+// instead of one we have to download from a URL first.
+export const parseResumeFromBuffer = async (buffer) => {
+  if (buffer.length < 4 || buffer.slice(0, 4).toString("ascii") !== "%PDF") {
+    throw new Error("Invalid PDF structure — the uploaded file is not a valid PDF.");
+  }
+  const text = await extractTextFromPDF(buffer);
+  if (!text || text.trim().length < 50) {
+    throw new Error("PDF has no readable text (may be scanned/image-based)");
+  }
+  return parseResumeText(text);
+};
