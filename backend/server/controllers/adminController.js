@@ -2,7 +2,7 @@ import pool from "../config/db.js";
 import fs from "fs";
 import { parseCSVString, mapCandidateColumns } from "../services/csvParser.js";
 import { sendRecruiterApprovalEmail, sendRecruiterRejectionEmail } from "../services/brevoService.js";
-import { parseResumeFromURL } from "../services/resumeParserService.js"; // pure regex — no API key needed
+import { parseResumeFromURL, parseResumeFromBuffer } from "../services/resumeParserService.js"; // pure regex — no API key needed
 import { computeSuitabilityScore } from "../services/suitabilityScoreService.js";
 import { upsertJobOnPublicSite } from "../services/publicSiteSync.js";
 
@@ -1331,6 +1331,96 @@ export const bulkUploadResumeLinks = async (req, res) => {
   } catch (err) {
     console.error("bulkUploadResumeLinks error:", err);
     res.status(500).json({ message: "Failed to process resume links" });
+  }
+};
+
+// DIRECT UPLOAD: BULK UPLOAD CANDIDATES FROM RESUME FILES (AI-parsed)
+// POST /api/admin/bulk-upload/resume-files  (multipart/form-data, field: "resumes", up to 50 files)
+export const bulkUploadResumeFiles = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+
+    const adminCheck = await pool.query("SELECT role FROM users WHERE id=$1", [adminId]);
+    if (!adminCheck.rows.length || adminCheck.rows[0].role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin only." });
+    }
+
+    const files = req.files || [];
+    if (!files.length) {
+      return res.status(400).json({ message: "No resume files uploaded" });
+    }
+    if (files.length > 50) {
+      return res.status(400).json({ message: "Maximum 50 files per batch" });
+    }
+
+    const results = [];
+    const errors = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const parsed = await parseResumeFromBuffer(file.buffer);
+        const resumeLink = `${process.env.BACKEND_URL || "https://api.pickyourhire.com"}/uploads/resumes/bulk/${file.filename}`;
+
+        const countResult = await pool.query("SELECT COUNT(*) FROM bulk_candidates");
+        const seq = parseInt(countResult.rows[0].count) + 1;
+        const candidateId = `RES-${new Date().getFullYear()}-${String(seq).padStart(5, "0")}`;
+
+        if (parsed.email) {
+          const existing = await pool.query("SELECT id FROM bulk_candidates WHERE email=$1", [parsed.email]);
+          if (existing.rows.length > 0) {
+            errors.push({ index: i + 1, file: file.originalname, error: `Email ${parsed.email} already exists` });
+            continue;
+          }
+        }
+
+        const result = await pool.query(
+          `INSERT INTO bulk_candidates(
+            candidate_id, name, contact, email, experience, skills,
+            current_location, current_company_name, highest_qualification,
+            technical_skills, soft_skills, linkedin, resume_link,
+            uploaded_by, status, role
+          ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          RETURNING *`,
+          [
+            candidateId,
+            parsed.name || "Unknown",
+            parsed.contact || "",
+            parsed.email || null,
+            parsed.experience || "",
+            parsed.skills || "",
+            parsed.location || "",
+            parsed.current_company_name || "",
+            parsed.highest_qualification || "",
+            parsed.technical_skills || "",
+            parsed.soft_skills || "",
+            parsed.linkedin || "",
+            resumeLink,
+            adminId,
+            "pending",
+            "",
+          ]
+        );
+
+        results.push(result.rows[0]);
+        console.log(`✓ Parsed uploaded resume ${i + 1}/${files.length}: ${parsed.name} (${candidateId})`);
+      } catch (err) {
+        console.error(`✗ Failed resume ${i + 1}: ${file.originalname} →`, err.message);
+        errors.push({ index: i + 1, file: file.originalname, error: err.message });
+      }
+    }
+
+    res.json({
+      message: "Resume upload & parsing completed",
+      parsedCount: results.length,
+      errorCount: errors.length,
+      totalFiles: files.length,
+      candidates: results,
+      errors,
+    });
+  } catch (err) {
+    console.error("bulkUploadResumeFiles error:", err);
+    res.status(500).json({ message: "Failed to process uploaded resumes" });
   }
 };
 
