@@ -1359,7 +1359,8 @@ export const bulkUploadResumeFiles = async (req, res) => {
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       try {
-        const parsed = await parseResumeFromBuffer(file.buffer);
+        const fileBuffer = fs.readFileSync(file.path);
+        const parsed = await parseResumeFromBuffer(fileBuffer);
         const resumeLink = `${process.env.BACKEND_URL || "https://api.pickyourhire.com"}/uploads/resumes/bulk/${file.filename}`;
 
         const countResult = await pool.query("SELECT COUNT(*) FROM bulk_candidates");
