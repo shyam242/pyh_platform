@@ -165,10 +165,16 @@ export default function RecruiterDashboard() {
 
   const downloadCV = async (e, referralId, name) => {
     e.stopPropagation();
+    const token = localStorage.getItem("token");
+    const downloadUrl = `${API_BASE_URL}/api/recruiter/${referralId}/cv/download`;
     try {
-      const token = localStorage.getItem("token");
-      const r = await fetch(`${API_BASE_URL}/api/recruiter/${referralId}/cv/download`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!r.ok) throw new Error("Download failed");
+      const r = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) {
+        // Surface the real reason instead of a generic "Download failed"
+        let message = `Download failed (${r.status})`;
+        try { const body = await r.json(); if (body?.error || body?.message) message = body.error || body.message; } catch {}
+        throw new Error(message);
+      }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url; a.download = `${name}-resume.pdf`;
@@ -180,7 +186,16 @@ export default function RecruiterDashboard() {
         body: JSON.stringify({ candidateId: referralId, candidateName: name, viewType: "referral_cv" }),
       }).catch(() => {});
       showSuccess("CV downloaded!");
-    } catch (err) { showError(err.message); }
+    } catch (err) {
+      // The fetch itself can fail (not just a non-2xx response) when the CV is redirected
+      // to external storage that doesn't send CORS headers back to a fetch()/blob() call.
+      // Fall back to a plain browser navigation, which isn't subject to that restriction.
+      if (err.message === "Failed to fetch" || err instanceof TypeError) {
+        window.open(`${downloadUrl}?token=${encodeURIComponent(token)}`, "_blank");
+        return;
+      }
+      showError(err.message);
+    }
   };
 
   const searchProjects = async () => {
@@ -204,9 +219,11 @@ export default function RecruiterDashboard() {
     ...bulkCandidates.map(c => ({ ...c, is_bulk: true })),
   ];
 
+  const isMineShortlisted = c => myStatuses[`${c.is_bulk ? "bulk" : "referred"}:${c.id}`] === "Shortlisted";
+
   const stats = {
     total: combined.length,
-    shortlisted: combined.filter(c => c.status === "shortlist").length,
+    shortlisted: combined.filter(isMineShortlisted).length,
     onHold: combined.filter(c => c.status === "hold").length,
     rejected: combined.filter(c => c.status === "reject").length,
   };
@@ -409,7 +426,7 @@ export default function RecruiterDashboard() {
             <div>
               <div style={{ marginBottom: 20 }}>
                 <h2 style={{ fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>{tab === "shortlisted" ? "Shortlisted Candidates" : "All Candidates"}</h2>
-                <p style={{ fontSize: 13, color: "#64748b", margin: 0 }}>{filtered.length} candidates</p>
+                <p style={{ fontSize: 13, color: "#64748b", margin: 0 }}>{(tab === "shortlisted" ? combined.filter(isMineShortlisted) : filtered).length} candidates</p>
               </div>
 
               {/* Search + Filter Bar */}
@@ -534,15 +551,17 @@ export default function RecruiterDashboard() {
               {/* List */}
               {loading ? (
                 <div style={{ padding: "48px", textAlign: "center", color: "#94a3b8", backgroundColor: "#fff", borderRadius: 14, border: `1.5px solid ${BORDER}` }}>Loading...</div>
-              ) : (tab === "shortlisted" ? combined.filter(c => c.status === "shortlist") : filtered).length === 0 ? (
+              ) : (tab === "shortlisted" ? combined.filter(isMineShortlisted) : filtered).length === 0 ? (
                 <div style={{ padding: "48px", textAlign: "center", backgroundColor: "#fff", borderRadius: 14, border: `1.5px solid ${BORDER}` }}>
                   <Users size={36} color="#E5E7EB" style={{ display: "block", margin: "0 auto 10px" }} />
                   <p style={{ color: "#94a3b8", margin: 0 }}>No candidates found</p>
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {(tab === "shortlisted" ? combined.filter(c => c.status === "shortlist") : filtered).map(c => {
-                    const sc = STATUS[c.status] || STATUS.default;
+                  {(tab === "shortlisted" ? combined.filter(isMineShortlisted) : filtered).map(c => {
+                    const src = c.is_bulk ? "bulk" : "referred";
+                    const mine = myStatuses[`${src}:${c.id}`];
+                    const sc = mine ? PRIVATE_STATUS_COLORS[mine] : STATUS.default;
                     return (
                       <div key={c.id} onClick={() => router.push(c.is_bulk ? `/bulk-candidates/${c.id}` : `/candidate-details/${c.id}`)}
                         style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderLeft: `4px solid ${sc.color}`, borderRadius: 14, padding: "16px 20px", cursor: "pointer" }}
@@ -558,7 +577,7 @@ export default function RecruiterDashboard() {
                               <div style={{ fontSize: 12, color: "#64748b" }}>{c.email}</div>
                             </div>
                           </div>
-                          <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 12px", borderRadius: 999, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, flexShrink: 0 }}>{sc.label}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, padding: "4px 12px", borderRadius: 999, backgroundColor: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, flexShrink: 0 }}>{mine || sc.label || "New"}</span>
                         </div>
 
                         {c.skills && (
@@ -576,50 +595,33 @@ export default function RecruiterDashboard() {
                           </div>
                         )}
 
-                        <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }} onClick={e => e.stopPropagation()}>
-                          {[
-                            { status: "shortlist", label: "Shortlist", color: "#1d4ed8", activeBg: "#EFF6FF" },
-                            { status: "hold", label: "Hold", color: "#C2410C", activeBg: "#FFF7ED" },
-                            { status: "reject", label: "Reject", color: "#dc2626", activeBg: "#FEF2F2" },
-                          ].map(btn => (
-                            <button key={btn.status} onClick={e => updateStatus(e, c.id, btn.status)}
-                              style={{ padding: "6px 14px", borderRadius: 8, border: `1.5px solid ${btn.color}`, backgroundColor: c.status === btn.status ? btn.activeBg : "#fff", color: btn.color, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                              {btn.label}
-                            </button>
-                          ))}
-                          {!c.is_bulk && (
+                        {!c.is_bulk && (
+                          <div style={{ display: "flex", gap: 8, marginTop: 12 }} onClick={e => e.stopPropagation()}>
                             <button onClick={e => downloadCV(e, c.id, c.name)}
                               style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 5, padding: "6px 14px", borderRadius: 8, border: `1.5px solid ${BORDER}`, backgroundColor: "#fff", color: "#475569", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                               <Download size={13} /> CV
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
 
-                        {/* Private status — only visible to you, not other recruiters. Admin can see it. */}
-                        {(() => {
-                          const src = c.is_bulk ? "bulk" : "referred";
-                          const myKey = `${src}:${c.id}`;
-                          const mine = myStatuses[myKey];
-                          return (
-                            <div onClick={e => e.stopPropagation()} style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${BORDER}` }}>
-                              <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
-                                My Status <span style={{ fontWeight: 500, textTransform: "none", color: "#cbd5e1" }}>(private — only visible to you & admin)</span>
-                              </div>
-                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                                {PRIVATE_STATUS_OPTIONS.map(opt => {
-                                  const sc = PRIVATE_STATUS_COLORS[opt];
-                                  const active = mine === opt;
-                                  return (
-                                    <button key={opt} onClick={e => setPrivateStatus(e, src, c.id, opt)}
-                                      style={{ padding: "6px 14px", borderRadius: 8, border: `1.5px solid ${sc.color}`, backgroundColor: active ? sc.bg : "#fff", color: sc.color, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                                      {opt}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })()}
+                        {/* Status — private to you; other recruiters and the candidate never see it. Admin can. */}
+                        <div onClick={e => e.stopPropagation()} style={{ marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${BORDER}` }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+                            My Status
+                          </div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            {PRIVATE_STATUS_OPTIONS.map(opt => {
+                              const osc = PRIVATE_STATUS_COLORS[opt];
+                              const active = mine === opt;
+                              return (
+                                <button key={opt} onClick={e => setPrivateStatus(e, src, c.id, opt)}
+                                  style={{ padding: "6px 14px", borderRadius: 8, border: `1.5px solid ${osc.color}`, backgroundColor: active ? osc.bg : "#fff", color: osc.color, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                                  {opt}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
