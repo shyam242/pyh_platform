@@ -54,6 +54,9 @@ export default function AdminDashboard() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [expandedCard, setExpandedCard] = useState(null);
   const [resumeLinks, setResumeLinks] = useState("");
+  const [resumeUploadMode, setResumeUploadMode] = useState("links"); // 'links' | 'files'
+  const [resumeFiles, setResumeFiles] = useState([]);
+  const [uploadingResumeFiles, setUploadingResumeFiles] = useState(false);
   const [parsingResumes, setParsingResumes] = useState(false);
   const [parseResults, setParseResults] = useState(null);
   // Candidate tab sub-filter: "all" | "referred" | "bulk"
@@ -263,6 +266,21 @@ export default function AdminDashboard() {
     if(!links.length){showError("Enter valid URLs");return;} if(links.length>50){showError("Max 50");return;}
     try { setParsingResumes(true); setParseResults(null); const r=await axios.post(`${API_BASE_URL}/api/admin/bulk-upload/resume-links`,{resume_links:links},{headers:{Authorization:`Bearer ${localStorage.getItem("token")}`}}); setParseResults(r.data); if(r.data.parsedCount>0)showSuccess(`${r.data.parsedCount} parsed`); if(r.data.errorCount>0)showError(`${r.data.errorCount} failed`); }
     catch { showError("Failed to parse"); } finally { setParsingResumes(false); }
+  };
+
+  const handleBulkUploadResumeFiles = async () => {
+    if(!resumeFiles.length){showError("Choose PDF files to upload");return;}
+    if(resumeFiles.length>50){showError("Max 50 files per batch");return;}
+    try {
+      setUploadingResumeFiles(true); setParseResults(null);
+      const fd=new FormData();
+      resumeFiles.forEach(f=>fd.append("resumes",f));
+      const r=await axios.post(`${API_BASE_URL}/api/admin/bulk-upload/resume-files`,fd,{headers:{Authorization:`Bearer ${localStorage.getItem("token")}`,"Content-Type":"multipart/form-data"}});
+      setParseResults(r.data);
+      if(r.data.parsedCount>0)showSuccess(`${r.data.parsedCount} parsed`);
+      if(r.data.errorCount>0)showError(`${r.data.errorCount} failed`);
+    } catch (err) { showError(err.response?.data?.message || "Failed to upload resumes"); }
+    finally { setUploadingResumeFiles(false); }
   };
 
   // ── Card single/double click: single=expand, double=collapse ──
@@ -1797,6 +1815,7 @@ export default function AdminDashboard() {
               "Rejected":["#FEF2F2","#dc2626"],"On Hold":["#FEF3C7","#d97706"],"Interested":["#DCFCE7","#15803d"],
               "Not Interested":["#FEF2F2","#dc2626"],"No Response":["#F8FAFC","#94a3b8"],
               "Awaiting Candidate":["#FFF7ED",O],"Accepted":["#DCFCE7","#15803d"],
+              "Referred":["#F3E8FF","#7c3aed"],
             };
             return map[s]||["#F8FAFC","#64748b"];
           };
@@ -1877,6 +1896,7 @@ export default function AdminDashboard() {
                     { Icon:Pause, label:"On Hold", value:statusCounts["On Hold"]||0, color:"#d97706", bg:"#FEF3C7" },
                     { Icon:Clock, label:"Awaiting Candidate", value:statusCounts["Awaiting Candidate"]||0, color:O, bg:O_LITE },
                     { Icon:UserCheck, label:"Accepted", value:statusCounts["Accepted"]||0, color:"#15803d", bg:"#DCFCE7" },
+                    { Icon:Megaphone, label:"Referred", value:statusCounts["Referred"]||0, color:"#7c3aed", bg:"#F3E8FF" },
                   ].map(s=>(
                     <div key={s.label} onClick={()=>setStatusFilter2(f=>f===s.label?"all":s.label)}
                       style={{ cursor:"pointer", textAlign:"center", minWidth:110, padding:"12px 14px", borderRadius:12, border:`1.5px solid ${statusFilter2===s.label?s.color:BORDER}`, backgroundColor:statusFilter2===s.label?s.bg:"#fff", opacity: statusFilter2!=="all"&&statusFilter2!==s.label?0.55:1, transition:"all 0.15s" }}>
@@ -2012,32 +2032,78 @@ export default function AdminDashboard() {
         {activeTab==="resume-parse" && (
           <div>
             <BackBtn/>
-            <TabHeader title="Resume Parser" subtitle="Paste resume PDF links — Claude AI extracts candidate data automatically"/>
+            <TabHeader title="Resume Parser" subtitle="Paste resume PDF links, or upload PDF files directly — details are extracted automatically"/>
             <div style={{ ...CARD, marginBottom:20 }}>
               <div style={{ backgroundColor:"#FEF3C7", border:"1px solid #FDE68A", borderRadius:12, padding:"14px 18px", marginBottom:22, display:"flex", gap:12 }}>
                 <div>
                   <div style={{ fontWeight:700, fontSize:13, color:"#92400e", marginBottom:4 }}>How it works</div>
-                  <div style={{ fontSize:12, color:"#78350f", lineHeight:1.7 }}>Paste one PDF URL per line · Click Parse · System will extracts: <strong>Name, Email, Phone, Location, Qualification, Experience, Company, Skills</strong> · Candidates auto-added with unique <strong>RES-YYYY-NNNNN</strong> ID.</div>
+                  <div style={{ fontSize:12, color:"#78350f", lineHeight:1.7 }}>Paste PDF links or upload PDF files directly · Click Parse/Upload · System extracts: <strong>Name, Email, Phone, Location, Qualification, Experience, Company, Skills</strong> · Candidates auto-added with unique <strong>RES-YYYY-NNNNN</strong> ID.</div>
                 </div>
               </div>
-              <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#374151", marginBottom:8 }}>Resume PDF URLs <span style={{ fontWeight:400, color:"#94a3b8" }}>(one per line, max 50)</span></label>
-              <textarea value={resumeLinks} onChange={e=>setResumeLinks(e.target.value)} rows={7}
-                placeholder={"https://example.com/resume1.pdf\nhttps://drive.google.com/uc?id=...\nhttps://dropbox.com/s/.../resume.pdf"}
-                style={{ width:"100%", padding:"12px 14px", fontSize:13, fontFamily:"monospace", border:`1.5px solid ${BORDER}`, borderRadius:10, outline:"none", resize:"vertical", color:"#0f172a", backgroundColor:"#FAFBFC", boxSizing:"border-box", lineHeight:1.7 }}
-                onFocus={e=>e.target.style.borderColor=O} onBlur={e=>e.target.style.borderColor=BORDER}/>
-              <div style={{ fontSize:12, color:"#94a3b8", marginTop:5, marginBottom:16 }}>{resumeLinks.split("\n").filter(l=>l.trim().startsWith("http")).length} valid URL(s) detected</div>
-              <div style={{ display:"flex", gap:10 }}>
-                <button onClick={handleBulkParseResumes} disabled={parsingResumes}
-                  style={{ padding:"11px 26px", backgroundColor:parsingResumes?"#FEF3C7":O, color:parsingResumes?"#c2410c":"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:700, cursor:parsingResumes?"not-allowed":"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:8 }}>
-                  {parsingResumes?(<><span style={{ display:"inline-block", width:14, height:14, border:"2px solid #c2410c", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/> Parsing…</>):"🤖 Parse Resumes"}
-                </button>
-                {!parsingResumes && <button onClick={()=>{setResumeLinks("");setParseResults(null);}} style={{ padding:"11px 20px", backgroundColor:"#fff", color:"#64748b", border:`1.5px solid ${BORDER}`, borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>Clear</button>}
+
+              <div style={{ display:"flex", gap:8, marginBottom:20 }}>
+                {[{id:"links",label:"Paste Links"},{id:"files",label:"Direct Upload"}].map(m=>(
+                  <button key={m.id} onClick={()=>{setResumeUploadMode(m.id);setParseResults(null);}}
+                    style={{ padding:"9px 18px", borderRadius:9, border:`1.5px solid ${resumeUploadMode===m.id?O:BORDER}`, backgroundColor:resumeUploadMode===m.id?O_LITE:"#fff", color:resumeUploadMode===m.id?O:"#475569", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+                    {m.label}
+                  </button>
+                ))}
               </div>
+
+              {resumeUploadMode==="links" ? (
+                <>
+                  <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#374151", marginBottom:8 }}>Resume PDF URLs <span style={{ fontWeight:400, color:"#94a3b8" }}>(one per line, max 50)</span></label>
+                  <textarea value={resumeLinks} onChange={e=>setResumeLinks(e.target.value)} rows={7}
+                    placeholder={"https://example.com/resume1.pdf\nhttps://drive.google.com/uc?id=...\nhttps://dropbox.com/s/.../resume.pdf"}
+                    style={{ width:"100%", padding:"12px 14px", fontSize:13, fontFamily:"monospace", border:`1.5px solid ${BORDER}`, borderRadius:10, outline:"none", resize:"vertical", color:"#0f172a", backgroundColor:"#FAFBFC", boxSizing:"border-box", lineHeight:1.7 }}
+                    onFocus={e=>e.target.style.borderColor=O} onBlur={e=>e.target.style.borderColor=BORDER}/>
+                  <div style={{ fontSize:12, color:"#94a3b8", marginTop:5, marginBottom:16 }}>{resumeLinks.split("\n").filter(l=>l.trim().startsWith("http")).length} valid URL(s) detected</div>
+                  <div style={{ display:"flex", gap:10 }}>
+                    <button onClick={handleBulkParseResumes} disabled={parsingResumes}
+                      style={{ padding:"11px 26px", backgroundColor:parsingResumes?"#FEF3C7":O, color:parsingResumes?"#c2410c":"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:700, cursor:parsingResumes?"not-allowed":"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:8 }}>
+                      {parsingResumes?(<><span style={{ display:"inline-block", width:14, height:14, border:"2px solid #c2410c", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/> Parsing…</>):"🤖 Parse Resumes"}
+                    </button>
+                    {!parsingResumes && <button onClick={()=>{setResumeLinks("");setParseResults(null);}} style={{ padding:"11px 20px", backgroundColor:"#fff", color:"#64748b", border:`1.5px solid ${BORDER}`, borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>Clear</button>}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#374151", marginBottom:8 }}>Resume PDF Files <span style={{ fontWeight:400, color:"#94a3b8" }}>(select up to 50 PDFs)</span></label>
+                  <label htmlFor="resume-files-input" style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, padding:"36px 20px", border:`2px dashed ${resumeFiles.length?O:BORDER}`, borderRadius:12, backgroundColor:resumeFiles.length?O_LITE:"#FAFBFC", cursor:"pointer", textAlign:"center" }}>
+                    <Upload size={22} color={resumeFiles.length?O:"#94a3b8"}/>
+                    <div style={{ fontSize:13, fontWeight:600, color:resumeFiles.length?O:"#374151" }}>
+                      {resumeFiles.length ? `${resumeFiles.length} file(s) selected` : "Click to choose PDF files, or drag & drop"}
+                    </div>
+                    <div style={{ fontSize:11, color:"#94a3b8" }}>PDF only · up to 50 files · 10MB each</div>
+                    <input id="resume-files-input" type="file" accept=".pdf,application/pdf" multiple style={{ display:"none" }}
+                      onChange={e=>{
+                        const chosen = Array.from(e.target.files||[]);
+                        if(chosen.length>50){showError("Max 50 files per batch");return;}
+                        setResumeFiles(chosen);
+                      }}/>
+                  </label>
+                  {resumeFiles.length>0 && (
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:12 }}>
+                      {resumeFiles.slice(0,12).map((f,i)=>(
+                        <span key={i} style={{ fontSize:11, backgroundColor:"#F1F5F9", color:"#475569", padding:"3px 10px", borderRadius:6 }}>{f.name}</span>
+                      ))}
+                      {resumeFiles.length>12 && <span style={{ fontSize:11, color:"#94a3b8" }}>+{resumeFiles.length-12} more</span>}
+                    </div>
+                  )}
+                  <div style={{ display:"flex", gap:10, marginTop:16 }}>
+                    <button onClick={handleBulkUploadResumeFiles} disabled={uploadingResumeFiles}
+                      style={{ padding:"11px 26px", backgroundColor:uploadingResumeFiles?"#FEF3C7":O, color:uploadingResumeFiles?"#c2410c":"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:700, cursor:uploadingResumeFiles?"not-allowed":"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:8 }}>
+                      {uploadingResumeFiles?(<><span style={{ display:"inline-block", width:14, height:14, border:"2px solid #c2410c", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/> Uploading…</>):"⬆️ Upload & Parse"}
+                    </button>
+                    {!uploadingResumeFiles && <button onClick={()=>{setResumeFiles([]);setParseResults(null);}} style={{ padding:"11px 20px", backgroundColor:"#fff", color:"#64748b", border:`1.5px solid ${BORDER}`, borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>Clear</button>}
+                  </div>
+                </>
+              )}
             </div>
             {parseResults && (
               <div style={{ ...CARD }}>
                 <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap" }}>
-                  {[{label:"Total",value:parseResults.totalLinks,bg:"#F8FAFC",color:"#374151"},{label:"✅ Parsed",value:parseResults.parsedCount,bg:"#f0fdf4",color:"#166534"},{label:"❌ Failed",value:parseResults.errorCount,bg:"#fef2f2",color:"#dc2626"}].map(s=>(
+                  {[{label:"Total",value:parseResults.totalLinks??parseResults.totalFiles,bg:"#F8FAFC",color:"#374151"},{label:"✅ Parsed",value:parseResults.parsedCount,bg:"#f0fdf4",color:"#166534"},{label:"❌ Failed",value:parseResults.errorCount,bg:"#fef2f2",color:"#dc2626"}].map(s=>(
                     <div key={s.label} style={{ flex:"1 1 110px", backgroundColor:s.bg, borderRadius:12, padding:"14px", textAlign:"center", border:`1.5px solid ${BORDER}` }}>
                       <div style={{ fontSize:26, fontWeight:800, color:s.color }}>{s.value}</div>
                       <div style={{ fontSize:12, color:s.color, fontWeight:600 }}>{s.label}</div>
@@ -2064,7 +2130,7 @@ export default function AdminDashboard() {
                 {parseResults.errors?.map((e,i)=>(
                   <div key={i} style={{ padding:"10px 14px", marginBottom:6, backgroundColor:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, fontSize:13 }}>
                     <span style={{ fontWeight:600, color:"#dc2626" }}>#{e.index}</span>
-                    <span style={{ color:"#374151", marginLeft:8 }}>{e.url}</span>
+                    <span style={{ color:"#374151", marginLeft:8 }}>{e.url||e.file}</span>
                     <span style={{ color:"#dc2626", marginLeft:8 }}>— {e.error}</span>
                   </div>
                 ))}
