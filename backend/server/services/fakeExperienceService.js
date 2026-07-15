@@ -57,6 +57,8 @@ const SYSTEM_PROMPT = `You are a meticulous technical recruiter and fraud-detect
 
 You must be skeptical but fair. Do not invent red flags that aren't supported by the resume text. If something is ambiguous, say so with "low" severity rather than asserting fraud.
 
+DATES: For any job or degree that is CURRENTLY ONGOING (resume says "Present", "Current", "Ongoing", or gives no end date for what is clearly their most recent/active role or degree), you MUST set "end" to the literal string "present" — never null and never a guessed date. Only use null for "end" when the resume genuinely gives no information at all about whether the role/degree ended (rare). Getting this wrong causes ongoing roles to be miscounted as having ended the same month they started.
+
 SCORING RUBRIC (total 100, but Communication and Availability cannot be judged from a resume alone — leave them as null, a human fills those in after a call/interview):
 
 - skill_match_score (/30): score = (matched_skills / required_skills) * 30, based on the JD's required skills vs candidate's demonstrated skills. If no JD was provided, estimate based on general role fit and note that in projects_quality_notes.
@@ -88,7 +90,7 @@ Respond with ONLY a single JSON object, no markdown fences, no commentary, match
   ],
   "education": [
     {"degree": string, "institution": string, "start": "YYYY-MM"|"YYYY"|null,
-     "end": "YYYY-MM"|"YYYY"|null}
+     "end": "YYYY-MM"|"YYYY"|"present"|null}
   ],
   "required_skills": [string],
   "matched_skills": [string],
@@ -188,7 +190,12 @@ function sortedPeriods(entries, startKey = "start", endKey = "end") {
     const s = parseFlexDate(e[startKey]);
     let en = parseFlexDate(e[endKey]);
     if (s === null) continue;
-    if (en === null) en = s;
+    // If no end date was given, DO NOT assume it ended the same month it
+    // started — that silently invents a phantom completion date and causes
+    // false "gap" flags against whatever comes next. Treat unstated end as
+    // "still ongoing" (now) instead, which is the far more common real case
+    // (e.g. a current job/degree the model failed to mark "present" for).
+    if (en === null) en = parseFlexDate("present");
     periods.push({
       label: e.company || e.institution || e.designation || "?",
       start: s,
