@@ -71,7 +71,7 @@ AUTHENTICITY ANALYSIS — be concrete and cite the evidence from the resume text
 
 - designation_inflation_flags: For each job, judge whether the claimed title is plausible given (a) total years of experience at that point in their career, (b) company size/tier, (c) the seniority of the work actually described under that title. Flag jumps like "Software Engineer" to "Architect"/"Director"/"VP" in under 2-3 years, or a senior title with junior-sounding day-to-day duties.
 - skill_anachronism_flags: Flag any skill/technology claim that is chronologically impossible or highly improbable (e.g., claiming years of experience with a technology before it existed or before it was widely adopted, or claiming a long tenure with a tool/framework that's only a couple of years old).
-- experience_inflation_flags: Flag if the headline "X years of experience" claimed at the top of the resume doesn't add up against the sum of the listed job durations.
+- experience_inflation_flags: Flag if the headline "X years of experience" claimed at the top of the resume doesn't add up against the sum of the listed job durations. Also flag a role with a start or end date genuinely after TODAY'S ACTUAL DATE given to you in the user message — but only compare against that given date, never against your own assumption of "now".
 - other_red_flags: anything else suspicious (vague company names, no verifiable details, generic copy-pasted project descriptions repeated across unrelated roles, suspiciously perfect/uniform job durations, etc).
 
 Each flag object must have: type, severity ("low"|"medium"|"high"), evidence (a short quote or specific fact from the resume), explanation.
@@ -137,7 +137,13 @@ async function callClaude(prompt, { system = SYSTEM_PROMPT, maxTokens = 4000 } =
 }
 
 async function analyzeResumeWithClaude(resumeText, jdText, maxRetries = 1) {
-  let userContent = `JOB DESCRIPTION:\n${jdText || "(No job description provided — score generally for role fit.)"}\n\n---\n\nCANDIDATE RESUME:\n${resumeText}`;
+  // IMPORTANT: the model's own training cutoff is NOT reliable "now" — without
+  // this, it will misjudge recent-but-real dates (e.g. "May 2026 – Present")
+  // as impossible future dates just because its training data ends earlier.
+  // Always tell it the real current date explicitly.
+  const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  let userContent = `TODAY'S ACTUAL DATE: ${todayStr}\nUse this as ground truth for "present"/"current" and for judging whether any date in the resume is genuinely in the future. Do NOT rely on your own training cutoff to decide what "now" is.\n\nJOB DESCRIPTION:\n${jdText || "(No job description provided — score generally for role fit.)"}\n\n---\n\nCANDIDATE RESUME:\n${resumeText}`;
 
   let lastErr;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
