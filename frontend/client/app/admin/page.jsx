@@ -340,6 +340,7 @@ export default function AdminDashboard() {
     { id:"bulk-candidates", label:"Bulk Candidates" },
     { id:"resume-parse", label:"Candidate upload" },
     { id:"resume-views", label:"Resume views", isLink:"/admin/resume-views" },
+    { id:"fake-experience-check", label:"Fake Experience Check", isLink:"/admin/fake-experience-check" },
   ];
   return (
     <div style={{ minHeight:"100vh", backgroundColor:"#F8FAFC", fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif", color:"#0f172a" }}>
