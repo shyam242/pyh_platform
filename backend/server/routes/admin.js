@@ -43,6 +43,12 @@ import {
   reconsiderRecruiter,
 } from "../controllers/adminController.js";
 import { adminParseProjects } from "../controllers/jdMatchController.js";
+import {
+  fakeExperienceUpload,
+  adminAnalyze,
+  adminGetLast,
+  adminClearLast,
+} from "../controllers/fakeExperienceController.js";
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -146,5 +152,12 @@ router.get("/recruiter-candidate-statuses", protect, getRecruiterCandidateStatus
 
 // PROJECT PARSING (admin can trigger for any candidate)
 router.post("/candidates/:userId/parse-projects", protect, adminParseProjects);
+
+// Fake Experience Check — same feature as the recruiter version, kept as a
+// separate route/store namespace so an admin's "last uploaded batch" doesn't
+// collide with any recruiter's. Nothing here is persisted to the database.
+router.post("/fake-experience/analyze", protect, fakeExperienceUpload, adminAnalyze);
+router.get("/fake-experience/last", protect, adminGetLast);
+router.delete("/fake-experience/last", protect, adminClearLast);
 
 export default router;
