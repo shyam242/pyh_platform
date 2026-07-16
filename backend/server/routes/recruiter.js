@@ -1,130 +1,97 @@
-// backend/server/controllers/candidateReportController.js
+import express from "express";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import { 
+  getAllReferrals, 
+  updateStatus,
+  verifyProfile,
+  downloadReferralCv,
+  downloadCandidateResume,
+  getReferralDetails,
+  getApprovalStatus,
+  trackResumeView,
+  getResumeViewStats,
+  setCandidateStatus,
+  getMyCandidateStatuses
+} from "../controllers/recruitercontroller.js";
+import { protect } from "../middleware/authMiddleware.js";
+import { analyzeCandidate, matchJD } from "../controllers/aiController.js";
+import { jdUpload, uploadJD, filterCandidates, bulkAnalyze, parseProjects, searchByProjects, getMatchHistory, getCandidateMatchResult } from "../controllers/jdMatchController.js";
+import { checkRecruiterApproved } from "../middleware/recruiterMiddleware.js";
+import {
+  fakeExperienceUpload,
+  recruiterAnalyze,
+  recruiterGetLast,
+  recruiterClearLast,
+} from "../controllers/fakeExperienceController.js";
+import {
+  listCandidatesForReports,
+  generateReports,
+  downloadReportPdf,
+  getReportHistory,
+} from "../controllers/candidateReportController.js";
 
-import pool from "../config/db.js";
-import { getOrCreateReport, getOrRenderPdf } from "../services/candidateReportService.js";
+const router = express.Router();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// ─── LIST ALL CANDIDATES FOR THE PICKER (referrals + bulk_candidates, same union filterCandidates uses) ─
+const uploadDir = path.join(__dirname, "../../uploads/resumes");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
-export const listCandidatesForReports = async (req, res) => {
-  try {
-    const { search } = req.query;
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, uploadDir); },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, "resume-" + uniqueSuffix + "-" + file.originalname);
+  },
+});
 
-    const referrals = await pool.query(`
-      SELECT id, name, email, skills, experience, company as current_company_name, 'referral' as source_type
-      FROM referrals ORDER BY id DESC
-    `);
-    const bulk = await pool.query(`
-      SELECT id, name, email, skills, experience, current_company_name, 'bulk' as source_type
-      FROM bulk_candidates ORDER BY id DESC
-    `);
+const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 
-    let combined = [...referrals.rows, ...bulk.rows];
+router.get("/approval-status", protect, getApprovalStatus);
+router.get("/all", protect, checkRecruiterApproved, getAllReferrals);
+router.get("/:referralId/details", protect, checkRecruiterApproved, getReferralDetails);
+router.post("/update", protect, checkRecruiterApproved, updateStatus);
+router.post("/verify", protect, checkRecruiterApproved, upload.single("resume"), verifyProfile);
+router.get("/:referralId/cv/download", protect, checkRecruiterApproved, downloadReferralCv);
+router.get("/candidate/:userId/resume/download", protect, checkRecruiterApproved, downloadCandidateResume);
+router.post("/track-view", protect, trackResumeView);
+router.get("/resume-view-stats", protect, getResumeViewStats);
 
-    if (search && search.trim()) {
-      const q = search.trim().toLowerCase();
-      combined = combined.filter((c) =>
-        (c.name || "").toLowerCase().includes(q) ||
-        (c.email || "").toLowerCase().includes(q) ||
-        (c.skills || "").toLowerCase().includes(q) ||
-        (c.current_company_name || "").toLowerCase().includes(q)
-      );
-    }
+// Private per-recruiter candidate status (not visible to other recruiters)
+router.put("/candidate-status", protect, checkRecruiterApproved, setCandidateStatus);
+router.get("/candidate-statuses", protect, checkRecruiterApproved, getMyCandidateStatuses);
 
-    res.json({ success: true, count: combined.length, candidates: combined });
-  } catch (err) {
-    console.error("listCandidatesForReports error:", err);
-    res.status(500).json({ error: err.message || "Failed to list candidates" });
-  }
-};
+router.post("/ai/analyze/:referralId", protect, checkRecruiterApproved, analyzeCandidate);
+router.post("/ai/match-jd/:referralId", protect, checkRecruiterApproved, matchJD);
 
-// ─── BATCH GENERATE (or reuse cached) REPORTS FOR SELECTED CANDIDATES ────────
+// Bulk JD-CV match flow
+router.post("/jd/upload", protect, checkRecruiterApproved, jdUpload.single("jd_file"), uploadJD);
+router.post("/jd/filter-candidates", protect, checkRecruiterApproved, filterCandidates);
+router.post("/jd/bulk-analyze", protect, checkRecruiterApproved, bulkAnalyze);
+router.get("/projects/search", protect, checkRecruiterApproved, searchByProjects);
+router.get("/jd/match-history", protect, checkRecruiterApproved, getMatchHistory);
+router.get("/jd/match-result/:candidateId", protect, checkRecruiterApproved, getCandidateMatchResult);
 
-export const generateReports = async (req, res) => {
-  try {
-    const { candidates, job_id, jd_text, job_title } = req.body;
-    // candidates: [{ id, source_type }]
+// Fake Experience Check — upload a batch of resumes (+ optional JD), get an
+// authenticity report back. Nothing here is persisted: files are processed
+// in memory only, and only the single most-recent batch is kept server-side
+// (in RAM, not the database) so the recruiter can revisit it as "last
+// uploaded CVs" until they run a new batch or the server restarts.
+router.post("/fake-experience/analyze", protect, checkRecruiterApproved, fakeExperienceUpload, recruiterAnalyze);
+router.get("/fake-experience/last", protect, checkRecruiterApproved, recruiterGetLast);
+router.delete("/fake-experience/last", protect, checkRecruiterApproved, recruiterClearLast);
 
-    if (!candidates || !Array.isArray(candidates) || candidates.length === 0) {
-      return res.status(400).json({ error: "Select at least one candidate" });
-    }
-    if (!job_id && !(jd_text && jd_text.trim())) {
-      return res.status(400).json({ error: "Choose a job posting or paste a job description" });
-    }
+// Candidate Evaluation Report Generation — pick candidates + a JD, get a PDF
+// report per candidate. Reports are cached in candidate_reports: the same
+// candidate+JD pairing is never re-sent to Claude twice.
+router.get("/reports/candidates", protect, checkRecruiterApproved, listCandidatesForReports);
+router.post("/reports/generate", protect, checkRecruiterApproved, generateReports);
+router.get("/reports/:reportId/download", protect, checkRecruiterApproved, downloadReportPdf);
+router.get("/reports/history", protect, checkRecruiterApproved, getReportHistory);
 
-    let resolvedJobTitle = job_title || null;
-    let resolvedJdText = jd_text || "";
-
-    if (job_id) {
-      const jobRes = await pool.query("SELECT job_title, job_description, responsibilities, qualifications, experience_required FROM jobs WHERE id=$1", [job_id]);
-      if (jobRes.rows.length === 0) return res.status(404).json({ error: "Selected job posting not found" });
-      const job = jobRes.rows[0];
-      resolvedJobTitle = job.job_title;
-      resolvedJdText = `${job.job_description}\n\nResponsibilities:\n${job.responsibilities}\n\nQualifications:\n${job.qualifications}\n\nExperience Required: ${job.experience_required}`;
-    }
-
-    const results = [];
-    for (const cand of candidates) {
-      try {
-        const { reportId, cached } = await getOrCreateReport({
-          candidateId: cand.id,
-          sourceType: cand.source_type,
-          jobId: job_id || null,
-          jdText: resolvedJdText,
-          jobTitle: resolvedJobTitle,
-          generatedBy: req.user.id,
-        });
-        results.push({ candidate_id: cand.id, source_type: cand.source_type, report_id: reportId, cached, success: true });
-      } catch (innerErr) {
-        console.error(`Report generation failed for candidate ${cand.id}:`, innerErr.message);
-        results.push({ candidate_id: cand.id, source_type: cand.source_type, success: false, error: innerErr.message });
-      }
-    }
-
-    res.json({
-      success: true,
-      total: results.length,
-      generated: results.filter((r) => r.success && !r.cached).length,
-      reused_from_cache: results.filter((r) => r.success && r.cached).length,
-      failed: results.filter((r) => !r.success).length,
-      results,
-    });
-  } catch (err) {
-    console.error("generateReports error:", err);
-    res.status(500).json({ error: err.message || "Failed to generate reports" });
-  }
-};
-
-// ─── DOWNLOAD A SINGLE REPORT AS PDF (renders from stored JSON, no AI call) ──
-
-export const downloadReportPdf = async (req, res) => {
-  try {
-    const { reportId } = req.params;
-    const { buffer, candidateName } = await getOrRenderPdf(reportId);
-    const safeName = (candidateName || "candidate").replace(/[^a-z0-9]+/gi, "_");
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${safeName}_report.pdf"`);
-    res.send(buffer);
-  } catch (err) {
-    console.error("downloadReportPdf error:", err);
-    res.status(404).json({ error: err.message || "Report not found" });
-  }
-};
-
-// ─── HISTORY: PAST REPORTS THIS RECRUITER HAS GENERATED (no AI call, DB read only) ─
-
-export const getReportHistory = async (req, res) => {
-  try {
-    const result = await pool.query(
-      `SELECT id, candidate_id, source_type, job_title, candidate_name, candidate_email, created_at
-       FROM candidate_reports
-       WHERE generated_by = $1
-       ORDER BY created_at DESC
-       LIMIT 200`,
-      [req.user.id]
-    );
-    res.json({ success: true, reports: result.rows });
-  } catch (err) {
-    console.error("getReportHistory error:", err);
-    res.status(500).json({ error: err.message || "Failed to fetch report history" });
-  }
-};
+export default router;
