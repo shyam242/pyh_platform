@@ -6,7 +6,7 @@ import {
   Download, Check, Pause, XCircle, Users, CheckCircle2,
   Search, Filter, X, LogOut, Building2, Briefcase,
   TrendingUp, Bell, ChevronRight, Eye, Clock,
-  UserCheck, Star, BarChart2, FileText, Mail, Phone, Sparkles, ShieldAlert
+  UserCheck, Star, BarChart2, FileText, Mail, Phone, Sparkles, ShieldAlert, ClipboardList
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
@@ -345,6 +345,13 @@ export default function RecruiterDashboard() {
             onMouseEnter={e => { e.currentTarget.style.backgroundColor = O_LITE; e.currentTarget.style.color = O; }}
             onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#475569"; }}>
             <ShieldAlert size={15} /> Fake Experience Check <span style={{ marginLeft: "auto", fontSize: 9, backgroundColor: O, color: "#fff", borderRadius: 999, padding: "1px 6px", fontWeight: 700 }}>AI</span>
+          </a>
+
+          {/* Candidate Report Generator — link to dedicated page */}
+          <a href="/candidate-reports" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, textDecoration: "none", backgroundColor: "transparent", color: "#475569", fontSize: 13, fontWeight: 500, fontFamily: "inherit", borderLeft: "3px solid transparent", border: `1.5px dashed ${O_MID}`, marginTop: 4 }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = O_LITE; e.currentTarget.style.color = O; }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "#475569"; }}>
+            <ClipboardList size={15} /> Generate Reports <span style={{ marginLeft: "auto", fontSize: 9, backgroundColor: O, color: "#fff", borderRadius: 999, padding: "1px 6px", fontWeight: 700 }}>AI</span>
           </a>
         </div>
 
