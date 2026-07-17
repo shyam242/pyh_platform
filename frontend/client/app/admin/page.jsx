@@ -13,6 +13,10 @@ import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
 
 const O = "#E87722", O_LITE = "#FFF3E8", O_MID = "#FBBF7A", BORDER = "#E2E8F0";
+// Selectable hiring-pipeline stages — also used to decide whether a stored
+// candidate_status is a "real" stage vs a referral-invite label like
+// "Awaiting Candidate"/"Accepted"/"Referred" that isn't itself selectable.
+const PIPELINE_STATUSES = ["Contacted","Interested","Not Interested","No Response","Shortlisted","Interview Scheduled","Interview Cleared","Offered","Hired","Rejected","On Hold"];
 const CARD = { backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "24px" };
 
 const initials = (name) => (name || "?").split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
@@ -86,11 +90,11 @@ export default function AdminDashboard() {
     const tag = document.activeElement?.tagName;
     if (["INPUT","TEXTAREA","SELECT"].includes(tag)) return;
     switch (e.key.toLowerCase()) {
-      case "c": e.preventDefault(); setActiveTab("candidates"); break;
+      case "c": e.preventDefault(); setActiveTab("bulk-candidates"); break;
       case "j": e.preventDefault(); window.location.href = "/admin/post-job"; break;
       case "r": e.preventDefault(); setActiveTab("pending-recruiters"); fetchPendingRecruiters(); break;
       case "p": e.preventDefault(); setActiveTab("resume-parse"); break;
-      case "v": e.preventDefault(); window.location.href = "/admin/bulk-candidates"; break;
+      case "v": e.preventDefault(); setActiveTab("resume-parse"); break;
     }
   }, []);
 
@@ -485,11 +489,11 @@ export default function AdminDashboard() {
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12 }}>
                   {[
-                    { label:"Add Candidates", desc:"Add new candidates to the platform", icon:UserPlus, shortcut:"Alt + C", bg:"#EFF6FF", color:"#1d4ed8", action:()=>setActiveTab("candidates") },
+                    { label:"Add Candidates", desc:"Add new candidates to the platform", icon:UserPlus, shortcut:"Alt + C", bg:"#EFF6FF", color:"#1d4ed8", action:()=>setActiveTab("bulk-candidates") },
                     { label:"Post Jobs", desc:"Create and publish new job openings", icon:Briefcase, shortcut:"Alt + J", bg:"#DCFCE7", color:"#15803d", action:()=>{window.location.href="/admin/post-job";} },
                     { label:"Recruiter", desc:"Manage recruiters and approvals", icon:UserCheck, shortcut:"Alt + R", bg:"#F3E8FF", color:"#7c3aed", action:()=>{setActiveTab("pending-recruiters");fetchPendingRecruiters();} },
                     { label:"Resume Parser", desc:"Parse resumes using AI technology", icon:Zap, shortcut:"Alt + P", bg:"#FFF7ED", color:O, action:()=>setActiveTab("resume-parse") },
-                    { label:"CV Add", desc:"Upload and manage CVs", icon:Upload, shortcut:"Alt + V", bg:"#ECFDF5", color:"#059669", action:()=>{window.location.href="/admin/bulk-candidates";} },
+                    { label:"CV Add", desc:"Upload and manage CVs", icon:Upload, shortcut:"Alt + V", bg:"#ECFDF5", color:"#059669", action:()=>setActiveTab("resume-parse") },
                   ].map(s=>{
                     const Icon=s.icon;
                     return (
@@ -1966,7 +1970,7 @@ export default function AdminDashboard() {
                   const [bg,fg]=avatarColor(c.name);
                   const [ssBg,ssFg]=statusStyle(c.candidate_status||"Contacted");
                   const src=sourceTag(c._source);
-                  const editable = c._source==="portal" || c._source==="bulk";
+                  const editable = c._source==="portal" || c._source==="bulk" || (c._source==="referred" && c.referral_status==="accepted");
                   return (
                     <div key={`${c._source}-${c.id}`}
                       style={{ display:"grid", gridTemplateColumns:"2.2fr 1.6fr 1.2fr 1.2fr 1.2fr 1.4fr 1.2fr 1fr", gap:8, padding:"14px 20px", borderBottom:i<filtered.length-1?`1px solid ${BORDER}`:"none", alignItems:"center", transition:"background 0.12s" }}
@@ -1995,14 +1999,14 @@ export default function AdminDashboard() {
                       {/* Status dropdown / badge */}
                       <div>
                         {editable ? (
-                          <select value={c.candidate_status||"Contacted"}
+                          <select value={PIPELINE_STATUSES.includes(c.candidate_status) ? c.candidate_status : "Contacted"}
                             onChange={e=>handleUpdateCandidateStatus(c._source,c.id,e.target.value)}
                             disabled={updatingStatus===c.id}
                             style={{ padding:"5px 10px", border:`1.5px solid ${BORDER}`, borderRadius:8, fontSize:11, fontWeight:700, color:ssFg, backgroundColor:ssBg, cursor:updatingStatus===c.id?"not-allowed":"pointer", fontFamily:"inherit", opacity:updatingStatus===c.id?0.5:1, outline:"none" }}>
-                            {["Contacted","Interested","Not Interested","No Response","Shortlisted","Interview Scheduled","Interview Cleared","Offered","Hired","Rejected","On Hold"].map(s=><option key={s} value={s}>{s}</option>)}
+                            {PIPELINE_STATUSES.map(s=><option key={s} value={s}>{s}</option>)}
                           </select>
                         ) : (
-                          <span title="Referral status is managed on the Referred Candidates page" style={{ padding:"5px 10px", borderRadius:8, fontSize:11, fontWeight:700, color:ssFg, backgroundColor:ssBg, border:`1.5px solid ${BORDER}` }}>{c.candidate_status||"Referred"}</span>
+                          <span title="This referral hasn't been accepted yet — pipeline status can be set once the candidate accepts" style={{ padding:"5px 10px", borderRadius:8, fontSize:11, fontWeight:700, color:ssFg, backgroundColor:ssBg, border:`1.5px solid ${BORDER}` }}>{c.candidate_status||"Referred"}</span>
                         )}
                       </div>
                       {/* Updated at */}
