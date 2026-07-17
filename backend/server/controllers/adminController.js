@@ -1575,7 +1575,7 @@ const referralStatusLabel = (referral_status) => {
 const fetchReferredRowsForStatus = async () => {
   const rows = (await pool.query(
     `SELECT id, name, email, phone AS contact, company, department, skills, experience,
-            referral_status, status, created_at, cv_file
+            referral_status, status, created_at, cv_file, candidate_status, status_updated_at
      FROM referrals ORDER BY id DESC`
   )).rows;
   return rows.map(r => ({
@@ -1584,8 +1584,11 @@ const fetchReferredRowsForStatus = async () => {
     job_role: r.company || r.department || null,
     skills: normalizeReferralSkills(r.skills),
     current_location: null,
-    candidate_status: referralStatusLabel(r.referral_status),
-    status_updated_at: null,
+    // Once a referral is accepted, an admin can move it through the normal
+    // hiring pipeline (candidate_status gets set) — until then, fall back to
+    // the referral-invite-derived label (Awaiting Candidate / Accepted / ...).
+    candidate_status: r.candidate_status || referralStatusLabel(r.referral_status),
+    status_updated_at: r.status_updated_at || null,
     ai_suitability_score: null,
     ai_score_breakdown: null,
   }));
@@ -1724,7 +1727,24 @@ export const updateUnifiedCandidateStatus = async (req, res) => {
     if (!CANDIDATE_STATUSES.includes(candidate_status)) {
       return res.status(400).json({ message: "Invalid status. Valid: " + CANDIDATE_STATUSES.join(", ") });
     }
-    if (!["portal", "bulk"].includes(source)) return res.status(400).json({ message: "Invalid source" });
+    if (!["portal", "bulk", "referred"].includes(source)) return res.status(400).json({ message: "Invalid source" });
+
+    if (source === "referred") {
+      // A referral can only be moved through the hiring pipeline once the
+      // candidate has actually accepted the referral itself — otherwise
+      // there's no confirmed candidate yet to track through Contacted /
+      // Interview Scheduled / etc.
+      const check = await pool.query("SELECT referral_status FROM referrals WHERE id=$1", [id]);
+      if (!check.rows.length) return res.status(404).json({ message: "Candidate not found" });
+      if (check.rows[0].referral_status !== "accepted") {
+        return res.status(400).json({ message: "This referral hasn't been accepted yet — pipeline status can only be set after the candidate accepts the referral." });
+      }
+      const result = await pool.query(
+        `UPDATE referrals SET candidate_status=$1, status_updated_at=NOW(), status_updated_by=$2 WHERE id=$3 RETURNING *`,
+        [candidate_status, adminId, id]
+      );
+      return res.json({ message: "Status updated", candidate: result.rows[0] });
+    }
 
     const table = source === "portal" ? "users" : "bulk_candidates";
     const roleClause = source === "portal" ? "AND role='candidate'" : "";
