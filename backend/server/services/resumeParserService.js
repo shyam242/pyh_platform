@@ -1,7 +1,8 @@
-// backend/server/services/resumeParserService.js
-// Pure Node.js resume parser — no AI API needed, uses pdf-parse + regex
 import fetch from "node-fetch";
 import pdfParse from "pdf-parse";
+import fs from "fs";
+
+const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff", ".heic"];
 
 // ─── GOOGLE DRIVE URL CONVERTER ───────────────────────────────────────────────
 // Converts any Google Drive share/view/docs URL into a direct-download URL.
@@ -284,4 +285,54 @@ export const parseResumeFromBuffer = async (buffer) => {
     throw new Error("PDF has no readable text (may be scanned/image-based)");
   }
   return parseResumeText(text);
+};
+
+// ─── UNIFIED FILE-TYPE ENTRY POINT (used by the bulk resume-file upload) ──────
+// Extracts text from whatever the admin uploaded — PDF, Word doc, or a plain
+// image — and returns parsed fields. Unlike parseResumeFromBuffer() above,
+// this NEVER throws for a "can't auto-read this" case; it returns
+// { parsed: null, reason } instead so the caller can still save the
+// candidate row (and the file) and flag it for manual review, rather than
+// discarding the upload. It only throws for truly unexpected I/O errors.
+export const extractResumeDetails = async (filePath, originalname) => {
+  const ext = "." + (originalname.split(".").pop() || "").toLowerCase();
+
+  if (IMAGE_EXTENSIONS.includes(ext)) {
+    return { parsed: null, reason: "Image resume — this file type can't be auto-parsed. Please enter the candidate's details manually." };
+  }
+
+  const buffer = fs.readFileSync(filePath);
+
+  try {
+    if (ext === ".pdf") {
+      if (buffer.length < 4 || buffer.slice(0, 4).toString("ascii") !== "%PDF") {
+        return { parsed: null, reason: "The uploaded file isn't a valid PDF." };
+      }
+      const text = await extractTextFromPDF(buffer);
+      if (!text || text.trim().length < 50) {
+        return { parsed: null, reason: "This PDF has no readable text — it's likely a scanned/image-based resume. Please enter the candidate's details manually." };
+      }
+      return { parsed: parseResumeText(text), reason: null };
+    }
+
+    if (ext === ".docx") {
+      const mammoth = (await import("mammoth")).default;
+      const result = await mammoth.extractRawText({ buffer });
+      const text = result.value || "";
+      if (!text || text.trim().length < 50) {
+        return { parsed: null, reason: "This Word document has no readable text. Please enter the candidate's details manually." };
+      }
+      return { parsed: parseResumeText(text), reason: null };
+    }
+
+    if (ext === ".doc") {
+      // Legacy binary .doc isn't supported by mammoth (docx-only) — keep the
+      // file and let the admin fill details in by hand rather than rejecting it.
+      return { parsed: null, reason: "Legacy .doc format can't be auto-parsed — please re-save as .docx/.pdf, or enter the candidate's details manually." };
+    }
+
+    return { parsed: null, reason: `Unsupported file type (${ext || "unknown"}) — please enter the candidate's details manually.` };
+  } catch (err) {
+    return { parsed: null, reason: `Couldn't read this file (${err.message}). Please enter the candidate's details manually.` };
+  }
 };
