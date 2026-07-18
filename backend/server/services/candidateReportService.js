@@ -271,6 +271,7 @@ const COLOR = {
   navy: "#0B2545", navyLite: "#EAF0FB", green: "#1E8E3E", greenLite: "#EAF3DE",
   orange: "#C2410C", orangeLite: "#FFF3E8", red: "#DC2626", redLite: "#FEF2F2",
   gray: "#64748B", lightGray: "#E2E8F0", border: "#E5E7EB", bg: "#F8FAFC", ink: "#0F172A",
+  brandNavy: "#050B2C", brandOrange: "#D9782D", brandOrangeLite: "#FDECDD",
 };
 
 const PAGE_MARGIN = 36;
@@ -339,7 +340,7 @@ function itemToLine(doc, item, width) {
     case "kv":
       return `${item.label}: ${item.value ?? "-"}`;
     case "check":
-      return `${item.ok ? "YES" : "NO"}  —  ${item.text}`;
+      return `${item.ok ? "\u2713" : "\u2715"}  ${item.text}`;
     case "bullet":
       return `\u2022  ${item.text}`;
     case "text":
@@ -383,10 +384,15 @@ function renderCard(doc, x, y, width, num, title, items, opts = {}) {
   const innerW = width - CARD_PAD * 2;
   doc.fontSize(9);
   const contentH = measureItems(doc, items, innerW);
-  const cardH = HEADER_H + contentH + CARD_PAD * 2 + (opts.extraH || 0);
+  const cardH = HEADER_H + contentH + CARD_PAD * 2 + (opts.extraH || 0) + (opts.footerH || 0);
 
   // card background + border
   doc.roundedRect(x, y, width, cardH, 8).fillAndStroke("#FFFFFF", COLOR.border);
+  // thin brand accent bar along the top edge, matching the report's header colors
+  doc.save();
+  doc.roundedRect(x, y, width, cardH, 8).clip();
+  doc.rect(x, y, width, 3).fillColor(opts.accent || COLOR.brandNavy).fill();
+  doc.restore();
 
   // numbered badge + title
   const badgeCx = x + CARD_PAD + 7, badgeCy = y + CARD_PAD + 7;
@@ -400,15 +406,29 @@ function renderCard(doc, x, y, width, num, title, items, opts = {}) {
   let contentY = y + CARD_PAD + HEADER_H;
   if (opts.renderExtra) contentY = opts.renderExtra(doc, x + CARD_PAD, contentY, innerW) || contentY;
 
-  renderItems(doc, x + CARD_PAD, contentY, items, innerW);
+  const afterItemsY = renderItems(doc, x + CARD_PAD, contentY, items, innerW);
+  if (opts.renderFooter) opts.renderFooter(doc, x + CARD_PAD, afterItemsY, innerW);
   return y + cardH;
 }
 
 function ensureSpace(doc, neededH) {
   if (doc.y + neededH > PAGE_H - PAGE_MARGIN) {
     doc.addPage();
-    doc.y = PAGE_MARGIN;
+    doc.y = 40;
   }
+}
+
+// Slim repeated header drawn on every page after the first (the first page
+// gets the full branded header drawn inline in buildPdfBuffer).
+function drawContinuationHeader(doc) {
+  doc.rect(0, 0, PAGE_W, 28).fillColor("#FFFFFF").fill();
+  doc.moveTo(0, 28).lineTo(PAGE_W, 28).strokeColor(COLOR.border).lineWidth(1).stroke();
+  doc.fontSize(9.5).font("Helvetica-Bold").fillColor(COLOR.brandNavy)
+    .text("Pick", PAGE_MARGIN, 9, { continued: true })
+    .fillColor(COLOR.brandOrange).text("YourHire");
+  doc.fontSize(7.5).font("Helvetica").fillColor(COLOR.gray)
+    .text("Candidate Evaluation Report — Confidential", 0, 10, { width: PAGE_W - PAGE_MARGIN, align: "right" });
+  doc.fillColor("#000");
 }
 
 // Same math renderCard uses internally, exposed separately so a whole row's
@@ -419,7 +439,7 @@ function measureCardHeight(doc, width, items, opts = {}) {
   const innerW = width - CARD_PAD * 2;
   doc.fontSize(9);
   const contentH = measureItems(doc, items, innerW);
-  return HEADER_H + contentH + CARD_PAD * 2 + (opts.extraH || 0);
+  return HEADER_H + contentH + CARD_PAD * 2 + (opts.extraH || 0) + (opts.footerH || 0);
 }
 
 export function buildPdfBuffer(report, meta = {}) {
@@ -429,16 +449,49 @@ export function buildPdfBuffer(report, meta = {}) {
     doc.on("data", (c) => chunks.push(c));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
+    doc.on("pageAdded", () => drawContinuationHeader(doc));
 
     const p = report.candidate_profile || {};
     const gap = 14;
 
-    // ── Header banner ──
-    doc.rect(0, 0, PAGE_W, 54).fillColor(COLOR.navy).fill();
-    doc.fillColor("#fff").fontSize(13).font("Helvetica-Bold").text("CONFIDENTIAL — Candidate Evaluation Report", PAGE_MARGIN, 16);
-    doc.fontSize(7.5).font("Helvetica").text("For internal recruiter use only. Do not share without authorization.", PAGE_MARGIN, 33);
+    // ── Header bar (white, branded) ──
+    const HEADER_H2 = 62;
+    doc.rect(0, 0, PAGE_W, HEADER_H2).fillColor("#FFFFFF").fill();
+    doc.moveTo(0, HEADER_H2).lineTo(PAGE_W, HEADER_H2).strokeColor(COLOR.border).lineWidth(1).stroke();
+
+    // Logo mark: rounded navy square with an orange accent bar, then wordmark
+    doc.roundedRect(PAGE_MARGIN, 16, 30, 30, 7).fillColor(COLOR.brandNavy).fill();
+    doc.roundedRect(PAGE_MARGIN + 6, 24, 18, 5, 2.5).fillColor(COLOR.brandOrange).fill();
+    doc.roundedRect(PAGE_MARGIN + 6, 31, 12, 5, 2.5).fillColor("#FFFFFF").fillOpacity(0.85).fill();
+    doc.fillOpacity(1);
+    doc.fontSize(13.5).font("Helvetica-Bold").fillColor(COLOR.brandNavy)
+      .text("Pick", PAGE_MARGIN + 38, 18, { continued: true })
+      .fillColor(COLOR.brandOrange).text("YourHire");
+    doc.fontSize(7).font("Helvetica").fillColor(COLOR.gray)
+      .text("Right People. Great Companies.", PAGE_MARGIN + 38, 33);
+
+    // Center title
+    const titleBoxX = PAGE_MARGIN + 120, titleBoxW = PAGE_W - titleBoxX * 2;
+    doc.fontSize(14).font("Helvetica-Bold").fillColor(COLOR.brandNavy)
+      .text("CANDIDATE EVALUATION REPORT", titleBoxX, 15, { width: titleBoxW, align: "center" });
+    const subA = "For Internal Use Only  |  ", subB = "Confidential";
+    doc.fontSize(8).font("Helvetica");
+    const subAW = doc.widthOfString(subA);
+    doc.fontSize(8).font("Helvetica-Bold");
+    const subBW = doc.widthOfString(subB);
+    const subStartX = titleBoxX + (titleBoxW - subAW - subBW) / 2;
+    doc.fontSize(8).font("Helvetica").fillColor(COLOR.gray).text(subA, subStartX, 34, { lineBreak: false });
+    doc.fontSize(8).font("Helvetica-Bold").fillColor(COLOR.brandOrange).text(subB, subStartX + subAW, 34, { lineBreak: false });
+
+    // Report date badge (top right)
+    const dateStr = new Date(meta.createdAt || Date.now()).toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" });
+    const badgeW = 128;
+    doc.roundedRect(PAGE_W - PAGE_MARGIN - badgeW, 14, badgeW, 34, 8).fillColor(COLOR.brandNavy).fill();
+    doc.fontSize(7).font("Helvetica").fillColor("#C7D2E8").text("REPORT DATE", PAGE_W - PAGE_MARGIN - badgeW + 12, 21);
+    doc.fontSize(10).font("Helvetica-Bold").fillColor("#FFFFFF").text(dateStr, PAGE_W - PAGE_MARGIN - badgeW + 12, 32);
     doc.fillColor("#000");
-    doc.y = 70;
+
+    doc.y = HEADER_H2 + 16;
 
     // ── ROW 1: Candidate Summary | Overall Role Match Score (with donut) ──
     const col2W = (CONTENT_W - gap) / 2;
@@ -446,7 +499,6 @@ export function buildPdfBuffer(report, meta = {}) {
     const row1Y = doc.y;
 
     const summaryItems = [
-      { type: "kv", label: "Candidate Name", value: p.name || meta.candidateName },
       { type: "kv", label: "Current Designation", value: p.designation },
       { type: "kv", label: "Total Experience", value: p.experience ? `${p.experience} Years` : null },
       { type: "kv", label: "Current Company", value: p.current_company_name },
@@ -457,7 +509,44 @@ export function buildPdfBuffer(report, meta = {}) {
       { type: "kv", label: "Expected CTC", value: p.expected_ctc ? `Rs. ${p.expected_ctc}` : null },
       { type: "kv", label: "Highest Qualification", value: p.highest_qualification },
     ];
-    const endY1 = renderCard(doc, leftX, row1Y, col2W, 1, "Candidate Summary", summaryItems);
+
+    const candidateName = p.name || meta.candidateName || "Candidate";
+    const initials = candidateName.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() || "").join("") || "?";
+    const recText = report.recommendation || "";
+    const recIsPositive = /highly recommended|^recommended/i.test(recText);
+    const recIsCaution = /reservation/i.test(recText);
+    const recColor = recIsPositive ? COLOR.green : recIsCaution ? COLOR.brandOrange : recText ? COLOR.red : COLOR.gray;
+    const recBg = recIsPositive ? COLOR.greenLite : recIsCaution ? COLOR.brandOrangeLite : recText ? COLOR.redLite : COLOR.bg;
+
+    const avatarHeaderH = 50;
+    const recFooterH = 40;
+
+    const endY1 = renderCard(doc, leftX, row1Y, col2W, 1, "Candidate Summary", summaryItems, {
+      accent: COLOR.brandNavy,
+      extraH: avatarHeaderH,
+      footerH: recFooterH,
+      renderExtra: (doc, cx0, cy0, innerW) => {
+        doc.circle(cx0 + 19, cy0 + 19, 19).fillColor(COLOR.brandNavy).fill();
+        doc.fontSize(13).font("Helvetica-Bold").fillColor("#fff")
+          .text(initials, cx0, cy0 + 12, { width: 38, align: "center" });
+        doc.fillColor("#000");
+        doc.fontSize(13).font("Helvetica-Bold").fillColor(COLOR.ink).text(candidateName, cx0 + 48, cy0 + 4, { width: innerW - 48 });
+        doc.fontSize(9).font("Helvetica-Bold").fillColor(COLOR.brandOrange).text(p.designation || "—", cx0 + 48, cy0 + 21, { width: innerW - 48 });
+        return cy0 + avatarHeaderH + 4;
+      },
+      renderFooter: (doc, cx0, cy0, innerW) => {
+        const fy = cy0 + 6;
+        doc.roundedRect(cx0, fy, innerW, recFooterH - 6, 8).fillColor(recBg).fill();
+        // small check/status dot
+        doc.circle(cx0 + 18, fy + (recFooterH - 6) / 2, 9).fillColor(recColor).fill();
+        doc.fontSize(9).font("Helvetica-Bold").fillColor("#fff").text(recIsPositive ? "\u2713" : recIsCaution ? "!" : "\u2715", cx0 + 18 - 5, fy + (recFooterH - 6) / 2 - 5, { width: 10, align: "center" });
+        doc.fontSize(9.5).font("Helvetica-Bold").fillColor(recColor)
+          .text(recText || "Recommendation pending", cx0 + 34, fy + 6, { width: innerW - 44 });
+        doc.fontSize(7.5).font("Helvetica").fillColor(COLOR.gray)
+          .text("Overall Recommendation", cx0 + 34, fy + (recFooterH - 6) / 2 + 4, { width: innerW - 44 });
+        doc.fillColor("#000");
+      },
+    });
 
     // Right card: donut + score breakdown bars, drawn via renderExtra hook
     const breakdown = [
@@ -473,6 +562,7 @@ export function buildPdfBuffer(report, meta = {}) {
     const scoreColor = percentColor(matchScore);
 
     const endY2 = renderCard(doc, rightX, row1Y, col2W, 2, `Overall Role Match Score${report.job_title ? ` — ${report.job_title}` : ""}`, [], {
+      accent: COLOR.brandOrange,
       extraH: donutH + barsH + 8,
       renderExtra: (doc, cx0, cy0, innerW) => {
         const ringCx = cx0 + 44, ringCy = cy0 + 46;
@@ -587,15 +677,13 @@ export function buildPdfBuffer(report, meta = {}) {
 
     doc.y = Math.max(endY_p1, endY_p2, endY_p3) + gap;
 
-    // ── ROW 4: Key Metrics strip (7 mini rings) ──
+    // ── ROW 4: Key Metrics strip (mini rings) ──
     const metrics = [
       ["Keyword Coverage", report.keyword_coverage_percent, true],
       ["ATS Compatibility", report.ats_compatibility_percent, true],
       ["Resume Quality", report.resume_quality_percent, true],
       ["Career Stability", report.career_stability_percent, true],
       ["Interview Success", report.interview_success_probability_percent, true],
-      ["Hire Probability", report.overall_hire_probability_percent, true],
-      ["Notice Period Risk", report.notice_period_risk, false],
     ];
     const stripH = 92;
     ensureSpace(doc, stripH);
@@ -624,23 +712,29 @@ export function buildPdfBuffer(report, meta = {}) {
     ensureSpace(doc, measureCardHeight(doc, CONTENT_W, focusItems));
     renderCard(doc, PAGE_MARGIN, doc.y, CONTENT_W, 11, "Interview Focus Areas", focusItems);
 
-    doc.moveDown(1.5);
-    doc.fontSize(7).fillColor(COLOR.gray).font("Helvetica")
-      .text("Generated by PickYourHire — this report is for internal screening purposes and should be verified during the interview process.", PAGE_MARGIN, doc.y, { width: CONTENT_W, align: "center" });
+    doc.y += 16;
+    ensureSpace(doc, 30);
+    const bandY = doc.y;
+    doc.roundedRect(PAGE_MARGIN, bandY, CONTENT_W, 26, 6).fillColor(COLOR.brandNavy).fill();
+    doc.fontSize(7.5).font("Helvetica").fillColor("#C7D2E8")
+      .text("This report is prepared by PickYourHire for candidate evaluation purposes only and should be validated during the interview process.", PAGE_MARGIN + 14, bandY + 6, { width: CONTENT_W - 200 });
+    doc.fontSize(8).font("Helvetica-Bold").fillColor("#FFFFFF")
+      .text("PickYourHire Consultants Private Limited", PAGE_MARGIN, bandY + 9, { width: CONTENT_W - 14, align: "right" });
+    doc.fillColor("#000");
 
     doc.end();
   });
 }
 
 export async function getOrRenderPdf(reportId) {
-  const r = await pool.query(`SELECT report_data, pdf_bytes, candidate_name FROM candidate_reports WHERE id=$1`, [reportId]);
+  const r = await pool.query(`SELECT report_data, pdf_bytes, candidate_name, created_at FROM candidate_reports WHERE id=$1`, [reportId]);
   if (r.rows.length === 0) throw new Error("Report not found");
   const row = r.rows[0];
 
   if (row.pdf_bytes) return { buffer: row.pdf_bytes, candidateName: row.candidate_name };
 
   const reportData = typeof row.report_data === "string" ? JSON.parse(row.report_data) : row.report_data;
-  const buffer = await buildPdfBuffer(reportData, { candidateName: row.candidate_name });
+  const buffer = await buildPdfBuffer(reportData, { candidateName: row.candidate_name, createdAt: row.created_at });
 
   // Cache the rendered PDF too, so even the (cheap) rendering step is skipped next time
   await pool.query(`UPDATE candidate_reports SET pdf_bytes=$1 WHERE id=$2`, [buffer, reportId]).catch(() => {});
