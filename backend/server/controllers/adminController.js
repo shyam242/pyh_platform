@@ -2,7 +2,7 @@ import pool from "../config/db.js";
 import fs from "fs";
 import { parseCSVString, mapCandidateColumns } from "../services/csvParser.js";
 import { sendRecruiterApprovalEmail, sendRecruiterRejectionEmail } from "../services/brevoService.js";
-import { parseResumeFromURL, parseResumeFromBuffer } from "../services/resumeParserService.js"; // pure regex — no API key needed
+import { parseResumeFromURL, parseResumeFromBuffer, extractResumeDetails } from "../services/resumeParserService.js"; // pure regex — no API key needed
 import { computeSuitabilityScore } from "../services/suitabilityScoreService.js";
 import { upsertJobOnPublicSite } from "../services/publicSiteSync.js";
 
@@ -1354,20 +1354,21 @@ export const bulkUploadResumeFiles = async (req, res) => {
     }
 
     const results = [];
-    const errors = [];
+    const needsReview = [];
+    const errors = []; // reserved for true failures (e.g. duplicate email) where even the fallback insert can't proceed
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      const resumeLink = `${process.env.BACKEND_URL || "https://api.pickyourhire.com"}/uploads/resumes/bulk/${file.filename}`;
+      const ext = (file.originalname.split(".").pop() || "").toLowerCase();
+
       try {
-        const fileBuffer = fs.readFileSync(file.path);
-        const parsed = await parseResumeFromBuffer(fileBuffer);
-        const resumeLink = `${process.env.BACKEND_URL || "https://api.pickyourhire.com"}/uploads/resumes/bulk/${file.filename}`;
+        // extractResumeDetails() never throws for "can't auto-read this file"
+        // cases (scanned images, empty PDFs, legacy .doc, etc) — it returns
+        // { parsed: null, reason } instead so the file+row are still kept.
+        const { parsed, reason } = await extractResumeDetails(file.path, file.originalname);
 
-        const countResult = await pool.query("SELECT COUNT(*) FROM bulk_candidates");
-        const seq = parseInt(countResult.rows[0].count) + 1;
-        const candidateId = `RES-${new Date().getFullYear()}-${String(seq).padStart(5, "0")}`;
-
-        if (parsed.email) {
+        if (parsed?.email) {
           const existing = await pool.query("SELECT id FROM bulk_candidates WHERE email=$1", [parsed.email]);
           if (existing.rows.length > 0) {
             errors.push({ index: i + 1, file: file.originalname, error: `Email ${parsed.email} already exists` });
@@ -1375,37 +1376,55 @@ export const bulkUploadResumeFiles = async (req, res) => {
           }
         }
 
+        const countResult = await pool.query("SELECT COUNT(*) FROM bulk_candidates");
+        const seq = parseInt(countResult.rows[0].count) + 1;
+        const candidateId = `RES-${new Date().getFullYear()}-${String(seq).padStart(5, "0")}`;
+        const isReview = !parsed;
+        const fallbackName = `Unnamed — ${file.originalname}`;
+
         const result = await pool.query(
           `INSERT INTO bulk_candidates(
             candidate_id, name, contact, email, experience, skills,
             current_location, current_company_name, highest_qualification,
             technical_skills, soft_skills, linkedin, resume_link,
-            uploaded_by, status, role
-          ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+            uploaded_by, status, role,
+            needs_manual_review, parse_error, original_resume_filename, resume_file_type
+          ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
           RETURNING *`,
           [
             candidateId,
-            parsed.name || "Unknown",
-            parsed.contact || "",
-            parsed.email || null,
-            parsed.experience || "",
-            parsed.skills || "",
-            parsed.location || "",
-            parsed.current_company_name || "",
-            parsed.highest_qualification || "",
-            parsed.technical_skills || "",
-            parsed.soft_skills || "",
-            parsed.linkedin || "",
+            parsed?.name || fallbackName,
+            parsed?.contact || "",
+            parsed?.email || null,
+            parsed?.experience || "",
+            parsed?.skills || "",
+            parsed?.location || "",
+            parsed?.current_company_name || "",
+            parsed?.highest_qualification || "",
+            parsed?.technical_skills || "",
+            parsed?.soft_skills || "",
+            parsed?.linkedin || "",
             resumeLink,
             adminId,
             "pending",
             "",
+            isReview,
+            reason || null,
+            file.originalname,
+            ext,
           ]
         );
 
-        results.push(result.rows[0]);
-        console.log(`✓ Parsed uploaded resume ${i + 1}/${files.length}: ${parsed.name} (${candidateId})`);
+        if (isReview) {
+          needsReview.push(result.rows[0]);
+          console.log(`⚠ Kept resume for manual review ${i + 1}/${files.length}: ${file.originalname} (${candidateId}) — ${reason}`);
+        } else {
+          results.push(result.rows[0]);
+          console.log(`✓ Parsed uploaded resume ${i + 1}/${files.length}: ${parsed.name} (${candidateId})`);
+        }
       } catch (err) {
+        // Genuine unexpected failure (DB error, etc) — the file itself is
+        // still on disk (multer already wrote it), it's just not in the DB yet.
         console.error(`✗ Failed resume ${i + 1}: ${file.originalname} →`, err.message);
         errors.push({ index: i + 1, file: file.originalname, error: err.message });
       }
@@ -1414,9 +1433,11 @@ export const bulkUploadResumeFiles = async (req, res) => {
     res.json({
       message: "Resume upload & parsing completed",
       parsedCount: results.length,
+      needsReviewCount: needsReview.length,
       errorCount: errors.length,
       totalFiles: files.length,
       candidates: results,
+      needsReview,
       errors,
     });
   } catch (err) {
@@ -1463,14 +1484,17 @@ export const updateBulkCandidateDetails = async (req, res) => {
         offer_in_hand = COALESCE($15, offer_in_hand),
         reason_for_change = COALESCE($16, reason_for_change),
         linkedin = COALESCE($17, linkedin),
-        role = COALESCE($18, role)
+        role = COALESCE($18, role),
+        needs_manual_review = FALSE,
+        reviewed_at = NOW(),
+        reviewed_by = $20
       WHERE id = $19
       RETURNING *`,
       [
         name, email, contact, experience, skills, technical_skills, soft_skills,
         current_location, preferred_location, current_company_name, highest_qualification,
         current_ctc, expected_ctc, notice_period, offer_in_hand, reason_for_change,
-        linkedin, role, candidateId
+        linkedin, role, candidateId, adminId
       ]
     );
 
