@@ -236,7 +236,25 @@ export default function BulkCandidateDetailPage() {
         </div>
       </div>
 
-      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "28px 32px", display: "grid", gridTemplateColumns: "1fr 290px", gap: 20 }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "28px 32px 0" }}>
+        {candidate.needs_manual_review && (
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, background: "#FFFBEB", border: "1.5px solid #FDE68A", borderRadius: 14, padding: "16px 20px", marginBottom: 20 }}>
+            <AlertCircle size={18} color="#D97706" style={{ flexShrink: 0, marginTop: 1 }} />
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 700, color: "#92400e" }}>This resume needs manual review</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#78350f", lineHeight: 1.6 }}>
+                {candidate.parse_error || "The uploaded file couldn't be parsed automatically."} The original resume{candidate.original_resume_filename ? ` (${candidate.original_resume_filename})` : ""} has been kept — nothing was discarded. Fill in the candidate's details below to complete their profile.
+              </p>
+            </div>
+            <button onClick={() => { setForm(candidate); setEditing(true); }}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "#D97706", color: "#fff", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
+              <Pencil size={13} /> Fill Details
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "0 32px 28px", display: "grid", gridTemplateColumns: "1fr 290px", gap: 20 }}>
         {/* Left column */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {/* Hero card */}
