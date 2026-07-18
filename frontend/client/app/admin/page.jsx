@@ -281,7 +281,8 @@ export default function AdminDashboard() {
       resumeFiles.forEach(f=>fd.append("resumes",f));
       const r=await axios.post(`${API_BASE_URL}/api/admin/bulk-upload/resume-files`,fd,{headers:{Authorization:`Bearer ${localStorage.getItem("token")}`,"Content-Type":"multipart/form-data"}});
       setParseResults(r.data);
-      if(r.data.parsedCount>0)showSuccess(`${r.data.parsedCount} parsed`);
+      if(r.data.parsedCount>0)showSuccess(`${r.data.parsedCount} parsed automatically`);
+      if(r.data.needsReviewCount>0)showError(`${r.data.needsReviewCount} saved — need manual review (unreadable file, e.g. image/scanned resume)`);
       if(r.data.errorCount>0)showError(`${r.data.errorCount} failed`);
     } catch (err) { showError(err.response?.data?.message || "Failed to upload resumes"); }
     finally { setUploadingResumeFiles(false); }
@@ -2073,20 +2074,23 @@ export default function AdminDashboard() {
                 </>
               ) : (
                 <>
-                  <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#374151", marginBottom:8 }}>Resume PDF Files <span style={{ fontWeight:400, color:"#94a3b8" }}>(select up to 50 PDFs)</span></label>
+                  <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#374151", marginBottom:8 }}>Resume Files <span style={{ fontWeight:400, color:"#94a3b8" }}>(PDF, Word, or image — select up to 50)</span></label>
                   <label htmlFor="resume-files-input" style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, padding:"36px 20px", border:`2px dashed ${resumeFiles.length?O:BORDER}`, borderRadius:12, backgroundColor:resumeFiles.length?O_LITE:"#FAFBFC", cursor:"pointer", textAlign:"center" }}>
                     <Upload size={22} color={resumeFiles.length?O:"#94a3b8"}/>
                     <div style={{ fontSize:13, fontWeight:600, color:resumeFiles.length?O:"#374151" }}>
-                      {resumeFiles.length ? `${resumeFiles.length} file(s) selected` : "Click to choose PDF files, or drag & drop"}
+                      {resumeFiles.length ? `${resumeFiles.length} file(s) selected` : "Click to choose files, or drag & drop"}
                     </div>
-                    <div style={{ fontSize:11, color:"#94a3b8" }}>PDF only · up to 50 files · 10MB each</div>
-                    <input id="resume-files-input" type="file" accept=".pdf,application/pdf" multiple style={{ display:"none" }}
+                    <div style={{ fontSize:11, color:"#94a3b8" }}>PDF, .doc/.docx, .jpg/.png/.webp · up to 50 files · 10MB each</div>
+                    <input id="resume-files-input" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" multiple style={{ display:"none" }}
                       onChange={e=>{
                         const chosen = Array.from(e.target.files||[]);
                         if(chosen.length>50){showError("Max 50 files per batch");return;}
                         setResumeFiles(chosen);
                       }}/>
                   </label>
+                  <div style={{ fontSize:11, color:"#94a3b8", marginTop:8, lineHeight:1.6 }}>
+                    Every file is kept and a candidate record is created — if a resume can't be auto-read (a scanned/image resume, a legacy .doc, etc.) it's saved with a <strong>Needs Review</strong> flag so you can open it and fill in the candidate's details by hand. Nothing is discarded.
+                  </div>
                   {resumeFiles.length>0 && (
                     <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:12 }}>
                       {resumeFiles.slice(0,12).map((f,i)=>(
@@ -2108,7 +2112,7 @@ export default function AdminDashboard() {
             {parseResults && (
               <div style={{ ...CARD }}>
                 <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap" }}>
-                  {[{label:"Total",value:parseResults.totalLinks??parseResults.totalFiles,bg:"#F8FAFC",color:"#374151"},{label:"✅ Parsed",value:parseResults.parsedCount,bg:"#f0fdf4",color:"#166534"},{label:"❌ Failed",value:parseResults.errorCount,bg:"#fef2f2",color:"#dc2626"}].map(s=>(
+                  {[{label:"Total",value:parseResults.totalLinks??parseResults.totalFiles,bg:"#F8FAFC",color:"#374151"},{label:"✅ Parsed",value:parseResults.parsedCount,bg:"#f0fdf4",color:"#166534"},{label:"⚠️ Needs Review",value:parseResults.needsReviewCount,bg:"#FEF3C7",color:"#92400e"},{label:"❌ Failed",value:parseResults.errorCount,bg:"#fef2f2",color:"#dc2626"}].filter(s=>s.value!==undefined).map(s=>(
                     <div key={s.label} style={{ flex:"1 1 110px", backgroundColor:s.bg, borderRadius:12, padding:"14px", textAlign:"center", border:`1.5px solid ${BORDER}` }}>
                       <div style={{ fontSize:26, fontWeight:800, color:s.color }}>{s.value}</div>
                       <div style={{ fontSize:12, color:s.color, fontWeight:600 }}>{s.label}</div>
@@ -2130,6 +2134,23 @@ export default function AdminDashboard() {
                     </div>
                     <button onClick={()=>window.open(`/bulk-candidates/${c.id}`,"_blank")}
                       style={{ padding:"6px 14px", backgroundColor:O, color:"#fff", border:"none", borderRadius:7, fontSize:12, fontWeight:700, cursor:"pointer" }}>View</button>
+                  </div>
+                ))}
+                {parseResults.needsReview?.map((c,i)=>(
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 18px", marginBottom:8, backgroundColor:"#FFFBEB", border:"1.5px solid #FDE68A", borderLeft:"4px solid #D97706", borderRadius:10 }}>
+                    <div style={{ width:38, height:38, borderRadius:"50%", backgroundColor:"#FEF3C7", color:"#92400e", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, flexShrink:0 }}>
+                      <AlertCircle size={16}/>
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:700, color:"#78350f" }}>{c.original_resume_filename || c.name}</div>
+                      <div style={{ fontSize:12, color:"#92400e" }}>{c.parse_error}</div>
+                    </div>
+                    <div style={{ fontSize:11, color:"#b45309", textAlign:"right", flexShrink:0 }}>
+                      <div style={{ fontWeight:700, marginBottom:2 }}>{c.candidate_id}</div>
+                      <div>resume kept · not discarded</div>
+                    </div>
+                    <button onClick={()=>window.open(`/bulk-candidates/${c.id}`,"_blank")}
+                      style={{ padding:"6px 14px", backgroundColor:"#D97706", color:"#fff", border:"none", borderRadius:7, fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Fill Details</button>
                   </div>
                 ))}
                 {parseResults.errors?.map((e,i)=>(
