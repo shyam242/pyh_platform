@@ -13,7 +13,6 @@ export default function BulkCandidatesPage() {
   const [selectedCandidates, setSelectedCandidates] = useState(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [pushing, setPushing] = useState(false);
   const [search, setSearch] = useState("");
 
   useEffect(() => { fetchBulkCandidates(); }, []);
@@ -89,35 +88,15 @@ export default function BulkCandidatesPage() {
     }
   };
 
-  const handlePushToMainCandidates = async () => {
-    if (!selectedCandidates.size) return showError("Select candidates first");
-    if (!window.confirm(`Push ${selectedCandidates.size} candidate(s) to main candidates pool?`)) return;
-    try {
-      setPushing(true);
-      const token = localStorage.getItem("token");
-      const res = await axios.post(
-        `${API_BASE_URL}/api/admin/bulk-candidates/push-to-candidates`,
-        { ids: Array.from(selectedCandidates) },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const { pushedCount, errorCount, errors } = res.data;
-      if (pushedCount > 0) showSuccess(`${pushedCount} candidate(s) pushed successfully`);
-      if (errorCount > 0) showError(`${errorCount} failed: ${errors.map(e => e.error).join("; ")}`);
-      setSelectedCandidates(new Set());
-      setSelectAll(false);
-      fetchBulkCandidates();
-    } catch (err) {
-      showError(err?.response?.data?.message || "Failed to push candidates");
-    } finally {
-      setPushing(false);
-    }
-  };
+  const filtered = candidates
+    .filter(c =>
+      c.name?.toLowerCase().includes(search.toLowerCase()) ||
+      c.email?.toLowerCase().includes(search.toLowerCase()) ||
+      c.skills?.toLowerCase().includes(search.toLowerCase())
+    )
+    .sort((a, b) => (b.needs_manual_review ? 1 : 0) - (a.needs_manual_review ? 1 : 0));
 
-  const filtered = candidates.filter(c =>
-    c.name?.toLowerCase().includes(search.toLowerCase()) ||
-    c.email?.toLowerCase().includes(search.toLowerCase()) ||
-    c.skills?.toLowerCase().includes(search.toLowerCase())
-  );
+  const needsReviewCount = candidates.filter(c => c.needs_manual_review).length;
 
   const initials = (name) => name?.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
 
@@ -149,35 +128,32 @@ export default function BulkCandidatesPage() {
       <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "0 32px" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button onClick={() => window.location.href = "/admin"}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", border: "1.5px solid #e5e7eb", borderRadius: 8, backgroundColor: "#fff", fontSize: 13, color: "#64748b", cursor: "pointer", fontFamily: "inherit", fontWeight: 500, marginRight: 4 }}>
+              ← Dashboard
+            </button>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: "#fef3e2", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Users size={18} color="#f97316" />
             </div>
             <div>
               <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#111827" }}>Bulk Candidates</p>
-              <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{candidates.length} total · CSV upload</p>
+              <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
+                {candidates.length} total · CSV upload
+                {needsReviewCount > 0 && <span style={{ color: "#b45309", fontWeight: 600 }}> · {needsReviewCount} need review</span>}
+              </p>
             </div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {selectedCandidates.size > 0 && (
-              <>
-                <button
-                  onClick={handlePushToMainCandidates}
-                  disabled={pushing}
-                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", background: pushing ? "#f3f4f6" : "#fff7ed", color: "#ea580c", border: "1px solid #fed7aa", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: pushing ? "not-allowed" : "pointer", opacity: pushing ? 0.7 : 1 }}
-                >
-                  <Upload size={14} />
-                  {pushing ? "Pushing…" : `Push ${selectedCandidates.size} to Candidates`}
-                </button>
-                <button
-                  onClick={handleBulkDelete}
-                  disabled={deleting}
-                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: deleting ? 0.6 : 1 }}
-                >
-                  <Trash2 size={14} />
-                  Delete {selectedCandidates.size} selected
-                </button>
-              </>
+              <button
+                onClick={handleBulkDelete}
+                disabled={deleting}
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: deleting ? 0.6 : 1 }}
+              >
+                <Trash2 size={14} />
+                Delete {selectedCandidates.size} selected
+              </button>
             )}
           </div>
         </div>
@@ -245,8 +221,8 @@ export default function BulkCandidatesPage() {
                   key={candidate.id}
                   onClick={() => router.push(`/bulk-candidates/${candidate.id}`)}
                   style={{
-                    background: "#fff",
-                    border: `1px solid ${isSelected ? "#fed7aa" : "#e5e7eb"}`,
+                    background: candidate.needs_manual_review ? "#FFFBEB" : "#fff",
+                    border: `1px solid ${isSelected ? "#fed7aa" : candidate.needs_manual_review ? "#FDE68A" : "#e5e7eb"}`,
                     borderRadius: 12,
                     padding: "20px",
                     cursor: "pointer",
@@ -284,13 +260,19 @@ export default function BulkCandidatesPage() {
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {candidate.name || "Unknown"}
+                        {candidate.name}
                       </p>
                       <p style={{ margin: 0, fontSize: 12, color: "#6b7280", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                         {candidate.email}
                       </p>
                     </div>
                   </div>
+
+                  {candidate.needs_manual_review && (
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", background: "#FEF3C7", color: "#92400e", borderRadius: 20, fontSize: 11, fontWeight: 600, marginBottom: 12 }}>
+                      <AlertCircle size={11} /> Needs Review — resume kept, details missing
+                    </div>
+                  )}
 
                   {/* Skills */}
                   {skills.length > 0 && (
