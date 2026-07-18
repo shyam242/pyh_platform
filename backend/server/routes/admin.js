@@ -86,14 +86,20 @@ const resumeStorage = multer.diskStorage({
   },
 });
 
+// Accepted so that even resumes we can't auto-parse (scanned images, legacy
+// .doc, etc.) are still kept on disk and attached to a manual-review
+// candidate record instead of being rejected outright.
+const RESUME_EXT_ALLOWLIST = [".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".webp"];
+
 const uploadResumes = multer({
   storage: resumeStorage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB per file
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === "application/pdf" || file.originalname.toLowerCase().endsWith(".pdf")) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (RESUME_EXT_ALLOWLIST.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error("Only PDF files are allowed"));
+      cb(new Error("Only PDF, Word (.doc/.docx), or image (.jpg/.png/.webp) files are allowed"));
     }
   },
 });
