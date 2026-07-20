@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { createProfile, getUserProfile, updateUserProfile, uploadProfileImage, getBankDetails, updateBankDetails, createCandidateProfile, getCandidateProfile, updateCandidateProfile, verifyCandidateProfile, deleteCandidateProfile, getReferrerProfile } from "../controllers/ProfileController.js";
 import { parseProjects } from "../controllers/jdMatchController.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { extractResumeDetails } from "../services/resumeParserService.js";
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -91,17 +92,32 @@ router.get("/candidate", protect, getCandidateProfile);
 router.put("/candidate", protect, updateCandidateProfile);
 
 // UPLOAD RESUME (For candidates)
-router.post("/upload-resume", protect, resumeUpload.single("file"), (req, res) => {
+router.post("/upload-resume", protect, resumeUpload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "Resume file is required" });
     }
 
     const filePath = `/uploads/resumes/${req.file.filename}`;
+
+    // Best-effort auto-parse — the candidate reviews/edits everything before
+    // it's saved, so a parsing miss here is never fatal to the upload itself.
+    let parsed = null;
+    let parseNote = null;
+    try {
+      const extracted = await extractResumeDetails(req.file.path, req.file.originalname);
+      parsed = extracted.parsed;
+      parseNote = extracted.reason;
+    } catch (err) {
+      console.error("Resume auto-parse failed (non-fatal):", err.message);
+    }
+
     res.json({
       message: "Resume uploaded successfully",
       filePath: filePath,
-      filename: req.file.filename
+      filename: req.file.filename,
+      parsed,
+      parseNote,
     });
   } catch (error) {
     console.error("Error uploading resume:", error);
