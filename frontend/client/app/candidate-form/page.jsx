@@ -77,11 +77,38 @@ export default function CandidateFormPage() {
       if (!response.ok) throw new Error("Failed to upload resume");
 
       const data = await response.json();
-      setFormData((prev) => ({
-        ...prev,
-        resume_file_path: data.filePath,
-      }));
-      showSuccess("Resume uploaded successfully!");
+      const p = data.parsed || null;
+
+      setFormData((prev) => {
+        const next = { ...prev, resume_file_path: data.filePath };
+        if (p) {
+          // Only fill in fields that are still blank — never overwrite
+          // anything the candidate has already typed themselves.
+          if (!next.current_location && p.location) next.current_location = p.location;
+          if (!next.current_company_name && p.current_company_name) next.current_company_name = p.current_company_name;
+          if (!next.highest_qualification && p.highest_qualification) {
+            const match = qualifications.find(
+              (q) => q.toLowerCase() === p.highest_qualification.toLowerCase()
+            );
+            next.highest_qualification = match || p.highest_qualification;
+          }
+          if (!next.contact && p.contact) next.contact = p.contact;
+          if (!next.linkedin_profile && p.linkedin) next.linkedin_profile = p.linkedin;
+          if (!next.technical_skills && p.technical_skills) next.technical_skills = p.technical_skills;
+          if (!next.soft_skills && p.soft_skills) next.soft_skills = p.soft_skills;
+          if (!next.skills && p.skills) next.skills = p.skills;
+        }
+        return next;
+      });
+
+      const filledCount = p
+        ? ["location", "current_company_name", "highest_qualification", "contact", "linkedin", "skills"].filter((k) => p[k]).length
+        : 0;
+      showSuccess(
+        filledCount > 0
+          ? `Resume uploaded! We pre-filled ${filledCount} field(s) from it — feel free to edit anything below.`
+          : "Resume uploaded successfully!"
+      );
     } catch (err) {
       showError(err.message || "Failed to upload resume");
     }
