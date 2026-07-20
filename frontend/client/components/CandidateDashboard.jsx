@@ -335,13 +335,6 @@ export default function CandidateDashboard() {
 
   const clearFilters = () => { setFilterRole(""); setFilterExp(""); setFilterLoc(""); setFilterSal(""); setShowSavedOnly(false); };
 
-  const STAT_CARDS = [
-    { label: "Total jobs",     value: jobs.length,                                    badge: `${Math.max(0,jobs.length-appliedCount)} new`, style: "primary", Icon: Briefcase },
-    { label: "Applied",        value: appliedCount,                                   badge: "In review",                                   style: "light",   Icon: Send },
-    { label: "Profile status", value: profile?.verified ? "Verified" : "Pending",     badge: profile?.verified ? "Active" : "Incomplete",   style: profile?.verified ? "green" : "warn", Icon: ShieldCheck },
-    { label: "Skills added",   value: profileSkills.length,                           badge: "Manage",                                      style: "light",   Icon: Sparkles },
-  ];
-
   /* ══ RENDER ══════════════════════════════════════════════════ */
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#ffffff", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: "#0f172a", fontSize: 15 }}>
@@ -393,37 +386,74 @@ export default function CandidateDashboard() {
       <div style={{ padding: "36px 48px 64px", maxWidth: 1280, margin: "0 auto" }}>
 
         {/* Page header */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 32 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28 }}>
           <div>
-            <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, color: "#0f172a" }}>Candidate dashboard</h1>
-            <p style={{ fontSize: 15, color: "#64748b", marginTop: 6 }}>
-              Welcome back, <strong style={{ color: "#0f172a" }}>{userName}</strong> — {filteredJobs.length} {showSavedOnly ? "saved" : "open"} job{filteredJobs.length !== 1 ? "s" : ""}
+            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: "#0f172a" }}>Welcome back, {userName}! 👋</h1>
+            <p style={{ fontSize: 14, color: "#64748b", marginTop: 6 }}>
+              Keep your profile up to date to get better job recommendations.
             </p>
           </div>
         </div>
 
-        {/* ── STAT CARDS ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 18, marginBottom: 36 }}>
-          {STAT_CARDS.map(({ label, value, badge, style, Icon }) => {
-            const isPrimary = style === "primary";
-            const isGreen   = style === "green";
-            const bg  = isPrimary ? O          : isGreen ? "#EAF3DE" : O_LITE;
-            const bdr = isPrimary ? "none"     : `1.5px solid ${isGreen ? "#97C459" : O_MID}`;
-            const lc  = isPrimary ? "rgba(255,255,255,0.85)" : isGreen ? "#3B6D11" : "#B35500";
-            const vc  = isPrimary ? "#fff"     : isGreen ? "#3B6D11" : "#7A3600";
-            const bbc = isPrimary ? "rgba(255,255,255,0.28)" : isGreen ? "#C0DD97" : "#FFD9B0";
-            return (
-              <div key={label} style={{ borderRadius: 16, padding: "22px 24px", backgroundColor: bg, border: bdr, position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", top: 20, right: 20, opacity: 0.18, color: isPrimary ? "#fff" : O }}>
-                  <Icon size={34} />
+        {/* ── STAT CARDS + APPLICATION TRACKER ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr) 1.3fr", gap: 16, marginBottom: 36, alignItems: "stretch" }}>
+          {[
+            { key: "jobs",    label: "Total jobs",     value: jobs.length, badge: `${Math.max(0,jobs.length-appliedCount)} new`, Icon: Briefcase, onClick: () => { setShowSavedOnly(false); document.getElementById("job-list-top")?.scrollIntoView({ behavior: "smooth" }); } },
+            { key: "applied", label: "Applied",         value: appliedCount, badge: "In review", Icon: Send,        onClick: () => router.push("/applied-jobs") },
+            { key: "status",  label: "Profile status",  value: profile?.verified ? "Verified" : "Pending", badge: profile?.verified ? "Active" : "Incomplete", Icon: ShieldCheck, onClick: () => router.push("/candidate-profile") },
+            { key: "skills",  label: "Skills added",    value: profileSkills.length, badge: "Manage", Icon: Sparkles, onClick: () => router.push("/candidate-profile/skills") },
+          ].map(card => (
+            <button
+              key={card.key}
+              onClick={card.onClick}
+              style={{
+                textAlign: "left", cursor: "pointer", fontFamily: "inherit",
+                borderRadius: 16, padding: "18px 20px", backgroundColor: "#fff",
+                border: `1.5px solid ${BORDER}`, position: "relative", overflow: "hidden",
+                transition: "box-shadow 0.15s, border-color 0.15s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.06)"; e.currentTarget.style.borderColor = O_MID; }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = BORDER; }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: O_LITE, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <card.Icon size={18} color={O} />
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: lc, letterSpacing: "0.07em", textTransform: "uppercase", marginBottom: 6 }}>{label}</div>
-                <div style={{ fontSize: typeof value === "string" && value.length > 5 ? 22 : 36, fontWeight: 700, color: vc, lineHeight: 1 }}>{value}</div>
-                <span style={{ display: "inline-block", width: "fit-content", marginTop: 12, fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 999, backgroundColor: bbc, color: isPrimary ? "#fff" : isGreen ? "#3B6D11" : "#7A3600" }}>{badge}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.06em", textTransform: "uppercase" }}>{card.label}</span>
               </div>
-            );
-          })}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: typeof card.value === "string" && card.value.length > 5 ? 20 : 30, fontWeight: 700, color: "#0f172a", lineHeight: 1 }}>{card.value}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 11px", borderRadius: 999, backgroundColor: O_LITE, color: "#B35500" }}>{card.badge}</span>
+              </div>
+            </button>
+          ))}
+
+          {/* Application tracker card */}
+          <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "18px 22px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}>Application tracker</span>
+              <span
+                onClick={() => router.push("/applied-jobs")}
+                style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 12, fontWeight: 700, color: O, cursor: "pointer" }}
+              >
+                View all <ChevronRight size={13} />
+              </span>
+            </div>
+            {[
+              { label: "Applied",   value: appliedCount, Icon: Send },
+              { label: "In review", value: appliedCount, Icon: Clock },
+            ].map(row => (
+              <div key={row.label} onClick={() => router.push("/applied-jobs")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid #F8FAFC", cursor: "pointer" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#475569", fontWeight: 500 }}>
+                  <row.Icon size={14} color={O} /> {row.label}
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{row.value}</span>
+              </div>
+            ))}
+          </div>
         </div>
+
+        <div id="job-list-top" />
 
         {/* ── TWO-COLUMN LAYOUT ── */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 280px", gap: 28 }}>
