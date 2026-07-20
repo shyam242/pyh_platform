@@ -24,12 +24,12 @@ function parseSkills(raw) {
   catch { return typeof raw === "string" ? raw.split(",").map(s => s.trim()).filter(Boolean) : []; }
 }
 
-function Card({ title, icon, action, children }) {
+function Card({ title, icon, action, children, accent = O, accentLite = O_LITE }) {
   return (
-    <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 14, padding: "20px 22px", marginBottom: 16 }}>
+    <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 14, padding: "20px 22px", marginBottom: 16, borderLeft: `4px solid ${accent}` }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <span style={{ color: O }}>{icon}</span>
+          <span style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: accentLite, color: accent, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{icon}</span>
           <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#0f172a" }}>{title}</h3>
         </div>
         {action}
@@ -256,7 +256,7 @@ export default function CandidateProfilePage() {
             {/* LEFT column */}
             <div>
               {/* Uploaded resume */}
-              <Card title="Uploaded resume" icon={<FileText size={16} />}
+              <Card title="Uploaded resume" icon={<FileText size={16} />} accent="#2563EB" accentLite="#EFF6FF"
                 action={
                   profile.resume_file_path ? (
                     <div style={{ display: "flex", gap: 8 }}>
@@ -285,7 +285,7 @@ export default function CandidateProfilePage() {
               </Card>
 
               {/* Skills */}
-              <Card title="Skills" icon={<Sparkles size={16} />} action={<EditLink onClick={() => router.push("/candidate-profile/skills")} label="Edit skills" />}>
+              <Card title="Skills" icon={<Sparkles size={16} />} accent="#DB2777" accentLite="#FDF2F8" action={<EditLink onClick={() => router.push("/candidate-profile/skills")} label="Edit skills" />}>
                 {profileSkills.length > 0 ? (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                     {profileSkills.map(s => (
@@ -298,7 +298,7 @@ export default function CandidateProfilePage() {
               </Card>
 
               {/* Experience */}
-              <Card title="Experience" icon={<Briefcase size={16} />} action={<EditLink onClick={() => router.push("/candidate-profile/edit")} />}>
+              <Card title="Experience" icon={<Briefcase size={16} />} accent="#4F46E5" accentLite="#EEF2FF" action={<EditLink onClick={() => router.push("/candidate-profile/edit")} />}>
                 {profile.job_role ? (
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
@@ -314,7 +314,7 @@ export default function CandidateProfilePage() {
               </Card>
 
               {/* Education */}
-              <Card title="Education" icon={<GraduationCap size={16} />} action={<EditLink onClick={() => router.push("/candidate-profile/edit")} />}>
+              <Card title="Education" icon={<GraduationCap size={16} />} accent="#0D9488" accentLite="#F0FDFA" action={<EditLink onClick={() => router.push("/candidate-profile/edit")} />}>
                 {profile.highest_qualification ? (
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 700 }}>{profile.highest_qualification}</div>
@@ -327,7 +327,7 @@ export default function CandidateProfilePage() {
 
               {/* Referred by */}
               {profile?.referrer && (
-                <Card title="Referred by" icon={<Users size={16} />}>
+                <Card title="Referred by" icon={<Users size={16} />} accent="#7C3AED" accentLite="#F5F3FF">
                   <div style={{ backgroundColor: O_LITE, border: `1px solid ${O_MID}`, borderRadius: 12, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14 }}>
                     <div style={{ width: 48, height: 48, borderRadius: "50%", backgroundColor: O, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, flexShrink: 0 }}>
                       {(profile.referrer.referrer_name || "R").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
@@ -351,7 +351,7 @@ export default function CandidateProfilePage() {
               )}
 
               {/* Project parsing */}
-              <Card title="Parsed projects" icon={<FolderKanbanIcon />} action={
+              <Card title="Parsed projects" icon={<FolderKanbanIcon />} accent="#D97706" accentLite="#FFFBEB" action={
                 profile.resume_file_path ? (
                   <span onClick={parseProjects} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 700, color: O, cursor: parsingProjects ? "not-allowed" : "pointer" }}>
                     <Sparkles size={12} /> {parsingProjects ? "Parsing..." : parsedProjects ? "Re-parse" : "Parse from resume"}
