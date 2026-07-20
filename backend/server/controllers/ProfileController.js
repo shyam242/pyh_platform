@@ -1,7 +1,9 @@
 import jwt from "jsonwebtoken";
+import fs from "fs";
 import pool from "../config/db.js";
 import { sendEmail } from "../services/brevoService.js";
 import { parseProjectsForUser } from "./jdMatchController.js";
+import { extractResumeDetails } from "../services/resumeParserService.js";
 
 const ADMIN_EMAILS = process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(",").map(e => e.trim()) : ["shyampickyourhire@gmail.com"];
 
@@ -432,6 +434,12 @@ export const createCandidateProfile = async (req, res) => {
       return res.status(403).json({ error: "Only candidates can create candidate profiles" });
     }
 
+    // A resume on file is enough to consider the candidate's profile verified —
+    // this keeps the "Profile status" badge in sync with reality instead of
+    // permanently showing "Pending" for anyone who uploaded a resume through
+    // the onboarding form rather than the quick-verify endpoint.
+    const verifiedFlag = !!resume_file_path;
+
     // Update candidate profile
     const result = await pool.query(
       `UPDATE users SET 
@@ -452,9 +460,10 @@ export const createCandidateProfile = async (req, res) => {
         soft_skills=$15,
         linkedin_profile=$16,
         resume_file_path=$17,
-        candidate_profile_completed=true
+        candidate_profile_completed=true,
+        verified = verified OR $19
       WHERE id=$18
-      RETURNING id, name, email, role, job_role, contact, skills, cctc, ectc, current_location, preferred_location, notice_period, offer_in_hand, reason_for_change, current_company_name, highest_qualification, address_aadhaar, technical_skills, soft_skills, linkedin_profile, resume_file_path, candidate_profile_completed`,
+      RETURNING id, name, email, role, job_role, contact, skills, cctc, ectc, current_location, preferred_location, notice_period, offer_in_hand, reason_for_change, current_company_name, highest_qualification, address_aadhaar, technical_skills, soft_skills, linkedin_profile, resume_file_path, candidate_profile_completed, verified`,
       [
         job_role,
         contact,
@@ -473,7 +482,8 @@ export const createCandidateProfile = async (req, res) => {
         soft_skills,
         linkedin_profile,
         resume_file_path,
-        userId
+        userId,
+        verifiedFlag
       ]
     );
 
@@ -509,7 +519,7 @@ export const getCandidateProfile = async (req, res) => {
         current_location, preferred_location, notice_period, offer_in_hand, 
         reason_for_change, current_company_name, highest_qualification, 
         address_aadhaar, technical_skills, soft_skills, linkedin_profile, 
-        resume_file_path, candidate_profile_completed
+        resume_file_path, candidate_profile_completed, verified
       FROM users WHERE id=$1`,
       [userId]
     );
@@ -681,11 +691,18 @@ export const updateCandidateProfile = async (req, res) => {
       query += `resume_file_path=$${paramCount}, `;
       params.push(resume_file_path);
       paramCount++;
+
+      // A resume on file is enough to consider the candidate verified — keep
+      // the "Profile status" badge in sync instead of leaving it stuck on
+      // "Pending" once a resume has actually been uploaded.
+      if (resume_file_path) {
+        query += `verified=true, `;
+      }
     }
 
     // Remove trailing comma and space
     query = query.slice(0, -2);
-    query += ` WHERE id=$${paramCount} RETURNING id, name, email, role, job_role, contact, skills, cctc, ectc, current_location, preferred_location, notice_period, offer_in_hand, reason_for_change, current_company_name, highest_qualification, address_aadhaar, technical_skills, soft_skills, linkedin_profile, resume_file_path, candidate_profile_completed`;
+    query += ` WHERE id=$${paramCount} RETURNING id, name, email, role, job_role, contact, skills, cctc, ectc, current_location, preferred_location, notice_period, offer_in_hand, reason_for_change, current_company_name, highest_qualification, address_aadhaar, technical_skills, soft_skills, linkedin_profile, resume_file_path, candidate_profile_completed, verified`;
     params.push(userId);
 
     const result = await pool.query(query, params);
@@ -718,7 +735,7 @@ export const verifyCandidateProfile = async (req, res) => {
     
     // Get resume file path from multer
     const resumeFilePath = req.file ? `/uploads/resumes/${req.file.filename}` : null;
-    const skills = req.body.skills ? JSON.parse(req.body.skills) : [];
+    let skills = req.body.skills ? JSON.parse(req.body.skills) : [];
 
     // Verify user is a candidate
     const userCheck = await pool.query(
@@ -734,10 +751,54 @@ export const verifyCandidateProfile = async (req, res) => {
       return res.status(403).json({ error: "Only candidates can verify profiles" });
     }
 
-    // Update resume and skills
+    // Try to auto-extract skills/experience/education from the resume itself
+    // so the candidate doesn't have to re-type what's already on the page.
+    // Fields the candidate has already filled in are left untouched (via
+    // COALESCE/NULLIF below) — this only fills in blanks, never overwrites.
+    let parsed = null;
+    if (req.file) {
+      try {
+        const extracted = await extractResumeDetails(req.file.path, req.file.originalname);
+        parsed = extracted.parsed;
+        if (parsed?.skills) {
+          const fromResume = parsed.skills.split(",").map(s => s.trim()).filter(Boolean);
+          skills = [...new Set([...skills, ...fromResume])];
+        }
+      } catch (err) {
+        console.error("Resume auto-parse failed (non-fatal):", err.message);
+      }
+    }
+
+    // Update resume, skills, verified flag, and any blank profile fields we
+    // could confidently extract from the resume text.
     const result = await pool.query(
-      "UPDATE users SET resume_file_path=$1, skills=$2, verified=true WHERE id=$3 RETURNING id, name, email, role, resume_file_path, skills, verified",
-      [resumeFilePath, JSON.stringify(skills), userId]
+      `UPDATE users SET
+         resume_file_path = $1,
+         skills = $2,
+         verified = true,
+         highest_qualification = COALESCE(NULLIF(highest_qualification, ''), $3),
+         current_location = COALESCE(NULLIF(current_location, ''), $4),
+         current_company_name = COALESCE(NULLIF(current_company_name, ''), $5),
+         technical_skills = COALESCE(NULLIF(technical_skills, ''), $6),
+         soft_skills = COALESCE(NULLIF(soft_skills, ''), $7),
+         contact = COALESCE(NULLIF(contact, ''), $8),
+         linkedin_profile = COALESCE(NULLIF(linkedin_profile, ''), $9)
+       WHERE id = $10
+       RETURNING id, name, email, role, resume_file_path, skills, verified,
+                 highest_qualification, current_location, current_company_name,
+                 technical_skills, soft_skills, contact, linkedin_profile`,
+      [
+        resumeFilePath,
+        JSON.stringify(skills),
+        parsed?.highest_qualification || null,
+        parsed?.location || null,
+        parsed?.current_company_name || null,
+        parsed?.technical_skills || null,
+        parsed?.soft_skills || null,
+        parsed?.contact || null,
+        parsed?.linkedin || null,
+        userId,
+      ]
     );
 
     if (result.rows.length === 0) {
@@ -746,7 +807,8 @@ export const verifyCandidateProfile = async (req, res) => {
 
     res.json({
       message: "Profile verified successfully",
-      user: result.rows[0]
+      user: result.rows[0],
+      parsed,
     });
   } catch (error) {
     console.error("Error verifying candidate profile:", error);
