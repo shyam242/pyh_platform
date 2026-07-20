@@ -415,6 +415,29 @@ export const getJobApplications = async (req, res) => {
   }
 };
 
+// GET CANDIDATE'S APPLIED JOBS (full list, with job + status details)
+export const getCandidateAppliedJobs = async (req, res) => {
+  try {
+    const candidateId = req.user.id;
+
+    const result = await pool.query(
+      `SELECT ja.id AS application_id, ja.job_id, ja.status, ja.applied_at,
+              j.job_title, j.department, j.location, j.job_type,
+              j.experience_required, j.salary_range, j.job_description
+       FROM job_applications ja
+       JOIN jobs j ON ja.job_id = j.id
+       WHERE ja.candidate_id=$1
+       ORDER BY ja.applied_at DESC`,
+      [candidateId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch applied jobs" });
+  }
+};
+
 // GET CANDIDATE'S APPLIED JOBS COUNT
 export const getCandidateAppliedCount = async (req, res) => {
   try {
