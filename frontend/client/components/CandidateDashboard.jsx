@@ -398,10 +398,14 @@ export default function CandidateDashboard() {
         {/* ── STAT CARDS + APPLICATION TRACKER ── */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr) 1.3fr", gap: 16, marginBottom: 36, alignItems: "stretch" }}>
           {[
-            { key: "jobs",    label: "Total jobs",     value: jobs.length, badge: `${Math.max(0,jobs.length-appliedCount)} new`, Icon: Briefcase, onClick: () => { setShowSavedOnly(false); document.getElementById("job-list-top")?.scrollIntoView({ behavior: "smooth" }); } },
-            { key: "applied", label: "Applied",         value: appliedCount, badge: "In review", Icon: Send,        onClick: () => router.push("/applied-jobs") },
-            { key: "status",  label: "Profile status",  value: profile?.verified ? "Verified" : "Pending", badge: profile?.verified ? "Active" : "Incomplete", Icon: ShieldCheck, onClick: () => router.push("/candidate-profile") },
-            { key: "skills",  label: "Skills added",    value: profileSkills.length, badge: "Manage", Icon: Sparkles, onClick: () => router.push("/candidate-profile/skills") },
+            { key: "jobs",    label: "Total jobs",     value: jobs.length, badge: `${Math.max(0,jobs.length-appliedCount)} new`, Icon: Briefcase,
+              accent: "#4F46E5", accentLite: "#EEF2FF", onClick: () => { setShowSavedOnly(false); document.getElementById("job-list-top")?.scrollIntoView({ behavior: "smooth" }); } },
+            { key: "applied", label: "Applied",         value: appliedCount, badge: "In review", Icon: Send,
+              accent: "#2563EB", accentLite: "#EFF6FF", onClick: () => router.push("/applied-jobs") },
+            { key: "status",  label: "Profile status",  value: profile?.verified ? "Verified" : "Pending", badge: profile?.verified ? "Active" : "Incomplete", Icon: ShieldCheck,
+              accent: profile?.verified ? "#16A34A" : "#D97706", accentLite: profile?.verified ? "#F0FDF4" : "#FFFBEB", onClick: () => router.push("/candidate-profile") },
+            { key: "skills",  label: "Skills added",    value: profileSkills.length, badge: "Manage", Icon: Sparkles,
+              accent: "#DB2777", accentLite: "#FDF2F8", onClick: () => router.push("/candidate-profile/skills") },
           ].map(card => (
             <button
               key={card.key}
@@ -409,21 +413,21 @@ export default function CandidateDashboard() {
               style={{
                 textAlign: "left", cursor: "pointer", fontFamily: "inherit",
                 borderRadius: 16, padding: "18px 20px", backgroundColor: "#fff",
-                border: `1.5px solid ${BORDER}`, position: "relative", overflow: "hidden",
+                border: `1.5px solid ${BORDER}`, borderTop: `3px solid ${card.accent}`, position: "relative", overflow: "hidden",
                 transition: "box-shadow 0.15s, border-color 0.15s",
               }}
-              onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.06)"; e.currentTarget.style.borderColor = O_MID; }}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = BORDER; }}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.06)"; e.currentTarget.style.borderColor = card.accent; e.currentTarget.style.borderTopColor = card.accent; }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = BORDER; e.currentTarget.style.borderTopColor = card.accent; }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: O_LITE, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <card.Icon size={18} color={O} />
+                <div style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: card.accentLite, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <card.Icon size={18} color={card.accent} />
                 </div>
                 <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", letterSpacing: "0.06em", textTransform: "uppercase" }}>{card.label}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: typeof card.value === "string" && card.value.length > 5 ? 20 : 30, fontWeight: 700, color: "#0f172a", lineHeight: 1 }}>{card.value}</span>
-                <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 11px", borderRadius: 999, backgroundColor: O_LITE, color: "#B35500" }}>{card.badge}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 11px", borderRadius: 999, backgroundColor: card.accentLite, color: card.accent }}>{card.badge}</span>
               </div>
             </button>
           ))}
