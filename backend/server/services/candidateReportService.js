@@ -293,6 +293,35 @@ function percentColor(pct) {
   return COLOR.red;
 }
 
+// Keeps content height bounded/predictable so the report fits one page:
+// caps list length (with a "+N more" note) and truncates long strings.
+function capList(arr, n) {
+  const list = arr || [];
+  if (list.length <= n) return { items: list, more: 0 };
+  return { items: list.slice(0, n), more: list.length - n };
+}
+function truncate(str, max) {
+  if (!str) return str;
+  const s = String(str);
+  return s.length > max ? s.slice(0, max - 1).trimEnd() + "\u2026" : s;
+}
+// Truncates str with an ellipsis so it's guaranteed to render on ONE line
+// within maxWidth at the given font. Unlike truncate() (a character-count
+// guess), this measures actual glyph widths — it's what keeps every row's
+// height perfectly predictable so the report never spills past one page.
+function fitWidth(doc, str, maxWidth, fontSize, bold = false) {
+  if (!str) return str;
+  const s = String(str);
+  doc.fontSize(fontSize).font(bold ? "Helvetica-Bold" : "Helvetica");
+  if (doc.widthOfString(s) <= maxWidth) return s;
+  let lo = 0, hi = s.length;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (doc.widthOfString(s.slice(0, mid) + "\u2026") <= maxWidth) lo = mid; else hi = mid - 1;
+  }
+  return lo > 0 ? s.slice(0, lo) + "\u2026" : "\u2026";
+}
+
 // Draws a ring/donut: gray background track + colored progress arc, with
 // a percentage (or short label) centered inside.
 function drawRing(doc, cx, cy, radius, thickness, percent, color, centerText, centerFontSize = 13) {
@@ -336,18 +365,29 @@ function drawRing(doc, cx, cy, radius, thickness, percent, color, centerText, ce
 
 function itemToLine(doc, item, width) {
   doc.fontSize(item.size || 9).font(item.bold ? "Helvetica-Bold" : "Helvetica");
+  let line;
   switch (item.type) {
-    case "kv":
-      return `${item.label}: ${item.value ?? "-"}`;
+    case "kv": {
+      const label = `${item.label}: `;
+      doc.fontSize(item.size || 9).font(item.bold ? "Helvetica-Bold" : "Helvetica");
+      const labelW = doc.widthOfString(label);
+      const value = fitWidth(doc, item.value ?? "-", Math.max(20, width - labelW), item.size || 9, item.bold);
+      line = label + value;
+      break;
+    }
     case "check":
-      return `${item.ok ? "\u2713" : "\u2715"}  ${item.text}`;
+      line = `${item.ok ? "\u2713" : "\u2715"}  ${item.text}`;
+      break;
     case "bullet":
-      return `\u2022  ${item.text}`;
+      line = `\u2022  ${item.text}`;
+      break;
     case "text":
-      return item.text;
+      line = item.text;
+      break;
     default:
-      return "";
+      line = "";
   }
+  return fitWidth(doc, line, width, item.size || 9, item.bold);
 }
 
 function measureItems(doc, items, width) {
@@ -376,8 +416,8 @@ function renderItems(doc, x, y, items, width) {
   return cy;
 }
 
-const CARD_PAD = 12;
-const HEADER_H = 20;
+const CARD_PAD = 7;
+const HEADER_H = 14;
 
 // Renders one numbered card at (x,y) with given width; returns bottom Y.
 function renderCard(doc, x, y, width, num, title, items, opts = {}) {
@@ -400,7 +440,7 @@ function renderCard(doc, x, y, width, num, title, items, opts = {}) {
   doc.fontSize(8.5).font("Helvetica-Bold").fillColor(COLOR.navy)
     .text(String(num), badgeCx - 9, badgeCy - 4.5, { width: 18, align: "center" });
   doc.fontSize(10.5).font("Helvetica-Bold").fillColor(COLOR.ink)
-    .text(title, x + CARD_PAD + 20, y + CARD_PAD + 1, { width: innerW - 20 });
+    .text(fitWidth(doc, title, innerW - 20, 10.5, true), x + CARD_PAD + 20, y + CARD_PAD + 1, { width: innerW - 20, lineBreak: false });
   doc.fillColor("#000");
 
   let contentY = y + CARD_PAD + HEADER_H;
@@ -412,10 +452,9 @@ function renderCard(doc, x, y, width, num, title, items, opts = {}) {
 }
 
 function ensureSpace(doc, neededH) {
-  if (doc.y + neededH > PAGE_H - PAGE_MARGIN) {
-    doc.addPage();
-    doc.y = 40;
-  }
+  // Intentionally a no-op: the report must render on exactly one page.
+  // Content going into it is capped/truncated (see capList/truncate) so it
+  // fits within PAGE_H — we never call doc.addPage() here.
 }
 
 // Slim repeated header drawn on every page after the first (the first page
@@ -424,8 +463,9 @@ function drawContinuationHeader(doc) {
   doc.rect(0, 0, PAGE_W, 28).fillColor("#FFFFFF").fill();
   doc.moveTo(0, 28).lineTo(PAGE_W, 28).strokeColor(COLOR.border).lineWidth(1).stroke();
   doc.fontSize(9.5).font("Helvetica-Bold").fillColor(COLOR.brandNavy)
-    .text("Pick", PAGE_MARGIN, 9, { continued: true })
-    .fillColor(COLOR.brandOrange).text("YourHire");
+    .text("PICK", PAGE_MARGIN, 9, { continued: true })
+    .fillColor(COLOR.brandOrange).text("YOUR", { continued: true })
+    .fillColor(COLOR.brandNavy).text("HIRE");
   doc.fontSize(7.5).font("Helvetica").fillColor(COLOR.gray)
     .text("Candidate Evaluation Report — Confidential", 0, 10, { width: PAGE_W - PAGE_MARGIN, align: "right" });
   doc.fillColor("#000");
@@ -452,7 +492,7 @@ export function buildPdfBuffer(report, meta = {}) {
     doc.on("pageAdded", () => drawContinuationHeader(doc));
 
     const p = report.candidate_profile || {};
-    const gap = 14;
+    const gap = 7;
 
     // ── Header bar (white, branded) ──
     const HEADER_H2 = 62;
@@ -465,10 +505,11 @@ export function buildPdfBuffer(report, meta = {}) {
     doc.roundedRect(PAGE_MARGIN + 6, 31, 12, 5, 2.5).fillColor("#FFFFFF").fillOpacity(0.85).fill();
     doc.fillOpacity(1);
     doc.fontSize(13.5).font("Helvetica-Bold").fillColor(COLOR.brandNavy)
-      .text("Pick", PAGE_MARGIN + 38, 18, { continued: true })
-      .fillColor(COLOR.brandOrange).text("YourHire");
-    doc.fontSize(7).font("Helvetica").fillColor(COLOR.gray)
-      .text("Right People. Great Companies.", PAGE_MARGIN + 38, 33);
+      .text("PICK", PAGE_MARGIN + 38, 18, { continued: true })
+      .fillColor(COLOR.brandOrange).text("YOUR", { continued: true })
+      .fillColor(COLOR.brandNavy).text("HIRE");
+    doc.fontSize(7).font("Helvetica-Oblique").fillColor(COLOR.gray)
+      .text("because the right hire changes everything", PAGE_MARGIN + 38, 33);
 
     // Center title
     const titleBoxX = PAGE_MARGIN + 120, titleBoxW = PAGE_W - titleBoxX * 2;
@@ -498,16 +539,17 @@ export function buildPdfBuffer(report, meta = {}) {
     const leftX = PAGE_MARGIN, rightX = PAGE_MARGIN + col2W + gap;
     const row1Y = doc.y;
 
+    const kvSize = 8;
     const summaryItems = [
-      { type: "kv", label: "Current Designation", value: p.designation },
-      { type: "kv", label: "Total Experience", value: p.experience ? `${p.experience} Years` : null },
-      { type: "kv", label: "Current Company", value: p.current_company_name },
-      { type: "kv", label: "Current Location", value: p.current_location },
-      { type: "kv", label: "Preferred Location", value: p.preferred_location },
-      { type: "kv", label: "Notice Period", value: p.notice_period },
-      { type: "kv", label: "Current CTC", value: p.current_ctc ? `Rs. ${p.current_ctc}` : null },
-      { type: "kv", label: "Expected CTC", value: p.expected_ctc ? `Rs. ${p.expected_ctc}` : null },
-      { type: "kv", label: "Highest Qualification", value: p.highest_qualification },
+      { type: "kv", label: "Current Designation", value: p.designation, size: kvSize },
+      { type: "kv", label: "Total Experience", value: p.experience ? `${p.experience} Years` : null, size: kvSize },
+      { type: "kv", label: "Current Company", value: p.current_company_name, size: kvSize },
+      { type: "kv", label: "Current Location", value: p.current_location, size: kvSize },
+      { type: "kv", label: "Preferred Location", value: p.preferred_location, size: kvSize },
+      { type: "kv", label: "Notice Period", value: p.notice_period, size: kvSize },
+      { type: "kv", label: "Current CTC", value: p.current_ctc ? `Rs. ${p.current_ctc}` : null, size: kvSize },
+      { type: "kv", label: "Expected CTC", value: p.expected_ctc ? `Rs. ${p.expected_ctc}` : null, size: kvSize },
+      { type: "kv", label: "Highest Qualification", value: p.highest_qualification, size: kvSize },
     ];
 
     const candidateName = p.name || meta.candidateName || "Candidate";
@@ -518,32 +560,33 @@ export function buildPdfBuffer(report, meta = {}) {
     const recColor = recIsPositive ? COLOR.green : recIsCaution ? COLOR.brandOrange : recText ? COLOR.red : COLOR.gray;
     const recBg = recIsPositive ? COLOR.greenLite : recIsCaution ? COLOR.brandOrangeLite : recText ? COLOR.redLite : COLOR.bg;
 
-    const avatarHeaderH = 50;
-    const recFooterH = 40;
+    const avatarHeaderH = 34;
+    const recFooterH = 26;
 
     const endY1 = renderCard(doc, leftX, row1Y, col2W, 1, "Candidate Summary", summaryItems, {
       accent: COLOR.brandNavy,
       extraH: avatarHeaderH,
       footerH: recFooterH,
       renderExtra: (doc, cx0, cy0, innerW) => {
-        doc.circle(cx0 + 19, cy0 + 19, 19).fillColor(COLOR.brandNavy).fill();
-        doc.fontSize(13).font("Helvetica-Bold").fillColor("#fff")
-          .text(initials, cx0, cy0 + 12, { width: 38, align: "center" });
+        doc.circle(cx0 + 16, cy0 + 16, 16).fillColor(COLOR.brandNavy).fill();
+        doc.fontSize(11.5).font("Helvetica-Bold").fillColor("#fff")
+          .text(initials, cx0, cy0 + 10, { width: 32, align: "center" });
         doc.fillColor("#000");
-        doc.fontSize(13).font("Helvetica-Bold").fillColor(COLOR.ink).text(candidateName, cx0 + 48, cy0 + 4, { width: innerW - 48 });
-        doc.fontSize(9).font("Helvetica-Bold").fillColor(COLOR.brandOrange).text(p.designation || "—", cx0 + 48, cy0 + 21, { width: innerW - 48 });
-        return cy0 + avatarHeaderH + 4;
+        doc.fontSize(12).font("Helvetica-Bold").fillColor(COLOR.ink)
+          .text(fitWidth(doc, candidateName, innerW - 40, 12, true), cx0 + 40, cy0 + 2, { width: innerW - 40, lineBreak: false });
+        doc.fontSize(8.5).font("Helvetica-Bold").fillColor(COLOR.brandOrange)
+          .text(fitWidth(doc, p.designation || "—", innerW - 40, 8.5, true), cx0 + 40, cy0 + 18, { width: innerW - 40, lineBreak: false });
+        return cy0 + avatarHeaderH + 2;
       },
       renderFooter: (doc, cx0, cy0, innerW) => {
-        const fy = cy0 + 6;
-        doc.roundedRect(cx0, fy, innerW, recFooterH - 6, 8).fillColor(recBg).fill();
-        // small check/status dot
-        doc.circle(cx0 + 18, fy + (recFooterH - 6) / 2, 9).fillColor(recColor).fill();
-        doc.fontSize(9).font("Helvetica-Bold").fillColor("#fff").text(recIsPositive ? "\u2713" : recIsCaution ? "!" : "\u2715", cx0 + 18 - 5, fy + (recFooterH - 6) / 2 - 5, { width: 10, align: "center" });
-        doc.fontSize(9.5).font("Helvetica-Bold").fillColor(recColor)
-          .text(recText || "Recommendation pending", cx0 + 34, fy + 6, { width: innerW - 44 });
-        doc.fontSize(7.5).font("Helvetica").fillColor(COLOR.gray)
-          .text("Overall Recommendation", cx0 + 34, fy + (recFooterH - 6) / 2 + 4, { width: innerW - 44 });
+        const fy = cy0 + 4;
+        doc.roundedRect(cx0, fy, innerW, recFooterH - 4, 7).fillColor(recBg).fill();
+        doc.circle(cx0 + 15, fy + (recFooterH - 4) / 2, 7.5).fillColor(recColor).fill();
+        doc.fontSize(8).font("Helvetica-Bold").fillColor("#fff").text(recIsPositive ? "\u2713" : recIsCaution ? "!" : "\u2715", cx0 + 15 - 5, fy + (recFooterH - 4) / 2 - 4.5, { width: 10, align: "center" });
+        doc.fontSize(8.5).font("Helvetica-Bold").fillColor(recColor)
+          .text(fitWidth(doc, recText || "Recommendation pending", innerW - 36, 8.5, true), cx0 + 28, fy + 4, { width: innerW - 36, lineBreak: false });
+        doc.fontSize(6.8).font("Helvetica").fillColor(COLOR.gray)
+          .text("Overall Recommendation", cx0 + 28, fy + (recFooterH - 4) / 2 + 3, { width: innerW - 36 });
         doc.fillColor("#000");
       },
     });
@@ -556,38 +599,38 @@ export function buildPdfBuffer(report, meta = {}) {
       ["Industry / Domain Match", report.domain_match?.score, report.domain_match?.max],
       ["Education & Certifications", report.education_match?.score, report.education_match?.max],
     ];
-    const barsH = breakdown.length * 15;
-    const donutH = 108;
+    const barsH = breakdown.length * 11.5;
+    const donutH = 78;
     const matchScore = report.final_match_score ?? 0;
     const scoreColor = percentColor(matchScore);
 
     const endY2 = renderCard(doc, rightX, row1Y, col2W, 2, `Overall Role Match Score${report.job_title ? ` — ${report.job_title}` : ""}`, [], {
       accent: COLOR.brandOrange,
-      extraH: donutH + barsH + 8,
+      extraH: donutH + barsH + 6,
       renderExtra: (doc, cx0, cy0, innerW) => {
-        const ringCx = cx0 + 44, ringCy = cy0 + 46;
-        drawRing(doc, ringCx, ringCy, 34, 9, matchScore, scoreColor, `${matchScore}%`, 15);
-        doc.fontSize(8).font("Helvetica-Bold").fillColor(scoreColor)
-          .text(report.match_label || "", cx0, cy0 + 86, { width: 92, align: "center" });
+        const ringCx = cx0 + 38, ringCy = cy0 + 38;
+        drawRing(doc, ringCx, ringCy, 29, 8, matchScore, scoreColor, `${matchScore}%`, 13);
+        doc.fontSize(7.5).font("Helvetica-Bold").fillColor(scoreColor)
+          .text(fitWidth(doc, report.match_label || "", 80, 7.5, true), cx0, cy0 + 71, { width: 80, align: "center", lineBreak: false });
 
         // recommendation badge
-        doc.roundedRect(cx0 + 100, cy0 + 4, innerW - 100, 30, 6).fillColor(COLOR.greenLite).fill();
-        doc.fontSize(8.5).font("Helvetica-Bold").fillColor("#3B6D11")
-          .text(report.recommendation || "", cx0 + 108, cy0 + 13, { width: innerW - 116 });
+        doc.roundedRect(cx0 + 88, cy0 + 4, innerW - 88, 26, 6).fillColor(COLOR.greenLite).fill();
+        doc.fontSize(7.8).font("Helvetica-Bold").fillColor("#3B6D11")
+          .text(fitWidth(doc, report.recommendation || "", innerW - 104, 7.8, true), cx0 + 96, cy0 + 12, { width: innerW - 104, lineBreak: false });
         doc.fillColor("#000");
 
         // score breakdown bars
-        let by = cy0 + 44;
-        const barX = cx0 + 100, barW = innerW - 100 - 34;
+        let by = cy0 + 36;
+        const barX = cx0 + 88, barW = innerW - 88 - 30;
         breakdown.forEach(([label, score, max]) => {
-          doc.fontSize(7.8).font("Helvetica").fillColor(COLOR.gray).text(label, barX, by, { width: barW });
-          by += 10;
-          doc.roundedRect(barX, by, barW, 5, 2.5).fillColor(COLOR.lightGray).fill();
+          doc.fontSize(7.2).font("Helvetica").fillColor(COLOR.gray).text(fitWidth(doc, label, barW, 7.2), barX, by, { width: barW, lineBreak: false });
+          by += 9;
+          doc.roundedRect(barX, by, barW, 4.5, 2.2).fillColor(COLOR.lightGray).fill();
           const pct = max ? (score / max) : 0;
-          if (pct > 0) doc.roundedRect(barX, by, barW * pct, 5, 2.5).fillColor(COLOR.navy).fill();
-          doc.fontSize(7.5).font("Helvetica-Bold").fillColor(COLOR.ink).text(`${score ?? 0}/${max ?? 0}`, barX + barW + 4, by - 2);
+          if (pct > 0) doc.roundedRect(barX, by, barW * pct, 4.5, 2.2).fillColor(COLOR.navy).fill();
+          doc.fontSize(7).font("Helvetica-Bold").fillColor(COLOR.ink).text(`${score ?? 0}/${max ?? 0}`, barX + barW + 4, by - 2);
           doc.fillColor("#000");
-          by += 11;
+          by += 9.5;
         });
         return by;
       },
@@ -599,25 +642,29 @@ export function buildPdfBuffer(report, meta = {}) {
     const col3W = (CONTENT_W - gap * 2) / 3;
     const c1x = PAGE_MARGIN, c2x = PAGE_MARGIN + col3W + gap, c3x = PAGE_MARGIN + (col3W + gap) * 2;
 
+    const skillsCap = capList(report.skills_match?.rows, 6);
     const skillItems = [
-      ...(report.skills_match?.rows || []).map((r) => ({ type: "check", ok: r.match, text: `${r.skill}`, size: 8.3 })),
-      { type: "gap", h: 3 },
-      { type: "text", text: `Overall Technical Skill Match: ${report.skills_match?.overall_percent ?? "-"}%`, bold: true, color: COLOR.green, size: 9 },
+      ...skillsCap.items.map((r) => ({ type: "check", ok: r.match, text: truncate(r.skill, 34), size: 7.6 })),
+      ...(skillsCap.more ? [{ type: "text", text: `+${skillsCap.more} more`, color: COLOR.gray, size: 7.2 }] : []),
+      { type: "gap", h: 2 },
+      { type: "text", text: `Overall Technical Skill Match: ${report.skills_match?.overall_percent ?? "-"}%`, bold: true, color: COLOR.green, size: 8.3 },
     ];
 
     const expDomainItems = [
-      { type: "kv", label: "Min Experience (JD)", value: report.experience_match?.min_experience_years != null ? `${report.experience_match.min_experience_years} yrs` : "-" },
-      { type: "kv", label: "Relevant Experience", value: report.experience_match?.relevant_experience_years != null ? `${report.experience_match.relevant_experience_years} yrs` : "-" },
-      { type: "text", text: `Experience Match Score: ${report.experience_match?.percent ?? "-"}%`, bold: true, color: COLOR.green, size: 9 },
-      { type: "gap", h: 8 },
-      { type: "text", text: "Domain Experience", bold: true, size: 9 },
-      { type: "text", text: (report.domain_match?.domains || []).join(", ") || "-", size: 8.5 },
+      { type: "kv", label: "Min Experience (JD)", value: report.experience_match?.min_experience_years != null ? `${report.experience_match.min_experience_years} yrs` : "-", size: 8 },
+      { type: "kv", label: "Relevant Experience", value: report.experience_match?.relevant_experience_years != null ? `${report.experience_match.relevant_experience_years} yrs` : "-", size: 8 },
+      { type: "text", text: `Experience Match Score: ${report.experience_match?.percent ?? "-"}%`, bold: true, color: COLOR.green, size: 8.3 },
+      { type: "gap", h: 5 },
+      { type: "text", text: "Domain Experience", bold: true, size: 8.3 },
+      { type: "text", text: truncate((report.domain_match?.domains || []).join(", ") || "-", 80), size: 7.8 },
     ];
 
+    const respCap = capList(report.responsibilities_match?.rows, 5);
     const respItems = [
-      ...(report.responsibilities_match?.rows || []).map((r) => ({ type: "check", ok: r.match, text: r.responsibility, size: 8.3 })),
-      { type: "gap", h: 3 },
-      { type: "text", text: `Responsibilities Match: ${report.responsibilities_match?.percent ?? "-"}%`, bold: true, color: COLOR.green, size: 9 },
+      ...respCap.items.map((r) => ({ type: "check", ok: r.match, text: truncate(r.responsibility, 48), size: 7.6 })),
+      ...(respCap.more ? [{ type: "text", text: `+${respCap.more} more`, color: COLOR.gray, size: 7.2 }] : []),
+      { type: "gap", h: 2 },
+      { type: "text", text: `Responsibilities Match: ${report.responsibilities_match?.percent ?? "-"}%`, bold: true, color: COLOR.green, size: 8.3 },
     ];
 
     // Measure all three BEFORE drawing any of them, so if the row doesn't
@@ -638,29 +685,33 @@ export function buildPdfBuffer(report, meta = {}) {
 
     // ── ROW 3: Profile Summary | Employment Timeline | Evaluation Summary ──
     const profileItems = [
-      { type: "kv", label: "Total Skills Identified", value: report.total_skills_identified },
-      { type: "kv", label: "Certifications", value: report.certifications_count },
-      { type: "kv", label: "Companies Worked", value: report.companies_worked_count },
-      { type: "gap", h: 6 },
-      { type: "text", text: "Top Skills", bold: true, size: 9 },
-      { type: "text", text: (report.top_skills || []).join(", ") || "-", size: 8.5 },
+      { type: "kv", label: "Total Skills Identified", value: report.total_skills_identified, size: 8 },
+      { type: "kv", label: "Certifications", value: report.certifications_count, size: 8 },
+      { type: "kv", label: "Companies Worked", value: report.companies_worked_count, size: 8 },
+      { type: "gap", h: 4 },
+      { type: "text", text: "Top Skills", bold: true, size: 8.3 },
+      { type: "text", text: truncate((report.top_skills || []).join(", ") || "-", 80), size: 7.8 },
     ];
 
+    const timelineCap = capList(report.employment_timeline, 2);
     const timelineItems = [];
-    (report.employment_timeline || []).forEach((e) => {
-      timelineItems.push({ type: "text", text: `${e.company || "-"} — ${e.designation || "-"}`, bold: true, size: 8.5 });
-      timelineItems.push({ type: "text", text: `${e.start || "-"} to ${e.end || "-"}  (${e.duration || "-"})`, color: COLOR.gray, size: 8 });
-      timelineItems.push({ type: "gap", h: 3 });
+    timelineCap.items.forEach((e) => {
+      timelineItems.push({ type: "text", text: truncate(`${e.company || "-"} — ${e.designation || "-"}`, 42), bold: true, size: 7.8 });
+      timelineItems.push({ type: "text", text: `${e.start || "-"} to ${e.end || "-"}  (${e.duration || "-"})`, color: COLOR.gray, size: 7.3 });
+      timelineItems.push({ type: "gap", h: 2 });
     });
-    if (timelineItems.length === 0) timelineItems.push({ type: "text", text: "No employment history on record.", color: COLOR.gray, size: 8.5 });
-    timelineItems.push({ type: "text", text: `Employment Stability Score: ${report.employment_stability_score ?? "-"} / 5`, bold: true, size: 9 });
+    if (timelineItems.length === 0) timelineItems.push({ type: "text", text: "No employment history on record.", color: COLOR.gray, size: 7.8 });
+    if (timelineCap.more) timelineItems.push({ type: "text", text: `+${timelineCap.more} earlier role(s)`, color: COLOR.gray, size: 7.2 });
+    timelineItems.push({ type: "text", text: `Employment Stability Score: ${report.employment_stability_score ?? "-"} / 5`, bold: true, size: 8.3 });
 
+    const strengthsCap = capList(report.profile_strengths, 3);
+    const considerCap = capList(report.areas_to_consider, 3);
     const evalItems = [
-      { type: "text", text: "Profile Strengths", bold: true, color: COLOR.green, size: 9 },
-      ...(report.profile_strengths || []).map((s) => ({ type: "bullet", text: s, size: 8.3 })),
-      { type: "gap", h: 6 },
-      { type: "text", text: "Areas to Consider", bold: true, color: COLOR.orange, size: 9 },
-      ...(report.areas_to_consider || []).map((s) => ({ type: "bullet", text: s, size: 8.3 })),
+      { type: "text", text: "Profile Strengths", bold: true, color: COLOR.green, size: 8.3 },
+      ...strengthsCap.items.map((s) => ({ type: "bullet", text: truncate(s, 58), size: 7.6 })),
+      { type: "gap", h: 4 },
+      { type: "text", text: "Areas to Consider", bold: true, color: COLOR.orange, size: 8.3 },
+      ...considerCap.items.map((s) => ({ type: "bullet", text: truncate(s, 58), size: 7.6 })),
     ];
 
     const row3MaxH = Math.max(
@@ -685,41 +736,43 @@ export function buildPdfBuffer(report, meta = {}) {
       ["Career Stability", report.career_stability_percent, true],
       ["Interview Success", report.interview_success_probability_percent, true],
     ];
-    const stripH = 92;
+    const stripH = 56;
     ensureSpace(doc, stripH);
     const stripY = doc.y;
     const cellW = CONTENT_W / metrics.length;
     doc.roundedRect(PAGE_MARGIN, stripY, CONTENT_W, stripH, 8).fillAndStroke("#FFFFFF", COLOR.border);
     metrics.forEach(([label, val, isPct], i) => {
       const cx = PAGE_MARGIN + cellW * i + cellW / 2;
-      const cy = stripY + 40;
+      const cy = stripY + 29;
       if (isPct) {
         const pct = Number(val) || 0;
-        drawRing(doc, cx, cy, 24, 6, pct, percentColor(pct), `${pct}%`, 9.5);
+        drawRing(doc, cx, cy, 18, 5, pct, percentColor(pct), `${pct}%`, 8);
       } else {
         const rc = riskColor(val);
-        doc.fillOpacity(0.15).circle(cx, cy, 24).fillColor(rc).fill();
+        doc.fillOpacity(0.15).circle(cx, cy, 18).fillColor(rc).fill();
         doc.fillOpacity(1);
-        doc.fontSize(8.5).font("Helvetica-Bold").fillColor(rc).text(String(val ?? "-"), cx - 24, cy - 5, { width: 48, align: "center" });
+        doc.fontSize(7.5).font("Helvetica-Bold").fillColor(rc).text(String(val ?? "-"), cx - 24, cy - 4, { width: 48, align: "center" });
       }
-      doc.fillColor("#000").fontSize(7).font("Helvetica").text(label, PAGE_MARGIN + cellW * i + 2, stripY + 72, { width: cellW - 4, align: "center" });
+      doc.fillColor("#000").fontSize(6.8).font("Helvetica").text(label, PAGE_MARGIN + cellW * i + 2, stripY + 52, { width: cellW - 4, align: "center" });
     });
     doc.y = stripY + stripH + gap;
 
     // ── ROW 5: Interview Focus Areas (full width) ──
-    const focusItems = (report.interview_focus_areas || []).map((s) => ({ type: "bullet", text: s, size: 8.5 }));
-    if (focusItems.length === 0) focusItems.push({ type: "text", text: "-", size: 8.5 });
+    const focusCap = capList(report.interview_focus_areas, 7);
+    const focusItems = focusCap.items.map((s) => ({ type: "bullet", text: truncate(s, 46), size: 7.8 }));
+    if (focusCap.more) focusItems.push({ type: "text", text: `+${focusCap.more} more`, color: COLOR.gray, size: 7.2 });
+    if (focusItems.length === 0) focusItems.push({ type: "text", text: "-", size: 7.8 });
     ensureSpace(doc, measureCardHeight(doc, CONTENT_W, focusItems));
     renderCard(doc, PAGE_MARGIN, doc.y, CONTENT_W, 11, "Interview Focus Areas", focusItems);
 
-    doc.y += 16;
-    ensureSpace(doc, 30);
+    doc.y += 6;
+    ensureSpace(doc, 26);
     const bandY = doc.y;
-    doc.roundedRect(PAGE_MARGIN, bandY, CONTENT_W, 26, 6).fillColor(COLOR.brandNavy).fill();
-    doc.fontSize(7.5).font("Helvetica").fillColor("#C7D2E8")
-      .text("This report is prepared by PickYourHire for candidate evaluation purposes only and should be validated during the interview process.", PAGE_MARGIN + 14, bandY + 6, { width: CONTENT_W - 200 });
+    doc.roundedRect(PAGE_MARGIN, bandY, CONTENT_W, 22, 6).fillColor(COLOR.brandNavy).fill();
+    doc.fontSize(7).font("Helvetica").fillColor("#C7D2E8")
+      .text("This report is prepared by PickYourHire for candidate evaluation purposes only and should be validated during the interview process.", PAGE_MARGIN + 12, bandY + 7, { width: CONTENT_W - 200 });
     doc.fontSize(8).font("Helvetica-Bold").fillColor("#FFFFFF")
-      .text("PickYourHire Consultants Private Limited", PAGE_MARGIN, bandY + 9, { width: CONTENT_W - 14, align: "right" });
+      .text("PickYourHire Consultants Private Limited", PAGE_MARGIN, bandY + 7, { width: CONTENT_W - 14, align: "right" });
     doc.fillColor("#000");
 
     doc.end();
