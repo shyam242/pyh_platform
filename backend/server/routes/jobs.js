@@ -10,7 +10,8 @@ import {
   getAdminJobs,
   applyForJob,
   getJobApplications,
-  getCandidateAppliedCount
+  getCandidateAppliedCount,
+  getCandidateAppliedJobs
 } from "../controllers/jobController.js";
 
 const router = express.Router();
@@ -22,6 +23,9 @@ router.get("/", getAllJobs);
 
 // CANDIDATE - GET APPLIED COUNT
 router.get("/applied/count", protect, getCandidateAppliedCount);
+
+// CANDIDATE - GET FULL APPLIED JOBS LIST (with status)
+router.get("/applied/list", protect, getCandidateAppliedJobs);
 
 // ADMIN - GET OWN JOBS  (must be before /:jobId)
 router.get("/admin/my-jobs", protect, getAdminJobs);
