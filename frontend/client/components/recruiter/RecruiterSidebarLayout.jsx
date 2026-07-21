@@ -16,7 +16,6 @@ export const BORDER = "#EBEBEB";
 
 const NAV_ITEMS = [
   { key: "dashboard",    label: "Dashboard",           icon: LayoutDashboard, href: "/recruiter" },
-  { key: "jobs",         label: "Jobs",                 icon: Briefcase,       href: "/recruiter/jobs" },
   { key: "candidates",   label: "Candidates",           icon: Users,           href: "/recruiter/candidates" },
   { key: "shortlisted",  label: "Shortlisted",          icon: Star,            href: "/recruiter/shortlisted" },
   { key: "interviews",   label: "Interviews Scheduled", icon: CalendarCheck,   href: "/recruiter/interviews" },
@@ -110,10 +109,10 @@ export default function RecruiterSidebarLayout({ active, children }) {
     .sort((a, b) => b.href.length - a.href.length)[0]?.key;
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#F5F6FA", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", display: "flex" }}>
+    <div style={{ height: "100vh", backgroundColor: "#F5F6FA", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", display: "flex" }}>
 
       {/* ── SIDEBAR ── */}
-      <aside style={{ width: 240, flexShrink: 0, backgroundColor: "#fff", borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", minHeight: "100vh", alignSelf: "flex-start" }}>
+      <aside style={{ width: 240, flexShrink: 0, backgroundColor: "#fff", borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", height: "100%", alignSelf: "stretch" }}>
         <div style={{ height: 60, flexShrink: 0, display: "flex", alignItems: "center", padding: "0 20px", borderBottom: `1px solid ${BORDER}`, boxSizing: "border-box" }}>
           <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "0.04em", color: "#0f172a" }}>
             PICK<span style={{ color: O }}>YOUR</span>HIRE
@@ -173,7 +172,7 @@ export default function RecruiterSidebarLayout({ active, children }) {
       </aside>
 
       {/* ── MAIN COLUMN ── */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column", overflowY: "auto" }}>
         {/* TOP BAR */}
         <div style={{ height: 60, flexShrink: 0, backgroundColor: "#fff", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 16, padding: "0 28px", position: "sticky", top: 0, zIndex: 40 }}>
           <div style={{ position: "relative", cursor: "pointer" }}>
