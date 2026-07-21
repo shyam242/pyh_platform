@@ -84,13 +84,12 @@ const normalizeResult = (item, isHistory) => {
 // Export a full list of candidate results (from a live match run or a past-results job group) as one CSV
 const exportResultsListCSV = (list, jdTitle, isHistory = false) => {
   const subKeys = Object.keys(WEIGHT_LABELS);
-  const header = ["Candidate Name", "Source", "Overall Score", ...Object.values(WEIGHT_LABELS), "Matched Skills", "Missing Skills", "Why Shortlist", "Concerns", "Analyzed Date"];
+  const header = ["Candidate Name", "Overall Score", ...Object.values(WEIGHT_LABELS), "Matched Skills", "Missing Skills", "Why Shortlist", "Concerns", "Analyzed Date"];
   const rows = [header];
   list.forEach(item => {
     const n = normalizeResult(item, isHistory);
     rows.push([
       n.name,
-      n.source_type === "bulk" ? "Bulk Uploaded" : "Referral",
       n.score,
       ...subKeys.map(k => (n.subscores[k] ?? "")),
       n.matched_skills.join("; "),
@@ -109,7 +108,6 @@ const exportCandidateReportCSV = (item, jdTitle, isHistory = false) => {
   const rows = [["Field", "Value"]];
   rows.push(["Job Title", jdTitle || ""]);
   rows.push(["Candidate Name", n.name || ""]);
-  rows.push(["Source", n.source_type === "bulk" ? "Bulk Uploaded" : "Referral"]);
   rows.push(["Overall Match Score", `${n.score}/100`]);
   Object.entries(WEIGHT_LABELS).forEach(([k, label]) => {
     rows.push([label, n.subscores[k] != null ? `${n.subscores[k]}/100` : ""]);
@@ -365,7 +363,7 @@ export default function JDMatchPage() {
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontSize: 14, fontWeight: 700 }}>{r.name}</div>
                                 <div style={{ fontSize: 11, color: "#94a3b8" }}>
-                                  {r.source_type === "bulk" ? "Bulk uploaded" : "Referral"} · Analyzed {new Date(r.jd_match_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                                  Analyzed {new Date(r.jd_match_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                                 </div>
                               </div>
                               <div style={{ textAlign: "center" }}>
@@ -500,15 +498,6 @@ export default function JDMatchPage() {
                     style={{ width: "100%", padding: "10px 14px", border: `1.5px solid ${BORDER}`, borderRadius: 9, fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }}
                     onFocus={e => e.target.style.borderColor = O} onBlur={e => e.target.style.borderColor = BORDER} />
                 </div>
-                <div>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Candidate Source</label>
-                  <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}
-                    style={{ width: "100%", padding: "10px 14px", border: `1.5px solid ${BORDER}`, borderRadius: 9, fontSize: 14, fontFamily: "inherit", outline: "none", backgroundColor: "#fff", cursor: "pointer", boxSizing: "border-box" }}>
-                    <option value="all">All candidates</option>
-                    <option value="referred">Referred only</option>
-                    <option value="bulk">Bulk uploaded only</option>
-                  </select>
-                </div>
               </div>
 
               <div style={{ display: "flex", gap: 10 }}>
@@ -561,7 +550,6 @@ export default function JDMatchPage() {
                         <div style={{ fontSize: 12, color: "#94a3b8" }}>{c.email} {c.experience ? `· ${c.experience} yrs` : ""} {c.company ? `· ${c.company}` : ""}</div>
                       </div>
                       {c.referrer_name && <span style={{ fontSize: 11, color: O, fontWeight: 600, backgroundColor: O_LITE, padding: "2px 9px", borderRadius: 6 }}>Referred</span>}
-                      <span style={{ fontSize: 11, color: "#94a3b8", backgroundColor: "#F1F5F9", padding: "2px 9px", borderRadius: 6 }}>{c.source_type === "bulk" ? "Bulk" : "Referral"}</span>
                     </div>
                   );
                 })}
@@ -621,7 +609,6 @@ export default function JDMatchPage() {
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 15, fontWeight: 700 }}>{r.name}</div>
-                            <div style={{ fontSize: 12, color: "#94a3b8" }}>{r.source_type === "bulk" ? "Bulk uploaded" : "Referral"}</div>
                           </div>
                           <div style={{ textAlign: "center" }}>
                             <div style={{ fontSize: 24, fontWeight: 700, color: sc.color, lineHeight: 1 }}>{r.weighted_score}</div>
