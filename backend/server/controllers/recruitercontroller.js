@@ -87,7 +87,7 @@ export const updateStatus = async (req, res) => {
 // recruiters never see it. Admin can see every recruiter's tags.
 // If the candidate was referred, the referrer gets an email on change.
 // ════════════════════════════════════════════════════════════════
-export const RECRUITER_CANDIDATE_STATUSES = ["Shortlisted", "In Process", "On Hold", "Offer Given"];
+export const RECRUITER_CANDIDATE_STATUSES = ["Shortlisted", "In Process", "On Hold", "Offer Given", "Rejected"];
 
 const getCandidateNameForSource = async (source, candidateId) => {
   if (source === "portal") {
