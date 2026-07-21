@@ -65,26 +65,20 @@ export default function CandidateCard({ candidate: c, actions, dateLabel = "Adde
           </div>
         </div>
 
-        {/* Referral / status box */}
-        <div style={{ minWidth: 170, flex: "0 0 auto" }}>
-          {c.referrer_name ? (
+        {/* Referral box — only ever shown when the candidate was actually referred */}
+        {c.referrer_name && (
+          <div style={{ minWidth: 170, flex: "0 0 auto" }}>
             <div style={{ backgroundColor: O_LITE, borderRadius: 10, padding: "8px 12px" }}>
               <div style={{ fontSize: 10.5, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 3 }}>Referred by</div>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: "#0f172a" }}>{c.referrer_name}</div>
               <div style={{ fontSize: 11, color: "#94a3b8" }}>{c.referrer_company || ""}</div>
             </div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#94a3b8" }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: c.is_bulk ? "#D97706" : "#94a3b8" }} />
-              {c.sourceLabel}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Dates / source */}
+        {/* Date added */}
         <div style={{ minWidth: 140, flex: "0 0 auto", fontSize: 11.5, color: "#94a3b8" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}><Calendar size={11} />{dateLabel} {fmtDate(c.created_at || c.upload_date)}</div>
-          <div>Sourced: {c.sourceLabel}</div>
           {extraMeta}
         </div>
 
