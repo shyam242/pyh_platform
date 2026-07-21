@@ -34,12 +34,13 @@ const STATUS = {
 };
 
 // Private per-recruiter pipeline status — only this recruiter (and admin) can see it.
-const PRIVATE_STATUS_OPTIONS = ["Shortlisted", "In Process", "On Hold", "Offer Given"];
+const PRIVATE_STATUS_OPTIONS = ["Shortlisted", "In Process", "On Hold", "Offer Given", "Rejected"];
 const PRIVATE_STATUS_COLORS = {
   "Shortlisted": { bg: "#EFF6FF", color: "#1d4ed8", border: "#BFDBFE" },
   "In Process":  { bg: "#F3E8FF", color: "#7c3aed", border: "#DDD6FE" },
   "On Hold":     { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" },
   "Offer Given": { bg: "#DCFCE7", color: "#15803d", border: "#86efac" },
+  "Rejected":    { bg: "#FEF2F2", color: "#DC2626", border: "#FECACA" },
 };
 
 export default function RecruiterDashboard() {
