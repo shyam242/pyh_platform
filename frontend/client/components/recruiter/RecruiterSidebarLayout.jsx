@@ -15,8 +15,7 @@ export const O_MID = "#FBBF7A";
 export const BORDER = "#EBEBEB";
 
 const NAV_ITEMS = [
-  { key: "dashboard",    label: "Dashboard",           icon: LayoutDashboard, href: "/recruiter/dashboard" },
-  { key: "jobs",         label: "Jobs",                 icon: Briefcase,       href: "/recruiter/jobs" },
+  { key: "dashboard",    label: "Dashboard",           icon: LayoutDashboard, href: "/recruiter" },
   { key: "candidates",   label: "Candidates",           icon: Users,           href: "/recruiter/candidates" },
   { key: "shortlisted",  label: "Shortlisted",          icon: Star,            href: "/recruiter/shortlisted" },
   { key: "interviews",   label: "Interviews Scheduled", icon: CalendarCheck,   href: "/recruiter/interviews" },
@@ -25,7 +24,7 @@ const NAV_ITEMS = [
   { key: "jdmatch",      label: "JD → CV Match",        icon: Sparkles,        href: "/jd-match", badge: "AI" },
   { key: "expcheck",     label: "Experience Check",     icon: ShieldCheck,     href: "/fake-experience-check", badge: "AI" },
   { key: "reports",      label: "Reports",              icon: BarChart2,       href: "/candidate-reports" },
-  { key: "profile",      label: "My Profile",           icon: User,            href: "/recruiter/profile" },
+  { key: "profile",      label: "My Profile",           icon: User,            href: "/profile" },
 ];
 
 const getInitials = name =>
@@ -60,7 +59,7 @@ function UserMenu({ user }) {
             <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{user?.name || "Recruiter"}</div>
             <div style={{ fontSize: 12, color: "#94a3b8" }}>{user?.email || ""}</div>
           </div>
-          <div onClick={() => router.push("/recruiter/profile")} style={{ padding: "10px 14px", fontSize: 13, color: "#334155", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+          <div onClick={() => router.push("/profile")} style={{ padding: "10px 14px", fontSize: 13, color: "#334155", cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
             <User size={14} /> My Profile
           </div>
           <div
@@ -105,7 +104,9 @@ export default function RecruiterSidebarLayout({ active, children }) {
     })();
   }, []);
 
-  const activeKey = active || NAV_ITEMS.find(n => pathname?.startsWith(n.href))?.key;
+  const activeKey = active || NAV_ITEMS
+    .filter(n => pathname === n.href || pathname?.startsWith(n.href + "/"))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.key;
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#F5F6FA", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", display: "flex" }}>
