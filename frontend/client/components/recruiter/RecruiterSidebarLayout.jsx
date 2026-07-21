@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard, Briefcase, Users, Star, CalendarCheck, PauseCircle,
-  Search, Sparkles, BarChart2, User, Settings, Bell, ChevronDown,
+  Search, Sparkles, BarChart2, User, ShieldCheck, Bell, ChevronDown,
   LogOut, Clock, UploadCloud,
 } from "lucide-react";
 import { API_BASE_URL } from "@/utils/api";
@@ -15,17 +15,17 @@ export const O_MID = "#FBBF7A";
 export const BORDER = "#EBEBEB";
 
 const NAV_ITEMS = [
-  { key: "dashboard",   label: "Dashboard",          icon: LayoutDashboard, href: "/recruiter/dashboard" },
-  { key: "jobs",        label: "Jobs",                icon: Briefcase,       href: "/recruiter/jobs" },
-  { key: "candidates",  label: "Candidates",          icon: Users,           href: "/recruiter/candidates" },
-  { key: "shortlisted", label: "Shortlisted",         icon: Star,            href: "/recruiter/shortlisted" },
-  { key: "interviews",  label: "Interviews Scheduled",icon: CalendarCheck,   href: "/recruiter/interviews" },
-  { key: "onhold",      label: "On Hold",             icon: PauseCircle,     href: "/recruiter/on-hold" },
-  { key: "projects",    label: "Search by Project",   icon: Search,          href: "/recruiter/search-by-project" },
-  { key: "jdmatch",     label: "JD → CV Match",       icon: Sparkles,        href: "/jd-match", badge: "AI" },
-  { key: "reports",     label: "Reports",             icon: BarChart2,       href: "/candidate-reports" },
-  { key: "profile",     label: "My Profile",          icon: User,            href: "/recruiter/profile" },
-  { key: "settings",    label: "Settings",            icon: Settings,        href: "/recruiter/settings" },
+  { key: "dashboard",    label: "Dashboard",           icon: LayoutDashboard, href: "/recruiter/dashboard" },
+  { key: "jobs",         label: "Jobs",                 icon: Briefcase,       href: "/recruiter/jobs" },
+  { key: "candidates",   label: "Candidates",           icon: Users,           href: "/recruiter/candidates" },
+  { key: "shortlisted",  label: "Shortlisted",          icon: Star,            href: "/recruiter/shortlisted" },
+  { key: "interviews",   label: "Interviews Scheduled", icon: CalendarCheck,   href: "/recruiter/interviews" },
+  { key: "onhold",       label: "On Hold",              icon: PauseCircle,     href: "/recruiter/on-hold" },
+  { key: "projects",     label: "Search by Project",    icon: Search,          href: "/recruiter/search-by-project" },
+  { key: "jdmatch",      label: "JD → CV Match",        icon: Sparkles,        href: "/jd-match", badge: "AI" },
+  { key: "expcheck",     label: "Experience Check",     icon: ShieldCheck,     href: "/fake-experience-check", badge: "AI" },
+  { key: "reports",      label: "Reports",              icon: BarChart2,       href: "/candidate-reports" },
+  { key: "profile",      label: "My Profile",           icon: User,            href: "/recruiter/profile" },
 ];
 
 const getInitials = name =>
