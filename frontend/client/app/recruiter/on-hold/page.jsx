@@ -75,7 +75,7 @@ export default function OnHoldPage() {
       ) : (
         <CandidateTable
           candidates={filtered}
-          columns={{ headers: ["Candidate", "Held On", "Source", "Status", "Actions"], gridTemplate: "2.2fr 1fr 1fr 1fr 1.6fr" }}
+          columns={{ headers: ["Candidate", "Held On", "Status", "Actions"], gridTemplate: "2.2fr 1fr 1fr 1.6fr" }}
           actions={[
             { label: "Shortlist",         bg: "#fff", color: "#16A34A", border: "#16A34A", onClick: c => setStatus(c.source, c.id, "Shortlisted") },
             { label: "Move to Interview", bg: "#fff", color: "#7C3AED", border: "#7C3AED", onClick: c => setStatus(c.source, c.id, "In Process") },
