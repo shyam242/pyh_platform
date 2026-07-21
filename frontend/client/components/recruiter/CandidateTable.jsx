@@ -64,9 +64,6 @@ export default function CandidateTable({ candidates, columns, actions }) {
             {/* Date col */}
             <span style={{ fontSize: 12.5, color: "#475569" }}>{fmtDate(c.myStatusUpdatedAt || c.created_at)}</span>
 
-            {/* Source col */}
-            <span style={{ fontSize: 12.5, color: "#475569" }}>{c.sourceLabel}</span>
-
             {/* Status / reason col */}
             {columns.showReason ? (
               <span style={{ fontSize: 12.5, color: "#475569" }}>{c.holdReason || "—"}</span>
