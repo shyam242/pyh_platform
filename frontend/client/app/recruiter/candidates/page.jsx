@@ -12,21 +12,18 @@ export default function CandidatesPage() {
   const { candidates, loading, setStatus, downloadCV } = useRecruiterCandidates();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [sourceFilter, setSourceFilter] = useState("all");
   const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
     return candidates.filter(c => {
       if (statusFilter !== "all" && c.myStatus !== statusFilter) return false;
-      if (sourceFilter === "referred" && c.source !== "referred") return false;
-      if (sourceFilter === "bulk" && c.source !== "bulk") return false;
       if (search) {
         const hay = [c.name, c.email, c.skills, c.role, c.current_location, c.referrer_name].filter(Boolean).join(" ").toLowerCase();
         if (!hay.includes(search.toLowerCase())) return false;
       }
       return true;
     }).sort((a, b) => new Date(b.created_at || b.upload_date || 0) - new Date(a.created_at || a.upload_date || 0));
-  }, [candidates, search, statusFilter, sourceFilter]);
+  }, [candidates, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const pageItems = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -68,11 +65,6 @@ export default function CandidatesPage() {
         <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); }} style={selectStyle}>
           <option value="all">All statuses</option>
           {["Shortlisted", "In Process", "On Hold", "Offer Given", "Rejected"].map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select value={sourceFilter} onChange={e => { setSourceFilter(e.target.value); setPage(1); }} style={selectStyle}>
-          <option value="all">All candidates</option>
-          <option value="referred">Employee Referral</option>
-          <option value="bulk">Bulk Upload</option>
         </select>
         <button style={{ ...selectStyle, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
           <Filter size={14} /> Filters
