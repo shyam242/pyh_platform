@@ -16,6 +16,7 @@ export const BORDER = "#EBEBEB";
 
 const NAV_ITEMS = [
   { key: "dashboard",    label: "Dashboard",           icon: LayoutDashboard, href: "/recruiter" },
+  { key: "jobs",         label: "Jobs",                 icon: Briefcase,       href: "/recruiter/jobs" },
   { key: "candidates",   label: "Candidates",           icon: Users,           href: "/recruiter/candidates" },
   { key: "shortlisted",  label: "Shortlisted",          icon: Star,            href: "/recruiter/shortlisted" },
   { key: "interviews",   label: "Interviews Scheduled", icon: CalendarCheck,   href: "/recruiter/interviews" },
@@ -112,8 +113,8 @@ export default function RecruiterSidebarLayout({ active, children }) {
     <div style={{ minHeight: "100vh", backgroundColor: "#F5F6FA", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", display: "flex" }}>
 
       {/* ── SIDEBAR ── */}
-      <aside style={{ width: 240, flexShrink: 0, backgroundColor: "#fff", borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh" }}>
-        <div style={{ padding: "22px 20px", borderBottom: `1px solid ${BORDER}` }}>
+      <aside style={{ width: 240, flexShrink: 0, backgroundColor: "#fff", borderRight: `1px solid ${BORDER}`, display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh", minHeight: "100vh", alignSelf: "flex-start" }}>
+        <div style={{ height: 60, flexShrink: 0, display: "flex", alignItems: "center", padding: "0 20px", borderBottom: `1px solid ${BORDER}`, boxSizing: "border-box" }}>
           <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "0.04em", color: "#0f172a" }}>
             PICK<span style={{ color: O }}>YOUR</span>HIRE
           </span>
