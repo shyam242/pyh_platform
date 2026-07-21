@@ -75,7 +75,7 @@ export default function InterviewsScheduledPage() {
       ) : (
         <CandidateTable
           candidates={filtered}
-          columns={{ headers: ["Candidate", "In Process Since", "Source", "Status", "Actions"], gridTemplate: "2.2fr 1fr 1fr 1fr 1.4fr" }}
+          columns={{ headers: ["Candidate", "In Process Since", "Status", "Actions"], gridTemplate: "2.2fr 1fr 1fr 1.4fr" }}
           actions={[
             { label: "Move to Hold",     bg: "#fff", color: "#D97706", border: "#D97706", onClick: c => setStatus(c.source, c.id, "On Hold") },
             { label: "Not Moving Ahead", bg: "#fff", color: "#DC2626", border: "#DC2626", onClick: c => setStatus(c.source, c.id, "Rejected") },
