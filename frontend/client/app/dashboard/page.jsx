@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { showSuccess, showError } from "@/utils/toast";
 import ReferrerDashboard from "@/components/ReferrerDashboard";
-import RecruiterDashboard from "@/components/RecruiterDashboard";
 import CandidateDashboard from "@/components/CandidateDashboard";
 
 export default function DashboardRouter() {
@@ -26,6 +25,7 @@ export default function DashboardRouter() {
       );
 
       if (payload.role === "admin") { window.location.href = "/admin"; return; }
+      if (payload.role === "recruiter") { window.location.href = "/recruiter"; return; }
       setRole(payload.role);
     } catch {
       localStorage.removeItem("token");
@@ -45,7 +45,6 @@ export default function DashboardRouter() {
   return (
     <>
       {role === "referrer"  && <ReferrerDashboard />}
-      {role === "recruiter" && <RecruiterDashboard />}
       {role === "candidate" && <CandidateDashboard />}
       {!role && (
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#64748b", fontSize: 15 }}>
