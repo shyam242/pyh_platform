@@ -2,13 +2,16 @@
 
 import { useMemo, useState } from "react";
 import { Search, Filter, Users, Star, CalendarCheck, PauseCircle } from "lucide-react";
-import RecruiterSidebarLayout, { BORDER } from "@/components/recruiter/RecruiterSidebarLayout";
+import RecruiterSidebarLayout, { O, BORDER } from "@/components/recruiter/RecruiterSidebarLayout";
 import CandidateTable from "@/components/recruiter/CandidateTable";
 import { useRecruiterCandidates } from "@/components/recruiter/useRecruiterCandidates";
+import AdvancedFiltersPanel, { useAdvancedFilters } from "@/components/recruiter/AdvancedFilters";
 
 export default function OnHoldPage() {
   const { candidates, loading, setStatus } = useRecruiterCandidates();
   const [search, setSearch] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const { filters, setFilter, clearFilters, activeFilterCount, matchesFilters } = useAdvancedFilters();
 
   const onHold = useMemo(() => candidates.filter(c => c.myStatus === "On Hold"), [candidates]);
 
@@ -17,8 +20,8 @@ export default function OnHoldPage() {
       if (!search) return true;
       const hay = [c.name, c.email, c.skills, c.role, c.current_location].filter(Boolean).join(" ").toLowerCase();
       return hay.includes(search.toLowerCase());
-    }).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-  }, [onHold, search]);
+    }).filter(matchesFilters).sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  }, [onHold, search, filters]);
 
   const counts = useMemo(() => ({
     total: candidates.length,
@@ -51,10 +54,14 @@ export default function OnHoldPage() {
             style={{ flex: 1, border: "none", outline: "none", padding: "10px 0", fontSize: 13, fontFamily: "inherit" }}
           />
         </div>
-        <button style={{ padding: "0 14px", border: `1.5px solid ${BORDER}`, borderRadius: 10, backgroundColor: "#fff", fontSize: 12.5, fontWeight: 600, color: "#334155", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-          <Filter size={14} /> Filters
+        <button onClick={() => setShowFilters(v => !v)} style={{ padding: "0 14px", border: `1.5px solid ${activeFilterCount || showFilters ? O : BORDER}`, borderRadius: 10, backgroundColor: "#fff", fontSize: 12.5, fontWeight: 600, color: activeFilterCount || showFilters ? O : "#334155", display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontFamily: "inherit" }}>
+          <Filter size={14} /> Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
         </button>
       </div>
+
+      {showFilters && (
+        <AdvancedFiltersPanel filters={filters} setFilter={setFilter} clearFilters={clearFilters} activeFilterCount={activeFilterCount} />
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 22 }}>
         {stats.map(s => (
