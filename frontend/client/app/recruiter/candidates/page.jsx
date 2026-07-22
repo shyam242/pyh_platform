@@ -5,6 +5,7 @@ import { Search, Filter, ChevronLeft, ChevronRight, Users, Star, PauseCircle, XC
 import RecruiterSidebarLayout, { O, O_LITE, BORDER } from "@/components/recruiter/RecruiterSidebarLayout";
 import CandidateCard from "@/components/recruiter/CandidateCard";
 import { useRecruiterCandidates } from "@/components/recruiter/useRecruiterCandidates";
+import AdvancedFiltersPanel, { useAdvancedFilters } from "@/components/recruiter/AdvancedFilters";
 
 const PER_PAGE = 10;
 
@@ -12,7 +13,9 @@ export default function CandidatesPage() {
   const { candidates, loading, setStatus, downloadCV } = useRecruiterCandidates();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
+  const { filters, setFilter, clearFilters, activeFilterCount, matchesFilters } = useAdvancedFilters();
 
   const filtered = useMemo(() => {
     return candidates.filter(c => {
@@ -21,9 +24,10 @@ export default function CandidatesPage() {
         const hay = [c.name, c.email, c.skills, c.role, c.current_location, c.referrer_name].filter(Boolean).join(" ").toLowerCase();
         if (!hay.includes(search.toLowerCase())) return false;
       }
+      if (!matchesFilters(c)) return false;
       return true;
     }).sort((a, b) => new Date(b.created_at || b.upload_date || 0) - new Date(a.created_at || a.upload_date || 0));
-  }, [candidates, search, statusFilter]);
+  }, [candidates, search, statusFilter, filters]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
   const pageItems = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
@@ -66,10 +70,14 @@ export default function CandidatesPage() {
           <option value="all">All statuses</option>
           {["Shortlisted", "In Process", "On Hold", "Offer Given", "Rejected"].map(s => <option key={s} value={s}>{s}</option>)}
         </select>
-        <button style={{ ...selectStyle, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-          <Filter size={14} /> Filters
+        <button onClick={() => setShowFilters(v => !v)} style={{ ...selectStyle, display: "flex", alignItems: "center", gap: 6, cursor: "pointer", color: activeFilterCount || showFilters ? O : "#334155", borderColor: activeFilterCount || showFilters ? O : BORDER }}>
+          <Filter size={14} /> Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
         </button>
       </div>
+
+      {showFilters && (
+        <AdvancedFiltersPanel filters={filters} setFilter={setFilter} clearFilters={clearFilters} activeFilterCount={activeFilterCount} />
+      )}
 
       {/* Stat cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 22 }}>
