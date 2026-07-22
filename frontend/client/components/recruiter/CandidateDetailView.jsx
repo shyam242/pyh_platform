@@ -4,7 +4,7 @@ import { useState } from "react";
 import {
   ArrowLeft, Mail, Phone, MapPin, Download, ExternalLink, Star,
   Briefcase, Building2, BookOpen, Award, TrendingUp, User, Users,
-  CheckCircle2, Sparkles, FileText, StickyNote, Send, Clock, Linkedin,
+  CheckCircle2, Sparkles, FileText, StickyNote, Send, Clock,
 } from "lucide-react";
 
 const O = "#E87722", O_LITE = "#FFF3E8", O_MID = "#FBBF7A", BORDER = "#EBEBEB";
@@ -199,7 +199,7 @@ export default function CandidateDetailView({
                 {candidate.phone && <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "#6b7280" }}><Phone size={12} /> {candidate.phone}</span>}
                 {candidate.linkedin && (
                   <a href={candidate.linkedin} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, color: "#1d4ed8", textDecoration: "none" }}>
-                    <Linkedin size={12} /> LinkedIn
+                    <ExternalLink size={12} /> LinkedIn
                   </a>
                 )}
               </div>
