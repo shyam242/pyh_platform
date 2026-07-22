@@ -144,7 +144,7 @@ export default function CandidateDetailsPage() {
     expectedCtc: raw.expected_ctc,
     noticePeriod: raw.notice_period,
     currentCompany: raw.current_company_name,
-    qualification: raw.qualification,
+    qualification: raw.qualification || raw.highest_qualification,
     reasonForChange: raw.reason_for_change,
     offerInHand: raw.offer_in_hand === "yes" ? "Yes" : raw.offer_in_hand === "no" ? "No" : null,
     skills: raw.skills,
