@@ -250,46 +250,24 @@ export default function RecruiterHomePage() {
             </div>
           </div>
 
-          {/* Open jobs + Top skills */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 16 }}>
-            <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "18px 20px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <span style={{ fontSize: 14.5, fontWeight: 700, color: "#0f172a" }}>Open Jobs</span>
-                <span onClick={() => router.push("/recruiter/jobs")} style={{ fontSize: 12, fontWeight: 700, color: O, cursor: "pointer" }}>View all jobs</span>
+          {/* Top skills */}
+          <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "18px 20px" }}>
+            <div style={{ fontSize: 14.5, fontWeight: 700, color: "#0f172a", marginBottom: 14 }}>Top Skills in Demand</div>
+            {loading ? (
+              <p style={{ fontSize: 13, color: "#94a3b8" }}>Loading…</p>
+            ) : topSkills.length === 0 ? (
+              <p style={{ fontSize: 13, color: "#94a3b8" }}>Not enough candidate data yet.</p>
+            ) : topSkills.map(s => (
+              <div key={s.skill} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                  <span style={{ color: "#334155", fontWeight: 600 }}>{s.skill}</span>
+                  <span style={{ color: "#94a3b8" }}>{s.count}</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 999, backgroundColor: "#F1F5F9" }}>
+                  <div style={{ height: "100%", borderRadius: 999, backgroundColor: O, width: `${s.pct}%` }} />
+                </div>
               </div>
-              {loading ? (
-                <p style={{ fontSize: 13, color: "#94a3b8" }}>Loading…</p>
-              ) : jobs.length === 0 ? (
-                <p style={{ fontSize: 13, color: "#94a3b8" }}>No open jobs right now.</p>
-              ) : jobs.slice(0, 5).map(j => (
-                <div key={j.id} onClick={() => router.push("/recruiter/jobs")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid #F8FAFC", cursor: "pointer" }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{j.job_title}</div>
-                    <div style={{ fontSize: 11.5, color: "#94a3b8" }}>{j.location} · {j.job_type}</div>
-                  </div>
-                  <ChevronRight size={14} color="#cbd5e1" />
-                </div>
-              ))}
-            </div>
-
-            <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "18px 20px" }}>
-              <div style={{ fontSize: 14.5, fontWeight: 700, color: "#0f172a", marginBottom: 14 }}>Top Skills in Demand</div>
-              {loading ? (
-                <p style={{ fontSize: 13, color: "#94a3b8" }}>Loading…</p>
-              ) : topSkills.length === 0 ? (
-                <p style={{ fontSize: 13, color: "#94a3b8" }}>Not enough candidate data yet.</p>
-              ) : topSkills.map(s => (
-                <div key={s.skill} style={{ marginBottom: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                    <span style={{ color: "#334155", fontWeight: 600 }}>{s.skill}</span>
-                    <span style={{ color: "#94a3b8" }}>{s.count}</span>
-                  </div>
-                  <div style={{ height: 6, borderRadius: 999, backgroundColor: "#F1F5F9" }}>
-                    <div style={{ height: "100%", borderRadius: 999, backgroundColor: O, width: `${s.pct}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
+            ))}
           </div>
         </div>
 
@@ -301,7 +279,6 @@ export default function RecruiterHomePage() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {[
                 { label: "Upload JD",         Icon: UploadCloud, accent: "#4F46E5", lite: "#EEF2FF", onClick: () => router.push("/jd-match") },
-                { label: "View Jobs",         Icon: Briefcase,   accent: "#0891B2", lite: "#ECFEFF", onClick: () => router.push("/recruiter/jobs") },
                 { label: "AI JD → CV Match",  Icon: Sparkles,    accent: "#7C3AED", lite: "#F5F3FF", onClick: () => router.push("/jd-match") },
                 { label: "Search Candidates", Icon: Search,      accent: "#D97706", lite: "#FFFBEB", onClick: () => router.push("/recruiter/search-by-project") },
                 { label: "Experience Check",  Icon: ShieldCheck, accent: "#16A34A", lite: "#F0FDF4", onClick: () => router.push("/fake-experience-check") },
