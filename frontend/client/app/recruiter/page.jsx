@@ -35,6 +35,57 @@ const STATUS_STYLE = {
   "Offer Given":  { bg: "#DCFCE7", color: "#15803d" },
 };
 
+// Curated list of technology / tool keywords used to surface an actual "tech stack"
+// signal from free-text candidate skills, instead of any comma-separated word.
+const TECH_KEYWORDS = new Set([
+  "javascript","typescript","react","react.js","reactjs","react native","angular","vue","vue.js",
+  "node","node.js","nodejs","next.js","nextjs","express","express.js","python","java","c++","c#",
+  "php","ruby","go","golang","rust","swift","kotlin","scala","sql","mysql","postgresql","postgres",
+  "mongodb","nosql","aws","azure","gcp","google cloud","docker","kubernetes","git","html","css",
+  "html5","css3","django","flask","fastapi","spring","spring boot",".net","dotnet","redux","graphql",
+  "rest api","rest","machine learning","ml","deep learning","data science","tensorflow","pytorch",
+  "devops","ci/cd","jenkins","terraform","ansible","linux","android","ios","flutter","redis","kafka",
+  "elasticsearch","tableau","power bi","salesforce","sap","selenium","microservices","blockchain",
+  "solidity","firebase","laravel","bootstrap","tailwind","tailwindcss","jquery","webpack","vite",
+  "cybersecurity","r","sas","hadoop","spark","airflow","jira","figma",
+]);
+
+// Trapezoid-style hiring funnel, drawn to scale with each stage's count.
+function FunnelChart({ stages, loading }) {
+  const chartW = 190, rowH = 46, gap = 6, minWidthFrac = 0.34;
+  const maxVal = Math.max(1, ...stages.map(s => s.value));
+  const rawWidths = stages.map(s => chartW * (minWidthFrac + (s.value / maxVal) * (1 - minWidthFrac)));
+  const widths = rawWidths.map((w, i) => (i === 0 ? w : Math.min(w, rawWidths[i - 1])));
+  const totalH = stages.length * rowH + (stages.length - 1) * gap;
+  const cx = chartW / 2;
+
+  return (
+    <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+      <svg width={chartW} height={totalH} viewBox={`0 0 ${chartW} ${totalH}`} style={{ flexShrink: 0 }}>
+        {stages.map((s, i) => {
+          const y = i * (rowH + gap);
+          const topW = widths[i];
+          const botW = i < stages.length - 1 ? widths[i + 1] : widths[i] * 0.6;
+          const points = [
+            [cx - topW / 2, y], [cx + topW / 2, y],
+            [cx + botW / 2, y + rowH], [cx - botW / 2, y + rowH],
+          ].map(p => p.join(",")).join(" ");
+          return <polygon key={s.label} points={points} fill={loading ? "#F1F5F9" : s.color} rx="4" />;
+        })}
+      </svg>
+      <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: totalH, flex: 1, minWidth: 0 }}>
+        {stages.map(s => (
+          <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 7, height: rowH }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: s.color, flexShrink: 0 }} />
+            <span style={{ fontSize: 12.5, color: "#64748b", whiteSpace: "nowrap" }}>{s.label}</span>
+            <span style={{ fontSize: 13.5, fontWeight: 700, color: "#0f172a", marginLeft: "auto" }}>{loading ? "—" : s.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function RecruiterHomePage() {
   const router = useRouter();
   const [referrals, setReferrals] = useState([]);
@@ -117,16 +168,37 @@ export default function RecruiterHomePage() {
       .slice(0, 4);
   }, [withStatus]);
 
-  const topSkills = useMemo(() => {
+  const techStack = useMemo(() => {
     const freq = {};
     withStatus.forEach(c => {
       (c.skills || "").split(",").map(s => s.trim()).filter(Boolean).forEach(s => {
-        freq[s] = (freq[s] || 0) + 1;
+        if (TECH_KEYWORDS.has(s.toLowerCase())) freq[s] = (freq[s] || 0) + 1;
       });
     });
     const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 5);
     const max = sorted[0]?.[1] || 1;
     return sorted.map(([skill, count]) => ({ skill, count, pct: Math.round((count / max) * 100) }));
+  }, [withStatus]);
+
+  // Notice period spread — lets a recruiter see at a glance how many candidates
+  // in the pool can join quickly vs. need a longer runway.
+  const noticePeriodBreakdown = useMemo(() => {
+    const buckets = { "Immediate": 0, "≤ 15 Days": 0, "≤ 30 Days": 0, "30+ Days": 0, "Not Specified": 0 };
+    withStatus.forEach(c => {
+      const np = (c.notice_period || "").toString().toLowerCase().trim();
+      if (!np) { buckets["Not Specified"]++; return; }
+      if (np.includes("immediate")) { buckets["Immediate"]++; return; }
+      const num = parseInt(np.replace(/[^0-9]/g, ""), 10);
+      if (isNaN(num)) { buckets["Not Specified"]++; }
+      else if (num === 0) buckets["Immediate"]++;
+      else if (num <= 15) buckets["≤ 15 Days"]++;
+      else if (num <= 30) buckets["≤ 30 Days"]++;
+      else buckets["30+ Days"]++;
+    });
+    const max = Math.max(1, ...Object.values(buckets));
+    return Object.entries(buckets)
+      .map(([label, count]) => ({ label, count, pct: Math.round((count / max) * 100) }))
+      .filter(b => b.count > 0);
   }, [withStatus]);
 
   const activityFeed = useMemo(() => {
@@ -149,12 +221,11 @@ export default function RecruiterHomePage() {
   ];
 
   const funnelStages = [
-    { label: "Total Candidates", value: counts.total,       color: "#4F46E5" },
-    { label: "Shortlisted",      value: counts.shortlisted, color: "#2563EB" },
-    { label: "In Process",       value: counts.inProcess,   color: "#7C3AED" },
-    { label: "Offer Given",      value: counts.offers,      color: "#DB2777" },
+    { label: "Total Candidates", value: counts.total,       color: "#A5B4FC" },
+    { label: "Shortlisted",      value: counts.shortlisted, color: "#86EFAC" },
+    { label: "In Process",       value: counts.inProcess,   color: "#FDBA74" },
+    { label: "Offer Given",      value: counts.offers,      color: "#F0ABFC" },
   ];
-  const maxFunnel = Math.max(1, ...funnelStages.map(f => f.value));
 
   const userName = user?.name?.split(" ")[0] || "Recruiter";
 
@@ -231,18 +302,10 @@ export default function RecruiterHomePage() {
 
             {/* Hiring funnel */}
             <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "18px 20px" }}>
-              <div style={{ fontSize: 14.5, fontWeight: 700, color: "#0f172a", marginBottom: 16 }}>Hiring Funnel</div>
-              {funnelStages.map(f => (
-                <div key={f.label} style={{ marginBottom: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 5 }}>
-                    <span style={{ color: "#64748b" }}>{f.label}</span>
-                    <span style={{ fontWeight: 700, color: "#0f172a" }}>{loading ? "—" : f.value}</span>
-                  </div>
-                  <div style={{ height: 9, borderRadius: 999, backgroundColor: "#F1F5F9" }}>
-                    <div style={{ height: "100%", borderRadius: 999, backgroundColor: f.color, width: `${loading ? 0 : Math.max(4, (f.value / maxFunnel) * 100)}%`, transition: "width 0.5s ease" }} />
-                  </div>
-                </div>
-              ))}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <span style={{ fontSize: 14.5, fontWeight: 700, color: "#0f172a" }}>Hiring Funnel</span>
+              </div>
+              <FunnelChart stages={funnelStages} loading={loading} />
               <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid #F1F5F9`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontSize: 12, color: "#64748b" }}>Conversion rate</span>
                 <span style={{ fontSize: 15, fontWeight: 700, color: O }}>{conversionRate}%</span>
@@ -250,24 +313,48 @@ export default function RecruiterHomePage() {
             </div>
           </div>
 
-          {/* Top skills */}
-          <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "18px 20px" }}>
-            <div style={{ fontSize: 14.5, fontWeight: 700, color: "#0f172a", marginBottom: 14 }}>Top Skills in Demand</div>
-            {loading ? (
-              <p style={{ fontSize: 13, color: "#94a3b8" }}>Loading…</p>
-            ) : topSkills.length === 0 ? (
-              <p style={{ fontSize: 13, color: "#94a3b8" }}>Not enough candidate data yet.</p>
-            ) : topSkills.map(s => (
-              <div key={s.skill} style={{ marginBottom: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                  <span style={{ color: "#334155", fontWeight: 600 }}>{s.skill}</span>
-                  <span style={{ color: "#94a3b8" }}>{s.count}</span>
+          {/* Tech stack + notice period */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "18px 20px" }}>
+              <div style={{ fontSize: 14.5, fontWeight: 700, color: "#0f172a", marginBottom: 14 }}>Top Tech Stack in Demand</div>
+              {loading ? (
+                <p style={{ fontSize: 13, color: "#94a3b8" }}>Loading…</p>
+              ) : techStack.length === 0 ? (
+                <p style={{ fontSize: 13, color: "#94a3b8" }}>No recognizable tech-stack data in the candidate pool yet.</p>
+              ) : techStack.map(s => (
+                <div key={s.skill} style={{ marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                    <span style={{ color: "#334155", fontWeight: 600 }}>{s.skill}</span>
+                    <span style={{ color: "#94a3b8" }}>{s.count}</span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 999, backgroundColor: "#F1F5F9" }}>
+                    <div style={{ height: "100%", borderRadius: 999, backgroundColor: O, width: `${s.pct}%` }} />
+                  </div>
                 </div>
-                <div style={{ height: 6, borderRadius: 999, backgroundColor: "#F1F5F9" }}>
-                  <div style={{ height: "100%", borderRadius: 999, backgroundColor: O, width: `${s.pct}%` }} />
+              ))}
+            </div>
+
+            <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "18px 20px" }}>
+              <div style={{ fontSize: 14.5, fontWeight: 700, color: "#0f172a", marginBottom: 14 }}>Notice Period Spread</div>
+              {loading ? (
+                <p style={{ fontSize: 13, color: "#94a3b8" }}>Loading…</p>
+              ) : noticePeriodBreakdown.length === 0 ? (
+                <p style={{ fontSize: 13, color: "#94a3b8" }}>No candidate data yet.</p>
+              ) : noticePeriodBreakdown.map(b => (
+                <div key={b.label} style={{ marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                    <span style={{ color: "#334155", fontWeight: 600 }}>{b.label}</span>
+                    <span style={{ color: "#94a3b8" }}>{b.count}</span>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 999, backgroundColor: "#F1F5F9" }}>
+                    <div style={{ height: "100%", borderRadius: 999, backgroundColor: "#7C3AED", width: `${b.pct}%` }} />
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+              <p style={{ fontSize: 11, color: "#94a3b8", margin: "10px 0 0", lineHeight: 1.5 }}>
+                Handy for spotting who can join quickly when a role needs to be filled urgently.
+              </p>
+            </div>
           </div>
         </div>
 
