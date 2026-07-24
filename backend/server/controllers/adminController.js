@@ -1901,14 +1901,26 @@ const logRecruiterActivity = async (recruiter, action, note, adminId) => {
 };
 
 // GET /api/admin/users/recruiter/:recruiterId  (single recruiter profile for the Recruiter Details page)
+let _adminUsersLinkedinChecked = false;
+const ensureUsersLinkedinColumn = async () => {
+  if (_adminUsersLinkedinChecked) return;
+  try {
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS linkedin VARCHAR(500);`);
+    _adminUsersLinkedinChecked = true;
+  } catch (err) {
+    console.error("ensureUsersLinkedinColumn error:", err.message);
+  }
+};
+
 export const getRecruiterDetails = async (req, res) => {
   try {
     if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
 
+    await ensureUsersLinkedinColumn();
     const { recruiterId } = req.params;
 
     const result = await pool.query(
-      `SELECT id, name, email, phone, company_name, company_website, is_recruiter_approved,
+      `SELECT id, name, email, phone, linkedin, company_name, company_website, is_recruiter_approved,
               recruiter_status, recruiter_approved_at, recruiter_rejected_at, rejection_reason, created_at
        FROM users WHERE id=$1 AND role='recruiter'`,
       [recruiterId]
@@ -1922,10 +1934,70 @@ export const getRecruiterDetails = async (req, res) => {
     recruiter.recruiter_status = recruiter.recruiter_status || (recruiter.is_recruiter_approved ? "approved" : "pending");
     recruiter.documents_status = documentsStatusFor(recruiter);
 
+    // Real pipeline stats for this recruiter, drawn from their private
+    // candidate-status tags. "Interviewed" is approximated from "In Process"
+    // since there's no dedicated interview status; "Hires" has no source of
+    // truth anywhere in the schema yet, so it's reported as 0 rather than faked.
+    const statusCounts = (await pool.query(
+      `SELECT status, COUNT(DISTINCT candidate_id || ':' || source) AS count
+       FROM recruiter_candidate_status WHERE recruiter_id=$1 GROUP BY status`,
+      [recruiterId]
+    )).rows.reduce((acc, r) => ({ ...acc, [r.status]: parseInt(r.count, 10) }), {});
+
+    const totalCandidates = (await pool.query(
+      `SELECT COUNT(DISTINCT candidate_id || ':' || source) AS count
+       FROM recruiter_candidate_status WHERE recruiter_id=$1`,
+      [recruiterId]
+    )).rows[0]?.count || 0;
+
+    recruiter.stats = {
+      candidates: parseInt(totalCandidates, 10),
+      shortlisted: statusCounts["Shortlisted"] || 0,
+      interviewed: statusCounts["In Process"] || 0,
+      offers: statusCounts["Offer Given"] || 0,
+      hires: 0,
+    };
+
     res.json(recruiter);
   } catch (err) {
     console.error("getRecruiterDetails error:", err);
     res.status(500).json({ message: "Failed to fetch recruiter details" });
+  }
+};
+
+// PUT /api/admin/users/recruiter/:recruiterId  (admin edits a recruiter's own profile fields)
+export const updateRecruiterProfile = async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    await ensureUsersLinkedinColumn();
+    const { recruiterId } = req.params;
+    const { name, phone, company_name, company_website, linkedin } = req.body;
+
+    const fields = [];
+    const values = [];
+    let i = 1;
+    if (name !== undefined) { fields.push(`name=$${i++}`); values.push(name); }
+    if (phone !== undefined) { fields.push(`phone=$${i++}`); values.push(phone); }
+    if (company_name !== undefined) { fields.push(`company_name=$${i++}`); values.push(company_name); }
+    if (company_website !== undefined) { fields.push(`company_website=$${i++}`); values.push(company_website); }
+    if (linkedin !== undefined) { fields.push(`linkedin=$${i++}`); values.push(linkedin); }
+
+    if (fields.length === 0) return res.status(400).json({ message: "No fields to update" });
+
+    values.push(recruiterId);
+    const result = await pool.query(
+      `UPDATE users SET ${fields.join(", ")} WHERE id=$${i} AND role='recruiter'
+       RETURNING id, name, email, phone, linkedin, company_name, company_website`,
+      values
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ message: "Recruiter not found" });
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("updateRecruiterProfile error:", err);
+    res.status(500).json({ message: "Failed to update recruiter" });
   }
 };
 
