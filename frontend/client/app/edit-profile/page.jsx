@@ -52,6 +52,7 @@ function EditProfilePageContent() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [user, setUser] = useState(null);
   const [isReferrer, setIsReferrer] = useState(false);
+  const [isRecruiter, setIsRecruiter] = useState(false);
   const [isPublicView, setIsPublicView] = useState(false);
   const [profileImage, setProfileImage] = useState(null);
   const [bankDetails, setBankDetails] = useState({ account_number: "", ifsc_code: "" });
@@ -98,6 +99,7 @@ function EditProfilePageContent() {
 
       setUser(userData);
       setIsReferrer(userData.role === "referrer");
+      setIsRecruiter(userData.role === "recruiter");
       setProfileImage(userData.image_url || null);
 
       // Bank details are only visible/editable in a genuine self-edit session
@@ -116,7 +118,9 @@ function EditProfilePageContent() {
         } catch { /* non-fatal — bank details are optional */ }
       }
 
-      const fields = userData.role === "referrer" ? ["name", "email", "company", "experience", "phone", "linkedin"] : ["name", "email", "company", "phone"];
+      const fields = userData.role === "referrer" ? ["name", "email", "company", "experience", "phone", "linkedin"]
+        : userData.role === "recruiter" ? ["name", "email", "company", "phone", "linkedin"]
+        : ["name", "email", "company", "phone"];
       setTotalFields(fields.length);
 
       setFormData({
@@ -137,8 +141,9 @@ function EditProfilePageContent() {
 
   const calculateCompletedFields = (data) => {
     const referrerFields = ["name", "email", "company", "experience", "phone", "linkedin"];
+    const recruiterFields = ["name", "email", "company", "phone", "linkedin"];
     const otherFields = ["name", "email", "company", "phone"];
-    const fieldsToCheck = isReferrer ? referrerFields : otherFields;
+    const fieldsToCheck = isReferrer ? referrerFields : isRecruiter ? recruiterFields : otherFields;
     
     let completed = 0;
     fieldsToCheck.forEach(field => {
@@ -231,6 +236,7 @@ function EditProfilePageContent() {
   const validateForm = () => {
     const required = ["name", "email", "phone", "company"];
     if (isReferrer) required.push("experience");
+    if (isRecruiter) required.push("linkedin");
 
     for (const field of required) {
       if (!formData[field] || formData[field].toString().trim() === "") {
@@ -420,6 +426,17 @@ function EditProfilePageContent() {
                     helper="Optional: Link to your LinkedIn profile"
                   />
                 </>
+              )}
+              {isRecruiter && (
+                <InputField
+                  label="LinkedIn Profile URL"
+                  name="linkedin"
+                  value={formData.linkedin}
+                  onChange={handleChange}
+                  placeholder="https://linkedin.com/in/yourprofile"
+                  required
+                  helper="Required — visible to admins on your recruiter profile"
+                />
               )}
             </div>
 
