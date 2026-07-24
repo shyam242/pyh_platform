@@ -381,7 +381,7 @@ export const getReferralsForAdmin = async (req, res) => {
     const rows = (await pool.query(
       `SELECT r.id, r.name, r.email, r.phone, r.skills, r.experience, r.company, r.department,
               r.referral_status, r.status, r.created_at, r.referrer_id, r.cv_file,
-              u.name AS referrer_name
+              u.name AS referrer_name, u.email AS referrer_email, u.phone AS referrer_phone
        FROM referrals r
        LEFT JOIN users u ON u.id = r.referrer_id
        ORDER BY r.id DESC`
@@ -398,6 +398,50 @@ export const getReferralsForAdmin = async (req, res) => {
   } catch (err) {
     console.error("getReferralsForAdmin error:", err);
     res.status(500).json({ message: "Failed to fetch referrals" });
+  }
+};
+
+// GET /api/admin/referred-candidates/:referralId — full profile of a single referred
+// candidate, including who referred them, for the admin "View Full Profile" screen.
+export const getReferredCandidateDetails = async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const { referralId } = req.params;
+
+    const rows = (await pool.query(
+      `SELECT r.*,
+              u.id AS referrer_id, u.name AS referrer_name, u.email AS referrer_email,
+              u.phone AS referrer_phone, u.company AS referrer_company,
+              u.linkedin_profile AS referrer_linkedin
+       FROM referrals r
+       LEFT JOIN users u ON u.id = r.referrer_id
+       WHERE r.id = $1`,
+      [referralId]
+    )).rows;
+
+    if (rows.length === 0) return res.status(404).json({ message: "Referred candidate not found" });
+
+    const row = rows[0];
+    const candidate = {
+      ...row,
+      skills: normalizeReferralSkills(row.skills),
+      status: referralWorkflowStatusLabel(row.status),
+      acceptance_status: referralStatusLabel(row.referral_status),
+      referrer: row.referrer_id ? {
+        id: row.referrer_id,
+        name: row.referrer_name,
+        email: row.referrer_email,
+        phone: row.referrer_phone,
+        company: row.referrer_company,
+        linkedin: row.referrer_linkedin,
+      } : null,
+    };
+
+    res.json({ candidate });
+  } catch (err) {
+    console.error("getReferredCandidateDetails error:", err);
+    res.status(500).json({ message: "Failed to fetch referred candidate details" });
   }
 };
 
