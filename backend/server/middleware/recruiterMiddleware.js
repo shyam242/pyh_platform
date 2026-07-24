@@ -21,6 +21,8 @@ export const checkRecruiterApproved = async (req, res, next) => {
 
     const { role, is_recruiter_approved } = result.rows[0];
 
+    if (role === "admin") return next();
+
     if (role !== "recruiter") {
       return res.status(403).json({ message: "This action is only for recruiters" });
     }
