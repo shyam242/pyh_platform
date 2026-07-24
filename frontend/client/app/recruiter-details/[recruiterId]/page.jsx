@@ -13,7 +13,7 @@ const avatarBg = name => {
   return c[(name||"").charCodeAt(0)%c.length];
 };
 
-const TABS = ["Overview","Jobs","Documents","Notes"];
+const TABS = ["Overview","Notes"];
 
 export default function RecruiterDetailPage() {
   const router = useRouter();
@@ -21,7 +21,6 @@ export default function RecruiterDetailPage() {
   const [recruiter, setRecruiter] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("Overview");
-  const [jobs, setJobs] = useState([]);
   const [suspending, setSuspending] = useState(false);
   const [note, setNote] = useState("");
   const [notes, setNotes] = useState([]);
@@ -29,7 +28,7 @@ export default function RecruiterDetailPage() {
   const [editForm, setEditForm] = useState({});
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { fetchRecruiter(); fetchJobs(); }, [recruiterId]);
+  useEffect(() => { fetchRecruiter(); }, [recruiterId]);
 
   const fetchRecruiter = async () => {
     try {
@@ -52,17 +51,6 @@ export default function RecruiterDetailPage() {
       showError(e.message);
       setTimeout(() => router.back(), 1500);
     } finally { setLoading(false); }
-  };
-
-  const fetchJobs = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/api/jobs/admin/my-jobs`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const d = await res.json();
-      setJobs(Array.isArray(d) ? d : []);
-    } catch {}
   };
 
   const handleSuspend = async () => {
@@ -312,65 +300,6 @@ export default function RecruiterDetailPage() {
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB: JOBS */}
-        {tab==="Jobs" && (
-          <div style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
-            <div style={{ padding:"16px 24px", borderBottom:`1.5px solid ${BORDER}` }}>
-              <h3 style={{ fontSize:14, fontWeight:700, margin:0 }}>Jobs Posted ({jobs.length})</h3>
-            </div>
-            {jobs.length===0 ? (
-              <div style={{ padding:"60px", textAlign:"center", color:"#94a3b8" }}>No jobs posted yet on the platform</div>
-            ) : (
-              <div>
-                <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1.5fr 1fr 1fr", gap:8, padding:"10px 24px", backgroundColor:"#F8FAFC", borderBottom:`1px solid ${BORDER}`, fontSize:11, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.04em" }}>
-                  <span>Job Title</span><span>Department</span><span>Location</span><span>Posted On</span><span>Status</span>
-                </div>
-                {jobs.map((j,i)=>(
-                  <div key={j.id} style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1.5fr 1fr 1fr", gap:8, padding:"13px 24px", borderBottom:i<jobs.length-1?`1px solid ${BORDER}`:"none", alignItems:"center" }}
-                    onMouseEnter={e=>e.currentTarget.style.backgroundColor="#FAFBFC"}
-                    onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
-                    <span style={{ fontSize:13, fontWeight:600 }}>{j.job_title||"—"}</span>
-                    <span style={{ fontSize:12, color:"#475569" }}>{j.department||"—"}</span>
-                    <span style={{ fontSize:12, color:"#475569" }}>{j.location||"Remote"}</span>
-                    <span style={{ fontSize:11, color:"#94a3b8" }}>{j.created_at?new Date(j.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short"}):"—"}</span>
-                    <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:999, backgroundColor:j.status==="active"?"#DCFCE7":"#F8FAFC", color:j.status==="active"?"#15803d":"#64748b", display:"inline-block" }}>{j.status||"Active"}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB: DOCUMENTS */}
-        {tab==="Documents" && (
-          <div style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:14, padding:"24px" }}>
-            <h3 style={{ fontSize:14, fontWeight:700, margin:"0 0 18px" }}>Verification Documents</h3>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
-              {[
-                { name:"GST Certificate", icon:"📄", status:"Verified" },
-                { name:"PAN Card", icon:"🪪", status:"Verified" },
-                { name:"Company Registration", icon:"🏢", status:"Verified" },
-                { name:"NDA", icon:"📋", status:"Pending" },
-                { name:"Company Logo", icon:"🖼️", status:recruiter.company_logo?"Uploaded":"Not Uploaded" },
-                { name:"Address Proof", icon:"📍", status:"Pending" },
-              ].map(d=>{
-                const ok = d.status==="Verified"||d.status==="Uploaded";
-                return (
-                  <div key={d.name} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", backgroundColor:"#F8FAFC", border:`1.5px solid ${ok?'#86efac':BORDER}`, borderRadius:12 }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                      <span style={{ fontSize:20 }}>{d.icon}</span>
-                      <span style={{ fontSize:13, fontWeight:600 }}>{d.name}</span>
-                    </div>
-                    <span style={{ fontSize:11, fontWeight:700, padding:"3px 9px", borderRadius:999, backgroundColor:ok?"#DCFCE7":"#FEF3C7", color:ok?"#15803d":"#d97706" }}>
-                      {ok?"✓":"⏳"} {d.status}
-                    </span>
-                  </div>
-                );
-              })}
             </div>
           </div>
         )}
