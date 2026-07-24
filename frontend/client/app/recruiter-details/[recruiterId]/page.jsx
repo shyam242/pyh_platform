@@ -44,6 +44,7 @@ export default function RecruiterDetailPage() {
         phone: d.phone || "",
         company_name: d.company_name || d.company || "",
         company_website: d.company_website || "",
+        linkedin: d.linkedin || "",
       });
       const saved = localStorage.getItem(`recruiter_notes_${recruiterId}`);
       if (saved) setNotes(JSON.parse(saved));
@@ -73,7 +74,7 @@ export default function RecruiterDetailPage() {
   const handleSaveEdit = async () => {
     setSaving(true);
     try {
-      await fetch(`${API_BASE_URL}/api/profile`, {
+      const res = await fetch(`${API_BASE_URL}/api/admin/users/recruiter/${recruiterId}`, {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -81,6 +82,7 @@ export default function RecruiterDetailPage() {
         },
         body: JSON.stringify(editForm)
       });
+      if (!res.ok) throw new Error("Failed");
       setRecruiter(r => ({ ...r, ...editForm }));
       showSuccess("Recruiter updated");
       setShowEditModal(false);
@@ -228,14 +230,13 @@ export default function RecruiterDetailPage() {
         </div>
 
         {/* STATS ROW */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(6,1fr)", gap:12, marginBottom:20 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12, marginBottom:20 }}>
           {[
-            { emoji:"💼", label:"Jobs Posted", value:"—", color:"#1d4ed8", bg:"#EFF6FF" },
-            { emoji:"👥", label:"Candidates", value:"—", color:"#7c3aed", bg:"#F3E8FF" },
-            { emoji:"⭐", label:"Shortlisted", value:"—", color:"#d97706", bg:"#FEF3C7" },
-            { emoji:"🗣️", label:"Interviewed", value:"—", color:"#059669", bg:"#DCFCE7" },
-            { emoji:"📋", label:"Offers", value:"—", color:O, bg:O_LITE },
-            { emoji:"✅", label:"Hires", value:"—", color:"#15803d", bg:"#DCFCE7" },
+            { emoji:"👥", label:"Candidates", value:recruiter.stats?.candidates ?? 0, color:"#7c3aed", bg:"#F3E8FF" },
+            { emoji:"⭐", label:"Shortlisted", value:recruiter.stats?.shortlisted ?? 0, color:"#d97706", bg:"#FEF3C7" },
+            { emoji:"🗣️", label:"Interviewed", value:recruiter.stats?.interviewed ?? 0, color:"#059669", bg:"#DCFCE7" },
+            { emoji:"📋", label:"Offers", value:recruiter.stats?.offers ?? 0, color:O, bg:O_LITE },
+            { emoji:"✅", label:"Hires", value:recruiter.stats?.hires ?? 0, color:"#15803d", bg:"#DCFCE7" },
           ].map(s=>(
             <div key={s.label} style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:12, padding:"16px 12px", textAlign:"center" }}>
               <div style={{ width:38, height:38, borderRadius:10, backgroundColor:s.bg, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, margin:"0 auto 8px" }}>{s.emoji}</div>
@@ -268,7 +269,6 @@ export default function RecruiterDetailPage() {
                 {[
                   { icon:"📝", text:"Registration submitted", sub:"Profile and company details added", time:fmtDate(recruiter.created_at), done:true },
                   { icon:"✅", text:"Account approved", sub:"Verified by admin", time:fmtDate(recruiter.recruiter_approved_at), done:!!recruiter.recruiter_approved_at },
-                  { icon:"💼", text:"First job posted", sub:"Started recruiting on platform", time:"—", done:false },
                   { icon:"🎯", text:"Active recruiter", sub:"Regularly submitting candidates", time:"Ongoing", done:false },
                 ].map((e,i)=>(
                   <div key={i} style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
@@ -299,6 +299,17 @@ export default function RecruiterDetailPage() {
                     <span style={{ fontSize:12, fontWeight:700, color:"#374151", maxWidth:200, textAlign:"right", wordBreak:"break-all" }}>{v}</span>
                   </div>
                 ))}
+                <div style={{ display:"flex", justifyContent:"space-between", padding:"8px 0" }}>
+                  <span style={{ fontSize:12, color:"#94a3b8", fontWeight:600 }}>LinkedIn</span>
+                  {recruiter.linkedin ? (
+                    <a href={recruiter.linkedin.startsWith("http")?recruiter.linkedin:`https://${recruiter.linkedin}`} target="_blank" rel="noreferrer"
+                      style={{ fontSize:12, fontWeight:700, color:"#0A66C2", maxWidth:200, textAlign:"right", wordBreak:"break-all", textDecoration:"none" }}>
+                      View Profile ↗
+                    </a>
+                  ) : (
+                    <span style={{ fontSize:12, fontWeight:700, color:"#374151" }}>—</span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -362,6 +373,7 @@ export default function RecruiterDetailPage() {
                 ["Phone Number","phone","tel"],
                 ["Company Name","company_name","text"],
                 ["Company Website","company_website","url"],
+                ["LinkedIn Profile","linkedin","url"],
               ].map(([label,key,type])=>(
                 <div key={key}>
                   <label style={{ display:"block", fontSize:12, fontWeight:600, color:"#475569", marginBottom:5 }}>{label}</label>
