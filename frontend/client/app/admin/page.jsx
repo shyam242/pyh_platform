@@ -2260,6 +2260,13 @@ export default function AdminDashboard() {
                   View Full Profile →
                 </button>
               )}
+              {/* Full profile link for bulk-uploaded candidates */}
+              {selectedCandidate._type==="bulk" && selectedCandidate.id && (
+                <button onClick={()=>window.location.href=`/bulk-candidates/${selectedCandidate.id}`}
+                  style={{ display:"block", width:"100%", marginTop:16, padding:"11px", backgroundColor:O, color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+                  Open Full Profile →
+                </button>
+              )}
             </div>
           </div>
         </div>
