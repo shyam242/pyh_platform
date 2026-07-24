@@ -107,7 +107,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (activeTab === "recruiters") fetchApprovedRecruiters();
     if (activeTab === "incentives") fetchReferrers();
-    if (activeTab === "candidates") { fetchDashboardData(); fetchReferredCandidates(); }
+    if (activeTab === "candidates") { fetchDashboardData(); fetchReferredCandidates(); fetchBulkCandidates(); }
     if (activeTab === "referred-candidates") fetchReferredCandidates();
     if (activeTab === "recruiter-status") fetchRecruiterStatuses();
     if (activeTab === "jobs-list" || activeTab === "jobs") fetchJobs();
@@ -538,7 +538,7 @@ export default function AdminDashboard() {
               {/* Top stat banner */}
               <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:24 }}>
                 {[
-                  { icon:Users, iconBg:"#EFF6FF", iconColor:"#1d4ed8", value:portalOnly.length, label:"Total Candidates", sub:"All candidates in your platform" },
+                  { icon:Users, iconBg:"#EFF6FF", iconColor:"#1d4ed8", value:portalOnly.length+allBulk.length, label:"Total Candidates", sub:"All candidates in your platform" },
                   { icon:Megaphone, iconBg:"#DCFCE7", iconColor:"#15803d", value:referredCandidates.length, label:"Referred Candidates", sub:"Candidates referred through your platform" },
                   { icon:"⏳", value:dashboardData?.pendingReferrals??"0", label:"Pending Review", sub:"Candidates under review" },
                   { icon:Award, iconBg:"#FFF7ED", iconColor:O, value:dashboardData?.successfulReferrals??"0", label:"Hired Candidates", sub:"Successfully hired" },
@@ -1133,24 +1133,13 @@ export default function AdminDashboard() {
               </div>
 
               {/* Footer info */}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                <div style={{ ...CARD, padding:"18px 22px" }}>
-                  <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
-                    <span style={{ fontSize:22 }}>ℹ️</span>
-                    <div>
-                      <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>About Approved Recruiters</div>
-                      <div style={{ fontSize:12, color:"#64748b", lineHeight:1.6 }}>These recruiters have successfully completed the verification process and are trusted partners on PickYourHire.</div>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ ...CARD, padding:"18px 22px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ ...CARD, padding:"18px 22px" }}>
+                <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                  <span style={{ fontSize:22 }}>ℹ️</span>
                   <div>
-                    <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>Need to remove a recruiter?</div>
-                    <div style={{ fontSize:12, color:"#64748b" }}>You can suspend or remove a recruiter from the platform if they violate our policies.</div>
+                    <div style={{ fontWeight:700, fontSize:13, marginBottom:4 }}>About Approved Recruiters</div>
+                    <div style={{ fontSize:12, color:"#64748b", lineHeight:1.6 }}>These recruiters have successfully completed the verification process and are trusted partners on PickYourHire.</div>
                   </div>
-                  <button style={{ padding:"9px 18px", backgroundColor:O, color:"#fff", border:"none", borderRadius:9, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0, marginLeft:16 }}>
-                    Manage Recruiters
-                  </button>
                 </div>
               </div>
             </div>
@@ -2032,9 +2021,6 @@ export default function AdminDashboard() {
           );
         })()}
 
-        {/* ═══════════════════════════════════════════════ */}
-        {/*    RESUME PARSER                                */}
-        {/* ═══════════════════════════════════════════════ */}
         {activeTab==="resume-parse" && (
           <div>
             <BackBtn/>
@@ -2241,11 +2227,37 @@ export default function AdminDashboard() {
                   View LinkedIn Profile →
                 </a>
               )}
+              {/* Referrer info for referred candidates */}
+              {selectedCandidate._type==="referred" && (selectedCandidate.referrer_name || selectedCandidate.referrer_id) && (
+                <div style={{ marginTop:16, padding:"14px", backgroundColor:"#F3E8FF", borderRadius:12, border:"1.5px solid #d8b4fe" }}>
+                  <div style={{ fontSize:11, fontWeight:600, color:"#7c3aed", textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:10 }}>Referred By</div>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:700, color:"#0f172a" }}>{selectedCandidate.referrer_name||"Unknown Referrer"}</div>
+                      {selectedCandidate.referrer_email && <div style={{ fontSize:12, color:"#64748b", marginTop:2 }}>{selectedCandidate.referrer_email}</div>}
+                      {selectedCandidate.referrer_phone && <div style={{ fontSize:12, color:"#64748b" }}>{selectedCandidate.referrer_phone}</div>}
+                    </div>
+                    {selectedCandidate.referrer_id && (
+                      <button onClick={()=>window.location.href=`/admin/referrers/${selectedCandidate.referrer_id}`}
+                        style={{ padding:"8px 16px", backgroundColor:"#7c3aed", color:"#fff", border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap" }}>
+                        View Referrer Profile →
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
               {/* Full details link for portal candidates */}
               {selectedCandidate._type==="portal" && selectedCandidate.id && (
                 <button onClick={()=>window.location.href=`/admin/candidates/${selectedCandidate.id}`}
                   style={{ display:"block", width:"100%", marginTop:16, padding:"11px", backgroundColor:O, color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
                   Open Full Profile →
+                </button>
+              )}
+              {/* Full profile link for referred candidates */}
+              {selectedCandidate._type==="referred" && selectedCandidate.id && (
+                <button onClick={()=>window.location.href=`/admin/referred-candidates/${selectedCandidate.id}`}
+                  style={{ display:"block", width:"100%", marginTop:16, padding:"11px", backgroundColor:O, color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+                  View Full Profile →
                 </button>
               )}
             </div>
