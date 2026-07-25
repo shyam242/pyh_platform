@@ -445,6 +445,64 @@ export const getReferredCandidateDetails = async (req, res) => {
   }
 };
 
+// UPDATE REFERRED CANDIDATE DETAILS (admin edit — referrals table)
+// PUT /api/admin/referred-candidates/:referralId/details
+export const updateReferredCandidateDetails = async (req, res) => {
+  try {
+    const { referralId } = req.params;
+    const adminId = req.user.id;
+
+    const adminCheck = await pool.query("SELECT role FROM users WHERE id=$1", [adminId]);
+    if (!adminCheck.rows.length || adminCheck.rows[0].role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admin only." });
+    }
+
+    const {
+      name, email, phone, linkedin, company, skills,
+      experience, industry, department
+    } = req.body;
+
+    // referrals.skills is stored as a JSON-stringified array — accept either a
+    // comma-separated string (from the edit form) or an array and normalize.
+    let skillsJson;
+    if (typeof skills === "string") {
+      skillsJson = JSON.stringify(skills.split(",").map(s => s.trim()).filter(Boolean));
+    } else if (Array.isArray(skills)) {
+      skillsJson = JSON.stringify(skills);
+    }
+
+    const result = await pool.query(
+      `UPDATE referrals SET
+        name = COALESCE($1, name),
+        email = COALESCE($2, email),
+        phone = COALESCE($3, phone),
+        linkedin = COALESCE($4, linkedin),
+        company = COALESCE($5, company),
+        skills = COALESCE($6, skills),
+        experience = COALESCE($7, experience),
+        industry = COALESCE($8, industry),
+        department = COALESCE($9, department),
+        updated_at = NOW()
+      WHERE id = $10
+      RETURNING *`,
+      [name, email, phone, linkedin, company, skillsJson, experience, industry, department, referralId]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ message: "Referred candidate not found" });
+    }
+
+    const row = result.rows[0];
+    res.json({
+      message: "Referred candidate updated successfully",
+      candidate: { ...row, skills: normalizeReferralSkills(row.skills) },
+    });
+  } catch (err) {
+    console.error("updateReferredCandidateDetails error:", err);
+    res.status(500).json({ message: "Failed to update referred candidate" });
+  }
+};
+
 // GET /api/admin/recruiter-candidate-statuses — admin-only view of every recruiter's
 // private candidate status tags (Shortlisted / In Process / On Hold / Offer Given).
 // Individual recruiters never see each other's tags — only admin sees this list.
