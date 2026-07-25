@@ -102,13 +102,15 @@ const ensureUserImageColumn = async () => {
   }
 };
 
-// Auto-create job_requests table if it doesn't exist — lets candidates
-// submit a "can't find the job I want" request (role, ctc, location, etc.)
-// that admins can review from the admin dashboard.
+// Auto-create candidate_job_requests table if it doesn't exist — lets
+// candidates submit a "can't find the job I want" request (role, ctc,
+// location, etc.) that admins can review from the admin dashboard.
+// Named candidate_job_requests (not job_requests) to avoid colliding with
+// any pre-existing job_requests table used by another feature.
 const ensureJobRequestsTable = async () => {
   try {
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS job_requests (
+      CREATE TABLE IF NOT EXISTS candidate_job_requests (
         id SERIAL PRIMARY KEY,
         candidate_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         job_role VARCHAR(255) NOT NULL,
@@ -123,12 +125,12 @@ const ensureJobRequestsTable = async () => {
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       );
-      CREATE INDEX IF NOT EXISTS idx_job_requests_candidate ON job_requests(candidate_id);
-      CREATE INDEX IF NOT EXISTS idx_job_requests_status ON job_requests(status);
+      CREATE INDEX IF NOT EXISTS idx_candidate_job_requests_candidate ON candidate_job_requests(candidate_id);
+      CREATE INDEX IF NOT EXISTS idx_candidate_job_requests_status ON candidate_job_requests(status);
     `);
-    console.log("✓ job_requests table ready");
+    console.log("✓ candidate_job_requests table ready");
   } catch (err) {
-    console.error("job_requests table setup error:", err.message);
+    console.error("candidate_job_requests table setup error:", err.message);
   }
 };
 
