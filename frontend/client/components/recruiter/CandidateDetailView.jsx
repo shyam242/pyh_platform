@@ -5,6 +5,7 @@ import {
   ArrowLeft, Mail, Phone, MapPin, Download, ExternalLink, Star,
   Briefcase, Building2, BookOpen, Award, TrendingUp, User, Users,
   CheckCircle2, Sparkles, FileText, StickyNote, Send, Clock,
+  Pencil, Trash2,
 } from "lucide-react";
 
 const O = "#E87722", O_LITE = "#FFF3E8", O_MID = "#FBBF7A", BORDER = "#EBEBEB";
@@ -127,6 +128,8 @@ export default function CandidateDetailView({
   onSendEmail,
   onAddNotes,
   referrer,
+  onEditCandidate,
+  onDeleteCandidate,
 }) {
   const [tab, setTab] = useState("overview");
 
@@ -392,6 +395,25 @@ export default function CandidateDetailView({
                 )}
               </div>
             </Card>
+
+            {(onEditCandidate || onDeleteCandidate) && (
+              <Card title="Admin Actions">
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {onEditCandidate && (
+                    <button onClick={onEditCandidate}
+                      style={{ width: "100%", padding: "0.875rem", backgroundColor: O_LITE, color: O, border: `1.5px solid ${O_MID}`, borderRadius: 8, fontSize: 13.5, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, fontFamily: "inherit" }}>
+                      <Pencil size={15} /> Edit Candidate Details
+                    </button>
+                  )}
+                  {onDeleteCandidate && (
+                    <button onClick={onDeleteCandidate}
+                      style={{ width: "100%", padding: "0.875rem", backgroundColor: "#dc2626", color: "#fff", border: "none", borderRadius: 8, fontSize: 13.5, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, fontFamily: "inherit" }}>
+                      <Trash2 size={15} /> Delete Candidate Profile
+                    </button>
+                  )}
+                </div>
+              </Card>
+            )}
 
             {referrer && (
               <ReferredByCard
