@@ -7,7 +7,8 @@ import {
   UserPlus, Zap, BarChart2, Home, Search, Filter, Eye,
   Mail, Phone, Building2, Calendar, Award, MoreVertical, ExternalLink,
   Pencil, Pause, Play, RotateCcw, MapPin, PlusCircle, Target, Sparkles, Plus,
-  CheckCircle2, XCircle, Clock, ThumbsUp, ThumbsDown, PhoneOff, Star, AlertCircle
+  CheckCircle2, XCircle, Clock, ThumbsUp, ThumbsDown, PhoneOff, Star, AlertCircle,
+  ClipboardList as ClipboardListIcon
 } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
@@ -82,6 +83,11 @@ export default function AdminDashboard() {
   const [exportingStatus, setExportingStatus] = useState(false);
   const [incPage, setIncPage] = useState(1);
   const [incSearch, setIncSearch] = useState("");
+  const [jobRequests, setJobRequests] = useState([]);
+  const [jobRequestsLoading, setJobRequestsLoading] = useState(false);
+  const [jobRequestStatusFilter, setJobRequestStatusFilter] = useState("All");
+  const [jobRequestSearch, setJobRequestSearch] = useState("");
+  const [updatingRequestId, setUpdatingRequestId] = useState(null);
   const clickTimers = useRef({});
 
   // ── Keyboard shortcuts ──────────────────────────────────────
@@ -103,7 +109,7 @@ export default function AdminDashboard() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  useEffect(() => { fetchDashboardData(); fetchJobs(); fetchReferredCandidates(); }, []);
+  useEffect(() => { fetchDashboardData(); fetchJobs(); fetchReferredCandidates(); fetchJobRequests(); }, []);
   useEffect(() => {
     if (activeTab === "recruiters") fetchApprovedRecruiters();
     if (activeTab === "incentives") fetchReferrers();
@@ -112,6 +118,7 @@ export default function AdminDashboard() {
     if (activeTab === "recruiter-status") fetchRecruiterStatuses();
     if (activeTab === "jobs-list" || activeTab === "jobs") fetchJobs();
     if (activeTab === "manage-status") { fetchCandidateStatusList(); }
+    if (activeTab === "job-requests") { fetchJobRequests(); }
   }, [activeTab]);
 
   // ── Fetchers ───────────────────────────────────────────────
@@ -162,6 +169,30 @@ export default function AdminDashboard() {
       const r = await axios.get(`${API_BASE_URL}/api/jobs/admin/my-jobs`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
       setJobs(Array.isArray(r.data) ? r.data : []);
     } catch { showError("Failed to load jobs"); }
+  };
+  // Candidate-submitted "can't find my job" requests
+  const fetchJobRequests = async () => {
+    try {
+      setJobRequestsLoading(true);
+      const r = await axios.get(`${API_BASE_URL}/api/job-requests`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+      setJobRequests(Array.isArray(r.data) ? r.data : []);
+    } catch { showError("Failed to load job requests"); } finally { setJobRequestsLoading(false); }
+  };
+  const updateJobRequestStatus = async (requestId, status) => {
+    try {
+      setUpdatingRequestId(requestId);
+      const r = await axios.put(`${API_BASE_URL}/api/job-requests/${requestId}`, { status }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+      setJobRequests(prev => prev.map(req => req.id === requestId ? r.data.request : req));
+      showSuccess("Request updated");
+    } catch { showError("Failed to update request"); } finally { setUpdatingRequestId(null); }
+  };
+  const deleteJobRequestRow = async (requestId) => {
+    if (!window.confirm("Delete this job request?")) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/api/job-requests/${requestId}`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+      setJobRequests(prev => prev.filter(req => req.id !== requestId));
+      showSuccess("Request deleted");
+    } catch { showError("Failed to delete request"); }
   };
   const fetchBulkCandidates = async () => {
     try {
@@ -341,6 +372,7 @@ export default function AdminDashboard() {
     { id:"incentives", label:"Incentives" },
     { id:"jobs-list", label:"All Jobs" },
     { id:"jobs", label:"Post Job" },
+    { id:"job-requests", label:"Job Requests" },
     { id:"bulk-jobs", label:"Bulk Jobs" },
     { id:"bulk-candidates", label:"Bulk Candidates" },
     { id:"resume-parse", label:"Candidate upload" },
@@ -375,6 +407,7 @@ export default function AdminDashboard() {
                     if(item.id==="jobs-list"||item.id==="jobs")fetchJobs();
                     if(item.id==="referred-candidates")fetchReferredCandidates();
                     if(item.id==="manage-status"){fetchCandidateStatusList();}
+                    if(item.id==="job-requests"){fetchJobRequests();}
                   }}
                     style={{ width:"100%", padding:"11px 20px", border:"none", borderLeft:`3px solid ${activeTab===item.id?O:"transparent"}`, backgroundColor:activeTab===item.id?O_LITE:"#fff", color:activeTab===item.id?O:"#374151", textAlign:"left", cursor:"pointer", fontSize:13, fontWeight:activeTab===item.id?700:400, fontFamily:"inherit", transition:"all 0.1s" }}
                     onMouseEnter={e=>{if(activeTab!==item.id)e.currentTarget.style.backgroundColor="#F8FAFC";}}
@@ -1559,6 +1592,133 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
+
+        {/* ═══════════════════════════════════════════════ */}
+        {/* JOB REQUESTS (candidate "can't find my job")    */}
+        {/* ═══════════════════════════════════════════════ */}
+        {activeTab==="job-requests" && (() => {
+          const STATUS_META = {
+            pending:   { label:"Pending",   color:"#B35500", bg:"#FFF3E8", border:"#FBBF7A" },
+            reviewed:  { label:"Reviewed",  color:"#1d4ed8", bg:"#EFF6FF", border:"#BFDBFE" },
+            fulfilled: { label:"Fulfilled", color:"#15803d", bg:"#DCFCE7", border:"#97C459" },
+            rejected:  { label:"Not available", color:"#dc2626", bg:"#FEF2F2", border:"#FCA5A5" },
+          };
+          const q = jobRequestSearch.toLowerCase();
+          const filtered = jobRequests.filter(r => {
+            const matchStatus = jobRequestStatusFilter==="All" || r.status===jobRequestStatusFilter;
+            const matchQ = !q || [r.job_role, r.candidate_name, r.candidate_email, r.department, r.location].filter(Boolean).join(" ").toLowerCase().includes(q);
+            return matchStatus && matchQ;
+          });
+          const counts = {
+            total: jobRequests.length,
+            pending: jobRequests.filter(r=>r.status==="pending").length,
+            reviewed: jobRequests.filter(r=>r.status==="reviewed").length,
+            fulfilled: jobRequests.filter(r=>r.status==="fulfilled").length,
+          };
+          return (
+            <div>
+              <BackBtn/>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20, flexWrap:"wrap", gap:12 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                  <div style={{ width:44, height:44, borderRadius:12, backgroundColor:O_LITE, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                    <Target size={20} color={O}/>
+                  </div>
+                  <div>
+                    <h2 style={{ fontSize:20, fontWeight:800, margin:0 }}>Candidate Job Requests</h2>
+                    <p style={{ fontSize:13, color:"#64748b", margin:"2px 0 0" }}>Jobs candidates couldn't find and asked us to source for them.</p>
+                  </div>
+                </div>
+                <button onClick={fetchJobRequests} style={{ display:"flex", alignItems:"center", gap:8, padding:"11px 20px", backgroundColor:"#fff", color:"#475569", border:`1.5px solid ${BORDER}`, borderRadius:10, cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"inherit" }}>
+                  <RotateCcw size={14}/> Refresh
+                </button>
+              </div>
+
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:20 }}>
+                {[
+                  { label:"Total Requests", value:counts.total, icon:ClipboardListIcon, color:"#1d4ed8", bg:"#EFF6FF" },
+                  { label:"Pending", value:counts.pending, icon:Clock, color:"#B35500", bg:"#FFF3E8" },
+                  { label:"Reviewed", value:counts.reviewed, icon:Eye, color:"#1d4ed8", bg:"#EFF6FF" },
+                  { label:"Fulfilled", value:counts.fulfilled, icon:CheckCircle2, color:"#15803d", bg:"#DCFCE7" },
+                ].map(s=>(
+                  <div key={s.label} style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderLeft:`4px solid ${s.color}`, borderRadius:14, padding:"16px 18px", display:"flex", alignItems:"flex-start", gap:12 }}>
+                    <div style={{ width:38, height:38, borderRadius:10, backgroundColor:s.bg, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                      <s.icon size={17} color={s.color}/>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:22, fontWeight:800, lineHeight:1.1 }}>{s.value}</div>
+                      <div style={{ fontSize:12, fontWeight:600, color:"#374151", marginTop:2 }}>{s.label}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
+                <div style={{ flex:1, minWidth:220, display:"flex", alignItems:"center", gap:8, padding:"10px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10 }}>
+                  <Search size={15} color="#94a3b8"/>
+                  <input value={jobRequestSearch} onChange={e=>setJobRequestSearch(e.target.value)} placeholder="Search by role, candidate name or email..."
+                    style={{ flex:1, border:"none", outline:"none", fontSize:13, fontFamily:"inherit", background:"transparent" }}/>
+                  {jobRequestSearch && <button onClick={()=>setJobRequestSearch("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", display:"flex" }}><X size={13}/></button>}
+                </div>
+                <select value={jobRequestStatusFilter} onChange={e=>setJobRequestStatusFilter(e.target.value)}
+                  style={{ padding:"10px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10, fontSize:13, color:"#374151", fontFamily:"inherit", cursor:"pointer" }}>
+                  {["All","pending","reviewed","fulfilled","rejected"].map(s=><option key={s} value={s}>{s==="All"?s:STATUS_META[s].label}</option>)}
+                </select>
+              </div>
+
+              {jobRequestsLoading ? (
+                <div style={{ ...CARD, textAlign:"center", color:"#94a3b8" }}>Loading job requests…</div>
+              ) : filtered.length===0 ? (
+                <div style={{ ...CARD, textAlign:"center", color:"#94a3b8" }}>
+                  {jobRequests.length===0 ? "No candidates have requested a job yet." : "No requests match your filters."}
+                </div>
+              ) : (
+                <div style={{ display:"grid", gap:14 }}>
+                  {filtered.map(r => {
+                    const meta = STATUS_META[r.status] || STATUS_META.pending;
+                    return (
+                      <div key={r.id} style={{ ...CARD, padding:"20px 22px" }}>
+                        <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:16, flexWrap:"wrap" }}>
+                          <div>
+                            <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                              <span style={{ fontSize:16, fontWeight:700, color:"#0f172a" }}>{r.job_role}</span>
+                              <Badge label={meta.label} color={meta.color} bg={meta.bg} border={meta.border}/>
+                            </div>
+                            <div style={{ fontSize:13, color:"#64748b", marginTop:4 }}>
+                              {[r.department, r.location, r.job_type, r.experience_required, r.ctc && `CTC: ${r.ctc}`].filter(Boolean).join(" · ") || "No additional details provided"}
+                            </div>
+                            {r.notes && (
+                              <p style={{ fontSize:13, color:"#475569", marginTop:10, backgroundColor:"#F8FAFC", padding:"10px 14px", borderRadius:9, maxWidth:640 }}>{r.notes}</p>
+                            )}
+                            <div style={{ display:"flex", alignItems:"center", gap:14, marginTop:12, fontSize:12, color:"#94a3b8", flexWrap:"wrap" }}>
+                              <span style={{ display:"flex", alignItems:"center", gap:5 }}><Users size={13}/> {r.candidate_name || "Unknown"}</span>
+                              <span style={{ display:"flex", alignItems:"center", gap:5 }}><Mail size={13}/> {r.candidate_email || "—"}</span>
+                              {r.candidate_phone && <span style={{ display:"flex", alignItems:"center", gap:5 }}><Phone size={13}/> {r.candidate_phone}</span>}
+                              <span style={{ display:"flex", alignItems:"center", gap:5 }}><Calendar size={13}/> {fmtDate(r.created_at)}</span>
+                            </div>
+                          </div>
+
+                          <div style={{ display:"flex", flexDirection:"column", gap:8, alignItems:"flex-end", minWidth:170 }}>
+                            <select
+                              value={r.status}
+                              disabled={updatingRequestId===r.id}
+                              onChange={e=>updateJobRequestStatus(r.id, e.target.value)}
+                              style={{ padding:"8px 12px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:9, fontSize:13, color:"#374151", fontFamily:"inherit", cursor:"pointer", minWidth:150 }}
+                            >
+                              {["pending","reviewed","fulfilled","rejected"].map(s=><option key={s} value={s}>{STATUS_META[s].label}</option>)}
+                            </select>
+                            <button onClick={()=>deleteJobRequestRow(r.id)} style={{ display:"flex", alignItems:"center", gap:6, padding:"7px 14px", backgroundColor:"#fef2f2", color:"#dc2626", border:"1.5px solid #fecaca", borderRadius:9, cursor:"pointer", fontSize:12, fontWeight:700, fontFamily:"inherit" }}>
+                              <Trash2 size={13}/> Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ═══════════════════════════════════════════════ */}
         {/* BULK CANDIDATES                                 */}
