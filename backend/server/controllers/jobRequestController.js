@@ -19,7 +19,7 @@ export const createJobRequest = async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO job_requests
+      `INSERT INTO candidate_job_requests
         (candidate_id, job_role, department, location, job_type, experience_required, ctc, notes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
@@ -51,7 +51,7 @@ export const getMyJobRequests = async (req, res) => {
     const candidateId = req.user.id;
 
     const result = await pool.query(
-      `SELECT * FROM job_requests WHERE candidate_id=$1 ORDER BY created_at DESC`,
+      `SELECT * FROM candidate_job_requests WHERE candidate_id=$1 ORDER BY created_at DESC`,
       [candidateId]
     );
 
@@ -72,7 +72,7 @@ export const getAllJobRequests = async (req, res) => {
 
     const result = await pool.query(
       `SELECT jr.*, u.name AS candidate_name, u.email AS candidate_email, u.phone AS candidate_phone
-       FROM job_requests jr
+       FROM candidate_job_requests jr
        JOIN users u ON jr.candidate_id = u.id
        ORDER BY jr.created_at DESC`
     );
@@ -101,7 +101,7 @@ export const updateJobRequestStatus = async (req, res) => {
     }
 
     const result = await pool.query(
-      `UPDATE job_requests
+      `UPDATE candidate_job_requests
        SET status=$1, admin_notes=COALESCE($2, admin_notes), updated_at=NOW()
        WHERE id=$3
        RETURNING *`,
@@ -129,7 +129,7 @@ export const deleteJobRequest = async (req, res) => {
 
     const { requestId } = req.params;
     const result = await pool.query(
-      "DELETE FROM job_requests WHERE id=$1 RETURNING *",
+      "DELETE FROM candidate_job_requests WHERE id=$1 RETURNING *",
       [requestId]
     );
 
