@@ -171,10 +171,9 @@ export default function AdminReferredCandidateDetailsPage() {
 
   const skillsArr = Array.isArray(raw.skills) ? raw.skills : (raw.skills ? String(raw.skills).split(",").map(s => s.trim()).filter(Boolean) : []);
 
-  // Normalize into the shape CandidateDetailView expects — the referrals
-  // table collects a smaller field set than bulk/portal candidates, so
-  // several fields will simply show "Not provided", same as any other
-  // candidate whose recruiter/uploader didn't fill them in.
+  // Normalize into the shape CandidateDetailView expects. Fields the admin
+  // hasn't filled in yet (via Edit Candidate Details) will show "Not provided",
+  // same as any other candidate whose recruiter/uploader didn't fill them in.
   const candidate = {
     name: raw.name,
     email: raw.email,
@@ -183,6 +182,14 @@ export default function AdminReferredCandidateDetailsPage() {
     experience: raw.experience,
     currentCompany: raw.company,
     department: raw.department,
+    role: raw.role,
+    location: raw.current_location,
+    preferredLocation: raw.preferred_location,
+    currentCtc: raw.current_ctc,
+    expectedCtc: raw.expected_ctc,
+    noticePeriod: raw.notice_period,
+    offerInHand: raw.offer_in_hand,
+    reasonForChange: raw.reason_for_change,
     skills: skillsArr.join(","),
     hasCv: !!raw.cv_file,
   };
@@ -205,11 +212,25 @@ export default function AdminReferredCandidateDetailsPage() {
               <Input label="Full Name" field="name" form={form} setForm={setForm} />
               <Input label="Email" field="email" form={form} setForm={setForm} />
               <Input label="Phone" field="phone" form={form} setForm={setForm} />
+              <Input label="Role" field="role" form={form} setForm={setForm} />
               <Input label="Experience" field="experience" form={form} setForm={setForm} />
               <Input label="Company" field="company" form={form} setForm={setForm} />
               <Input label="Department" field="department" form={form} setForm={setForm} />
               <Input label="Industry" field="industry" form={form} setForm={setForm} />
+              <Input label="Current Location" field="current_location" form={form} setForm={setForm} />
+              <Input label="Preferred Location" field="preferred_location" form={form} setForm={setForm} />
+              <Input label="Current CTC (LPA)" field="current_ctc" form={form} setForm={setForm} />
+              <Input label="Expected CTC (LPA)" field="expected_ctc" form={form} setForm={setForm} />
+              <Input label="Notice Period" field="notice_period" form={form} setForm={setForm} />
+              <Input label="Offer in Hand" field="offer_in_hand" form={form} setForm={setForm} />
               <Input label="LinkedIn Profile URL" field="linkedin" form={form} setForm={setForm} />
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#64748b", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Reason for Change</label>
+              <input value={form.reason_for_change || ""} onChange={e => setForm(f => ({ ...f, reason_for_change: e.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", fontSize: 13, border: `1.5px solid ${BORDER}`, borderRadius: 8, outline: "none", fontFamily: "inherit", boxSizing: "border-box", color: "#0f172a", backgroundColor: "#f8fafc" }}
+                onFocus={e => e.target.style.borderColor = O} onBlur={e => e.target.style.borderColor = BORDER} />
             </div>
 
             <div style={{ marginBottom: 14 }}>
