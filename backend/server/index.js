@@ -15,6 +15,7 @@ import referralRoutes from "./routes/referral.js";
 import recruiterRoutes from "./routes/recruiter.js";
 import adminRoutes from "./routes/admin.js";
 import jobRoutes from "./routes/jobs.js";
+import jobRequestRoutes from "./routes/jobRequests.js";
 import pool from "./config/db.js";
 
 // Auto-create resume_views table if it doesn't exist
@@ -101,6 +102,36 @@ const ensureUserImageColumn = async () => {
   }
 };
 
+// Auto-create job_requests table if it doesn't exist — lets candidates
+// submit a "can't find the job I want" request (role, ctc, location, etc.)
+// that admins can review from the admin dashboard.
+const ensureJobRequestsTable = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS job_requests (
+        id SERIAL PRIMARY KEY,
+        candidate_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        job_role VARCHAR(255) NOT NULL,
+        department VARCHAR(255),
+        location VARCHAR(255),
+        job_type VARCHAR(50),
+        experience_required VARCHAR(100),
+        ctc VARCHAR(100),
+        notes TEXT,
+        status VARCHAR(20) DEFAULT 'pending',
+        admin_notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_job_requests_candidate ON job_requests(candidate_id);
+      CREATE INDEX IF NOT EXISTS idx_job_requests_status ON job_requests(status);
+    `);
+    console.log("✓ job_requests table ready");
+  } catch (err) {
+    console.error("job_requests table setup error:", err.message);
+  }
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -124,8 +155,9 @@ app.use("/api/referral", referralRoutes);
 app.use("/api/recruiter", recruiterRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/jobs", jobRoutes);
+app.use("/api/job-requests", jobRequestRoutes);
 
 const PORT = process.env.PORT || 5000;
-Promise.all([ensureResumeViewsTable(), ensureInvitedByColumn(), ensureIncentiveTrackingColumns(), ensureUserImageColumn()]).then(() => {
+Promise.all([ensureResumeViewsTable(), ensureInvitedByColumn(), ensureIncentiveTrackingColumns(), ensureUserImageColumn(), ensureJobRequestsTable()]).then(() => {
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 });
