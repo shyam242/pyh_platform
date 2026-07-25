@@ -1844,7 +1844,7 @@ export default function AdminDashboard() {
           };
 
           const handleViewCV = (c) => {
-            if (c._source === "bulk") { window.open(`/bulk-candidates/${c.id}`, "_blank"); return; }
+            if (c._source === "bulk") { window.open(`/admin/bulk-candidates/${c.id}`, "_blank"); return; }
             if (c._source === "portal" && c.resume_link) { window.open(c.resume_link, "_blank"); return; }
             if (c._source === "referred" && c.cv_file) { window.open(`${API_BASE_URL}/uploads/cv/${c.cv_file}`, "_blank"); return; }
             setSelectedCandidate({ ...c, _type:c._source==="referred"?"referred":c._source, status:c.candidate_status });
@@ -2118,7 +2118,7 @@ export default function AdminDashboard() {
                       <div style={{ fontWeight:700, color:O, marginBottom:2 }}>{c.candidate_id}</div>
                       <div>{c.current_location||"—"} · {c.experience?`${c.experience} yrs`:"—"}</div>
                     </div>
-                    <button onClick={()=>window.open(`/bulk-candidates/${c.id}`,"_blank")}
+                    <button onClick={()=>window.open(`/admin/bulk-candidates/${c.id}`,"_blank")}
                       style={{ padding:"6px 14px", backgroundColor:O, color:"#fff", border:"none", borderRadius:7, fontSize:12, fontWeight:700, cursor:"pointer" }}>View</button>
                   </div>
                 ))}
@@ -2135,7 +2135,7 @@ export default function AdminDashboard() {
                       <div style={{ fontWeight:700, marginBottom:2 }}>{c.candidate_id}</div>
                       <div>resume kept · not discarded</div>
                     </div>
-                    <button onClick={()=>window.open(`/bulk-candidates/${c.id}`,"_blank")}
+                    <button onClick={()=>window.open(`/admin/bulk-candidates/${c.id}`,"_blank")}
                       style={{ padding:"6px 14px", backgroundColor:"#D97706", color:"#fff", border:"none", borderRadius:7, fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" }}>Fill Details</button>
                   </div>
                 ))}
@@ -2262,7 +2262,7 @@ export default function AdminDashboard() {
               )}
               {/* Full profile link for bulk-uploaded candidates */}
               {selectedCandidate._type==="bulk" && selectedCandidate.id && (
-                <button onClick={()=>window.location.href=`/bulk-candidates/${selectedCandidate.id}`}
+                <button onClick={()=>window.location.href=`/admin/bulk-candidates/${selectedCandidate.id}`}
                   style={{ display:"block", width:"100%", marginTop:16, padding:"11px", backgroundColor:O, color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
                   Open Full Profile →
                 </button>
