@@ -445,6 +445,69 @@ export const getReferredCandidateDetails = async (req, res) => {
   }
 };
 
+// UPDATE REFERRED CANDIDATE DETAILS (admin edit)
+// PUT /api/admin/referred-candidates/:referralId/details
+export const updateReferredCandidateDetails = async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const { referralId } = req.params;
+    const {
+      name, email, phone, company, department, industry,
+      experience, skills, linkedin,
+    } = req.body;
+
+    const result = await pool.query(
+      `UPDATE referrals SET
+        name = COALESCE($1, name),
+        email = COALESCE($2, email),
+        phone = COALESCE($3, phone),
+        company = COALESCE($4, company),
+        department = COALESCE($5, department),
+        industry = COALESCE($6, industry),
+        experience = COALESCE($7, experience),
+        skills = COALESCE($8, skills),
+        linkedin = COALESCE($9, linkedin)
+      WHERE id = $10
+      RETURNING *`,
+      [
+        name, email, phone, company, department, industry,
+        experience, skills != null ? JSON.stringify(Array.isArray(skills) ? skills : String(skills).split(",").map(s => s.trim()).filter(Boolean)) : null,
+        linkedin, referralId
+      ]
+    );
+
+    if (!result.rows.length) {
+      return res.status(404).json({ message: "Referred candidate not found" });
+    }
+
+    res.json({ message: "Candidate updated successfully", candidate: result.rows[0] });
+  } catch (err) {
+    console.error("updateReferredCandidateDetails error:", err);
+    res.status(500).json({ message: "Failed to update candidate" });
+  }
+};
+
+// DELETE REFERRED CANDIDATE PROFILE (admin only)
+// DELETE /api/admin/referred-candidates/:referralId
+export const deleteReferredCandidate = async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const { referralId } = req.params;
+    const result = await pool.query("DELETE FROM referrals WHERE id=$1 RETURNING *", [referralId]);
+
+    if (!result.rows.length) {
+      return res.status(404).json({ message: "Referred candidate not found" });
+    }
+
+    res.json({ message: "Candidate profile deleted successfully", candidate: result.rows[0] });
+  } catch (err) {
+    console.error("deleteReferredCandidate error:", err);
+    res.status(500).json({ message: "Failed to delete candidate" });
+  }
+};
+
 // GET /api/admin/recruiter-candidate-statuses — admin-only view of every recruiter's
 // private candidate status tags (Shortlisted / In Process / On Hold / Offer Given).
 // Individual recruiters never see each other's tags — only admin sees this list.
