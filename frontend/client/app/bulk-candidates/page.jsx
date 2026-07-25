@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import { Trash2, Pencil, AlertCircle, Users, Search, X, Upload } from "lucide-react";
+import { Trash2, AlertCircle, Users, Search, X, Upload } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
 
@@ -289,26 +289,15 @@ export default function BulkCandidatesPage() {
                         <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: "#374151" }}>{candidate.experience ? `${candidate.experience} yrs` : "—"}</p>
                       </div>
                     </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        onClick={e => { e.stopPropagation(); router.push(`/admin/bulk-candidates/${candidate.id}`); }}
-                        style={{ padding: "5px 8px", background: "none", border: "1px solid #fed7aa", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", color: "#f97316" }}
-                        onMouseEnter={e => e.currentTarget.style.background = "#fff7ed"}
-                        onMouseLeave={e => e.currentTarget.style.background = "none"}
-                        title="Edit candidate"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        onClick={e => handleDeleteCandidate(candidate.id, e)}
-                        style={{ padding: "5px 8px", background: "none", border: "1px solid #fecaca", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", color: "#dc2626" }}
-                        onMouseEnter={e => e.currentTarget.style.background = "#fef2f2"}
-                        onMouseLeave={e => e.currentTarget.style.background = "none"}
-                        title="Delete candidate"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+                    <button
+                      onClick={e => handleDeleteCandidate(candidate.id, e)}
+                      style={{ padding: "5px 8px", background: "none", border: "1px solid #fecaca", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", color: "#dc2626" }}
+                      onMouseEnter={e => e.currentTarget.style.background = "#fef2f2"}
+                      onMouseLeave={e => e.currentTarget.style.background = "none"}
+                      title="Delete candidate"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 </div>
               );
