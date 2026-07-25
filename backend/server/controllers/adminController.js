@@ -1210,6 +1210,28 @@ export const getBulkUploadedCandidates = async (req, res) => {
   }
 };
 
+// GET /api/admin/bulk-candidates/:candidateId — single bulk-uploaded candidate's full
+// profile, admin only. Kept separate from getBulkUploadedCandidates (which recruiters
+// can also call for the shared list) so the admin profile page's Edit/Delete actions
+// are never reachable — or even visible — to a non-admin.
+export const getBulkCandidateDetails = async (req, res) => {
+  try {
+    if (!(await isAdmin(req.user.id))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const { candidateId } = req.params;
+    const result = await pool.query("SELECT * FROM bulk_candidates WHERE id=$1", [candidateId]);
+
+    if (!result.rows.length) {
+      return res.status(404).json({ message: "Candidate not found" });
+    }
+
+    res.json({ candidate: result.rows[0] });
+  } catch (err) {
+    console.error("getBulkCandidateDetails error:", err);
+    res.status(500).json({ message: "Failed to fetch candidate details" });
+  }
+};
+
 // DELETE BULK UPLOADED CANDIDATE
 export const deleteBulkCandidate = async (req, res) => {
   try {
