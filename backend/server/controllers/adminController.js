@@ -454,7 +454,8 @@ export const updateReferredCandidateDetails = async (req, res) => {
     const { referralId } = req.params;
     const {
       name, email, phone, company, department, industry,
-      experience, skills, linkedin,
+      experience, skills, linkedin, role, current_location, preferred_location,
+      current_ctc, expected_ctc, notice_period, offer_in_hand, reason_for_change,
     } = req.body;
 
     const result = await pool.query(
@@ -467,13 +468,23 @@ export const updateReferredCandidateDetails = async (req, res) => {
         industry = COALESCE($6, industry),
         experience = COALESCE($7, experience),
         skills = COALESCE($8, skills),
-        linkedin = COALESCE($9, linkedin)
-      WHERE id = $10
+        linkedin = COALESCE($9, linkedin),
+        role = COALESCE($10, role),
+        current_location = COALESCE($11, current_location),
+        preferred_location = COALESCE($12, preferred_location),
+        current_ctc = COALESCE($13, current_ctc),
+        expected_ctc = COALESCE($14, expected_ctc),
+        notice_period = COALESCE($15, notice_period),
+        offer_in_hand = COALESCE($16, offer_in_hand),
+        reason_for_change = COALESCE($17, reason_for_change)
+      WHERE id = $18
       RETURNING *`,
       [
         name, email, phone, company, department, industry,
         experience, skills != null ? JSON.stringify(Array.isArray(skills) ? skills : String(skills).split(",").map(s => s.trim()).filter(Boolean)) : null,
-        linkedin, referralId
+        linkedin, role, current_location, preferred_location,
+        current_ctc, expected_ctc, notice_period, offer_in_hand, reason_for_change,
+        referralId
       ]
     );
 
