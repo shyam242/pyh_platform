@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import { Trash2, AlertCircle, Users, Search, X, Upload } from "lucide-react";
+import { Trash2, Pencil, AlertCircle, Users, Search, X, Upload } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
 
@@ -88,15 +88,11 @@ export default function BulkCandidatesPage() {
     }
   };
 
-  const filtered = candidates
-    .filter(c =>
-      c.name?.toLowerCase().includes(search.toLowerCase()) ||
-      c.email?.toLowerCase().includes(search.toLowerCase()) ||
-      c.skills?.toLowerCase().includes(search.toLowerCase())
-    )
-    .sort((a, b) => (b.needs_manual_review ? 1 : 0) - (a.needs_manual_review ? 1 : 0));
-
-  const needsReviewCount = candidates.filter(c => c.needs_manual_review).length;
+  const filtered = candidates.filter(c =>
+    c.name?.toLowerCase().includes(search.toLowerCase()) ||
+    c.email?.toLowerCase().includes(search.toLowerCase()) ||
+    c.skills?.toLowerCase().includes(search.toLowerCase())
+  );
 
   const initials = (name) => name?.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
 
@@ -137,10 +133,7 @@ export default function BulkCandidatesPage() {
             </div>
             <div>
               <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: "#111827" }}>Bulk Candidates</p>
-              <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>
-                {candidates.length} total · CSV upload
-                {needsReviewCount > 0 && <span style={{ color: "#b45309", fontWeight: 600 }}> · {needsReviewCount} need review</span>}
-              </p>
+              <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>{candidates.length} total · CSV upload</p>
             </div>
           </div>
 
@@ -219,10 +212,10 @@ export default function BulkCandidatesPage() {
               return (
                 <div
                   key={candidate.id}
-                  onClick={() => router.push(`/bulk-candidates/${candidate.id}`)}
+                  onClick={() => router.push(`/admin/bulk-candidates/${candidate.id}`)}
                   style={{
-                    background: candidate.needs_manual_review ? "#FFFBEB" : "#fff",
-                    border: `1px solid ${isSelected ? "#fed7aa" : candidate.needs_manual_review ? "#FDE68A" : "#e5e7eb"}`,
+                    background: "#fff",
+                    border: `1px solid ${isSelected ? "#fed7aa" : "#e5e7eb"}`,
                     borderRadius: 12,
                     padding: "20px",
                     cursor: "pointer",
@@ -268,12 +261,6 @@ export default function BulkCandidatesPage() {
                     </div>
                   </div>
 
-                  {candidate.needs_manual_review && (
-                    <div style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", background: "#FEF3C7", color: "#92400e", borderRadius: 20, fontSize: 11, fontWeight: 600, marginBottom: 12 }}>
-                      <AlertCircle size={11} /> Needs Review — resume kept, details missing
-                    </div>
-                  )}
-
                   {/* Skills */}
                   {skills.length > 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 14 }}>
@@ -302,15 +289,26 @@ export default function BulkCandidatesPage() {
                         <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: "#374151" }}>{candidate.experience ? `${candidate.experience} yrs` : "—"}</p>
                       </div>
                     </div>
-                    <button
-                      onClick={e => handleDeleteCandidate(candidate.id, e)}
-                      style={{ padding: "5px 8px", background: "none", border: "1px solid #fecaca", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", color: "#dc2626" }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#fef2f2"}
-                      onMouseLeave={e => e.currentTarget.style.background = "none"}
-                      title="Delete candidate"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        onClick={e => { e.stopPropagation(); router.push(`/admin/bulk-candidates/${candidate.id}`); }}
+                        style={{ padding: "5px 8px", background: "none", border: "1px solid #fed7aa", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", color: "#f97316" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#fff7ed"}
+                        onMouseLeave={e => e.currentTarget.style.background = "none"}
+                        title="Edit candidate"
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        onClick={e => handleDeleteCandidate(candidate.id, e)}
+                        style={{ padding: "5px 8px", background: "none", border: "1px solid #fecaca", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", color: "#dc2626" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#fef2f2"}
+                        onMouseLeave={e => e.currentTarget.style.background = "none"}
+                        title="Delete candidate"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
