@@ -421,7 +421,7 @@ export default function AdminReferrerDetailPage() {
                   {referralHistory.map(r => {
                     const sc = STATUS_COLORS[r.status] || STATUS_COLORS.pending;
                     return (
-                      <div key={r.id} onClick={() => router.push(`/referral/${r.id}`)}
+                      <div key={r.id} onClick={() => router.push(`/admin/referred-candidates/${r.id}`)}
                         style={{ display: "grid", gridTemplateColumns: "1.8fr 1.4fr 1fr 1fr", gap: 10, padding: "12px 20px", borderTop: `1px solid #F8FAFC`, alignItems: "center", cursor: "pointer" }}
                         onMouseEnter={e => e.currentTarget.style.backgroundColor = "#FAFAFA"}
                         onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}>
