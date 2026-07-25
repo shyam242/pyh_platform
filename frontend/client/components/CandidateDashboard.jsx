@@ -5,11 +5,11 @@ import {
   Plus, Edit2, Bell, Settings, Bookmark, Eye,
   Filter, Clock, ShieldCheck, Briefcase, Send, Sparkles,
   ChevronRight, User, Trash2, LogOut, CheckCircle,
-  TrendingUp, MapPin, Activity, X
+  TrendingUp, MapPin, Activity, X, HelpCircle, ClipboardList, Loader2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { showSuccess, showError } from "@/utils/toast";
-import { API_BASE_URL } from "@/utils/api";
+import { API_BASE_URL, apiFetch } from "@/utils/api";
 
 /* ── design tokens ────────────────────────────────────────────── */
 const O      = "#E87722";
@@ -204,6 +204,145 @@ function SettingsPanel({ onDeleteProfile }) {
   );
 }
 
+/* ── Can't find your job? Request one ────────────────────────── */
+const REQUEST_STATUS_STYLE = {
+  pending:   { label: "Pending review", bg: "#FFF3E8", color: "#B35500", border: "#FBBF7A" },
+  reviewed:  { label: "Reviewed",       bg: "#EFF6FF", color: "#1d4ed8", border: "#BFDBFE" },
+  fulfilled: { label: "Fulfilled",      bg: "#EAF3DE", color: "#3B6D11", border: "#97C459" },
+  rejected:  { label: "Not available",  bg: "#FEF2F2", color: "#B91C1C", border: "#FCA5A5" },
+};
+
+function JobRequestSection({ myRequests, requestsLoading, onSubmit, submitting }) {
+  const [open, setOpen] = useState(false);
+  const emptyForm = { job_role: "", department: "", location: "", job_type: "", experience_required: "", ctc: "", notes: "" };
+  const [form, setForm] = useState(emptyForm);
+
+  const update = (field, value) => setForm(p => ({ ...p, [field]: value }));
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    if (!form.job_role.trim()) { showError("Please tell us the job role you're looking for."); return; }
+    const ok = await onSubmit(form);
+    if (ok) { setForm(emptyForm); setOpen(false); }
+  };
+
+  return (
+    <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "22px 24px", marginTop: 28 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+          <div style={{ width: 42, height: 42, borderRadius: 11, backgroundColor: O_LITE, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <HelpCircle size={20} color={O} />
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>Can't find the job you're looking for?</div>
+            <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0", maxWidth: 520 }}>
+              Tell us the role, CTC, and other details you're after — our team will review it and reach out if a matching opening comes up.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => setOpen(v => !v)}
+          style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 20px", borderRadius: 9, backgroundColor: open ? "#fff" : O, color: open ? "#475569" : "#fff", border: `1.5px solid ${open ? BORDER : O}`, fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}
+        >
+          {open ? <><X size={15} /> Close</> : <><Plus size={15} /> Request a job</>}
+        </button>
+      </div>
+
+      {open && (
+        <form onSubmit={handleSubmit} style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid #F1F5F9` }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
+            {[
+              { key: "job_role",             label: "Job role *",     placeholder: "e.g. Backend Developer" },
+              { key: "department",           label: "Department",     placeholder: "e.g. Engineering" },
+              { key: "location",             label: "Location",       placeholder: "e.g. Bengaluru / Remote" },
+              { key: "experience_required",  label: "Experience",     placeholder: "e.g. 2-3 years" },
+              { key: "ctc",                  label: "Expected CTC",   placeholder: "e.g. 8-10 LPA" },
+            ].map(f => (
+              <div key={f.key}>
+                <label style={{ fontSize: 12, color: "#94a3b8", display: "block", marginBottom: 6, fontWeight: 600 }}>{f.label}</label>
+                <input
+                  style={{ width: "100%", padding: "10px 13px", fontSize: 14, border: `1.5px solid ${BORDER}`, borderRadius: 9, backgroundColor: "#FAFAFA", color: "#0f172a", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+                  placeholder={f.placeholder} value={form[f.key]}
+                  onChange={e => update(f.key, e.target.value)}
+                  onFocus={e => (e.target.style.borderColor = O)}
+                  onBlur={e => (e.target.style.borderColor = BORDER)}
+                />
+              </div>
+            ))}
+            <div>
+              <label style={{ fontSize: 12, color: "#94a3b8", display: "block", marginBottom: 6, fontWeight: 600 }}>Job type</label>
+              <select
+                value={form.job_type}
+                onChange={e => update("job_type", e.target.value)}
+                style={{ width: "100%", padding: "10px 13px", fontSize: 14, border: `1.5px solid ${BORDER}`, borderRadius: 9, backgroundColor: "#FAFAFA", color: form.job_type ? "#0f172a" : "#94a3b8", outline: "none", fontFamily: "inherit", boxSizing: "border-box" }}
+              >
+                <option value="">Select type</option>
+                <option value="Full-time">Full-time</option>
+                <option value="Part-time">Part-time</option>
+                <option value="Contract">Contract</option>
+                <option value="Internship">Internship</option>
+                <option value="Remote">Remote</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <label style={{ fontSize: 12, color: "#94a3b8", display: "block", marginBottom: 6, fontWeight: 600 }}>Additional details</label>
+            <textarea
+              rows={3}
+              placeholder="Anything else that would help us find the right fit — specific companies, skills, shift timing, etc."
+              value={form.notes}
+              onChange={e => update("notes", e.target.value)}
+              style={{ width: "100%", padding: "10px 13px", fontSize: 14, border: `1.5px solid ${BORDER}`, borderRadius: 9, backgroundColor: "#FAFAFA", color: "#0f172a", outline: "none", fontFamily: "inherit", boxSizing: "border-box", resize: "vertical" }}
+              onFocus={e => (e.target.style.borderColor = O)}
+              onBlur={e => (e.target.style.borderColor = BORDER)}
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitting}
+            style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8, padding: "10px 24px", borderRadius: 9, backgroundColor: O, color: "#fff", border: "none", fontSize: 14, fontWeight: 700, cursor: submitting ? "default" : "pointer", fontFamily: "inherit", opacity: submitting ? 0.7 : 1 }}
+          >
+            {submitting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+            {submitting ? "Submitting..." : "Submit request"}
+          </button>
+        </form>
+      )}
+
+      {myRequests.length > 0 && (
+        <div style={{ marginTop: 22, paddingTop: 18, borderTop: `1px solid #F1F5F9` }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#475569", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <ClipboardList size={15} color={O} /> Your submitted requests
+          </div>
+          {requestsLoading ? (
+            <p style={{ fontSize: 13, color: "#94a3b8" }}>Loading...</p>
+          ) : (
+            <div style={{ display: "grid", gap: 10 }}>
+              {myRequests.map(r => {
+                const s = REQUEST_STATUS_STYLE[r.status] || REQUEST_STATUS_STYLE.pending;
+                return (
+                  <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 16px", borderRadius: 10, backgroundColor: "#F8FAFC", border: `1px solid #F1F5F9`, flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{r.job_role}</div>
+                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                        {[r.department, r.location, r.experience_required, r.ctc].filter(Boolean).join(" · ") || "No additional details"}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 13px", borderRadius: 999, backgroundColor: s.bg, color: s.color, border: `1px solid ${s.border}`, whiteSpace: "nowrap" }}>
+                      {s.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════ */
 export default function CandidateDashboard() {
   const router = useRouter();
@@ -221,6 +360,9 @@ export default function CandidateDashboard() {
   const [notifications, setNotifications]   = useState([]);
   const [prevJobIds, setPrevJobIds]         = useState(null);
   const [activity, setActivity]             = useState([]);
+  const [myJobRequests, setMyJobRequests]         = useState([]);
+  const [jobRequestsLoading, setJobRequestsLoading] = useState(true);
+  const [submittingRequest, setSubmittingRequest] = useState(false);
 
   /* ── boot ── */
   useEffect(() => {
@@ -240,7 +382,39 @@ export default function CandidateDashboard() {
   }, [prevJobIds]);
 
   /* ── fetch helpers ── */
-  const fetchAll = t => Promise.all([fetchJobs(t), fetchProfile(t), fetchApplied(t)]);
+  const fetchAll = t => Promise.all([fetchJobs(t), fetchProfile(t), fetchApplied(t), fetchMyJobRequests(t)]);
+
+  const fetchMyJobRequests = async t => {
+    setJobRequestsLoading(true);
+    try {
+      const r = await fetch(`${API_BASE_URL}/api/job-requests/mine`, { headers: { Authorization: `Bearer ${t}` } });
+      if (r.ok) setMyJobRequests((await r.json()) || []);
+    } catch {}
+    finally { setJobRequestsLoading(false); }
+  };
+
+  const submitJobRequest = async form => {
+    setSubmittingRequest(true);
+    try {
+      const t = localStorage.getItem("token");
+      const r = await fetch(`${API_BASE_URL}/api/job-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+        body: JSON.stringify(form),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.message || "Failed to submit request");
+      showSuccess(data.message || "Job request submitted!");
+      addActivity(`Requested a job: ${form.job_role}`, "action");
+      setMyJobRequests(p => [data.request, ...p]);
+      return true;
+    } catch (err) {
+      showError(err.message || "Failed to submit request");
+      return false;
+    } finally {
+      setSubmittingRequest(false);
+    }
+  };
 
   const fetchJobs = async t => {
     setJobLoading(true);
@@ -683,6 +857,13 @@ export default function CandidateDashboard() {
 
           </div>
         </div>
+
+        <JobRequestSection
+          myRequests={myJobRequests}
+          requestsLoading={jobRequestsLoading}
+          onSubmit={submitJobRequest}
+          submitting={submittingRequest}
+        />
       </div>
     </div>
   );
