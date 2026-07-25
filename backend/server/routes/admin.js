@@ -21,6 +21,7 @@ import {
   bulkUploadCandidates,
   uploadCandidatesCSV,
   getBulkUploadedCandidates,
+  getBulkCandidateDetails,
   deleteBulkCandidate,
   revokeReferrerIncentive,
   updateBulkCandidateStatus,
@@ -145,6 +146,7 @@ router.post("/bulk-upload/csv", protect, upload.single("csvFile"), uploadCandida
 router.post("/bulk-upload/resume-links", protect, bulkUploadResumeLinks);
 router.post("/bulk-upload/resume-files", protect, uploadResumes.array("resumes", 50), bulkUploadResumeFiles);
 router.get("/bulk-candidates", protect, getBulkUploadedCandidates);
+router.get("/bulk-candidates/:candidateId", protect, getBulkCandidateDetails);
 router.delete("/bulk-candidates/:candidateId", protect, deleteBulkCandidate);
 
 // CANDIDATE STATUS MANAGEMENT
