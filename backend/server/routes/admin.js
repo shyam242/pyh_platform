@@ -49,6 +49,11 @@ import {
 } from "../controllers/adminController.js";
 import { adminParseProjects } from "../controllers/jdMatchController.js";
 import {
+  getNotifications,
+  getUnreadNotificationCount,
+  markNotificationRead,
+} from "../controllers/notificationController.js";
+import {
   fakeExperienceUpload,
   adminAnalyze,
   adminGetLast,
@@ -111,6 +116,11 @@ const uploadResumes = multer({
 
 // DASHBOARD
 router.get("/dashboard", protect, getDashboardData);
+
+// NOTIFICATIONS (candidate referrals + sign-ins; auto-archived after 7 days)
+router.get("/notifications", protect, getNotifications);
+router.get("/notifications/unread-count", protect, getUnreadNotificationCount);
+router.put("/notifications/:id/read", protect, markNotificationRead);
 
 // CANDIDATES
 router.get("/candidates", protect, getAllCandidates);
