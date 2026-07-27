@@ -363,6 +363,7 @@ export default function AdminDashboard() {
 
   const NAV_ITEMS = [
     { id:"overview", label:"Overview" },
+    { id:"notifications", label:"Notifications", isLink:"/admin/notifications" },
     { id:"candidates", label:"Total Candidates" },
     { id:"referred-candidates", label:"Referred Candidates" },
     { id:"manage-status", label:"Candidate Status" },
