@@ -8,6 +8,7 @@ import {
   getMyReferrals,
   getReferrerStats,
   acceptReferral,
+  rejectReferral,
   getReferralById,
   updateReferral,
   getReferrerById,
@@ -65,6 +66,7 @@ router.get("/stats", protect, getReferrerStats);
 router.get("/:referralId", getReferralById);
 router.put("/:referralId/update", updateReferral);
 router.post("/:referralId/accept", acceptReferral);
+router.post("/:referralId/reject", rejectReferral);
 router.get("/referrer/:referrerId", getReferrerById);
 
 export default router;
