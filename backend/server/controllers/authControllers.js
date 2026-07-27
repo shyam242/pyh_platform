@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import otpGenerator from "otp-generator";
 import pool from "../config/db.js";
 import { sendOtpEmail } from "../services/brevoService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const OTP_TTL_MINUTES = 10;
 let otpTableReady = null;
@@ -170,6 +171,16 @@ export const verifyOtp = async (req, res) => {
       { id: user.rows[0].id, role: userRole },
       process.env.JWT_SECRET
     );
+
+    // Notify admin of the sign-in (skip admins signing into their own dashboard)
+    if (userRole !== "admin") {
+      createNotification({
+        type: "login",
+        title: `${user.rows[0].name || email} signed in`,
+        message: `${user.rows[0].name || email} (${userRole}) signed in to the platform.`,
+        userId: user.rows[0].id,
+      });
+    }
 
     res.json({
       token,
