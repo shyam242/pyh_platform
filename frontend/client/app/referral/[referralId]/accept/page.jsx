@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
+import { CheckCircle2, AlertCircle, ArrowRight, XCircle } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
 
@@ -13,6 +13,10 @@ export default function AcceptReferral() {
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [showRejectBox, setShowRejectBox] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejecting, setRejecting] = useState(false);
+  const [justRejected, setJustRejected] = useState(false);
   
   const [formData, setFormData] = useState({
     name: "",
@@ -86,6 +90,29 @@ export default function AcceptReferral() {
     }
   };
 
+  const handleReject = async () => {
+    setRejecting(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/referral/${referralId}/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: rejectReason }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to reject referral");
+      }
+
+      showSuccess("Referral rejected.");
+      setJustRejected(true);
+    } catch (err) {
+      showError(err.message || "Failed to reject referral");
+    } finally {
+      setRejecting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ minHeight: "100vh", backgroundColor: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -121,6 +148,38 @@ export default function AcceptReferral() {
           >
             Go to Home
             <ArrowRight style={{ width: "1rem", height: "1rem" }} />
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (justRejected || referral.candidate_rejected) {
+    return (
+      <div style={{ minHeight: "100vh", backgroundColor: "#fff", padding: "2rem", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ maxWidth: "500px", textAlign: "center" }}>
+          <XCircle style={{ width: "4rem", height: "4rem", margin: "0 auto 1.5rem", color: "#dc2626" }} />
+          <h1 style={{ fontSize: "2rem", fontWeight: "bold", color: "#000", marginBottom: "0.5rem" }}>Referral Rejected</h1>
+          <p style={{ color: "#666", marginBottom: "2rem", lineHeight: "1.6" }}>
+            You've declined this referral. No further action is needed on your end.
+          </p>
+          <a
+            href="/"
+            style={{
+              padding: "0.75rem 2rem",
+              backgroundColor: "#000",
+              color: "#fff",
+              textDecoration: "none",
+              borderRadius: "0.5rem",
+              fontWeight: "600",
+              display: "inline-block",
+              cursor: "pointer",
+              transition: "all 0.3s"
+            }}
+            onMouseEnter={(e) => e.target.style.backgroundColor = "#1f2937"}
+            onMouseLeave={(e) => e.target.style.backgroundColor = "#000"}
+          >
+            Go to Home
           </a>
         </div>
       </div>
@@ -400,24 +459,96 @@ export default function AcceptReferral() {
           </button>
 
           <button
-            onClick={() => window.history.back()}
+            onClick={() => setShowRejectBox(!showRejectBox)}
             style={{
               padding: "1rem",
-              backgroundColor: "#f3f4f6",
-              color: "#000",
-              border: "1px solid #ddd",
+              backgroundColor: showRejectBox ? "#fef2f2" : "#f3f4f6",
+              color: showRejectBox ? "#dc2626" : "#000",
+              border: `1px solid ${showRejectBox ? "#fca5a5" : "#ddd"}`,
               borderRadius: "0.5rem",
               fontSize: "1rem",
               fontWeight: "600",
               cursor: "pointer",
-              transition: "all 0.3s"
+              transition: "all 0.3s",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem"
             }}
-            onMouseEnter={(e) => e.target.style.backgroundColor = "#e5e7eb"}
-            onMouseLeave={(e) => e.target.style.backgroundColor = "#f3f4f6"}
           >
-            Go Back
+            <XCircle style={{ width: "1rem", height: "1rem" }} />
+            Reject Referral
           </button>
         </div>
+
+        {/* REJECT CONFIRMATION BOX */}
+        {showRejectBox && (
+          <div style={{
+            marginTop: "1.5rem",
+            backgroundColor: "#fef2f2",
+            border: "1px solid #fca5a5",
+            borderRadius: "0.75rem",
+            padding: "1.5rem"
+          }}>
+            <h3 style={{ fontSize: "1rem", fontWeight: "bold", color: "#991b1b", marginBottom: "0.75rem" }}>
+              Are you sure you want to reject this referral?
+            </h3>
+            <p style={{ fontSize: "0.9rem", color: "#7f1d1d", marginBottom: "1rem" }}>
+              This can't be undone. Let us know why (optional) — it helps the referrer and recruiter understand.
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Reason for rejecting (optional)"
+              rows={3}
+              style={{
+                width: "100%",
+                padding: "0.75rem 1rem",
+                border: "1px solid #fca5a5",
+                borderRadius: "0.5rem",
+                fontSize: "0.95rem",
+                outline: "none",
+                boxSizing: "border-box",
+                fontFamily: "inherit",
+                marginBottom: "1rem",
+                resize: "vertical"
+              }}
+            />
+            <div style={{ display: "flex", gap: "0.75rem" }}>
+              <button
+                onClick={handleReject}
+                disabled={rejecting}
+                style={{
+                  padding: "0.75rem 1.5rem",
+                  backgroundColor: rejecting ? "#9ca3af" : "#dc2626",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "0.5rem",
+                  fontSize: "0.95rem",
+                  fontWeight: "600",
+                  cursor: rejecting ? "not-allowed" : "pointer"
+                }}
+              >
+                {rejecting ? "Rejecting..." : "Confirm Rejection"}
+              </button>
+              <button
+                onClick={() => setShowRejectBox(false)}
+                style={{
+                  padding: "0.75rem 1.5rem",
+                  backgroundColor: "#fff",
+                  color: "#000",
+                  border: "1px solid #ddd",
+                  borderRadius: "0.5rem",
+                  fontSize: "0.95rem",
+                  fontWeight: "600",
+                  cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
