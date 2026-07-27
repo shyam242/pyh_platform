@@ -1,6 +1,7 @@
 import pool from "../config/db.js";
 import path from "path";
 import { sendCandidateReferralEmail } from "../services/emailService.js";
+import { createNotification } from "../services/notificationService.js";
 
 // CREATE REFERRAL WITH CV
 export const createReferral = async (req, res) => {
@@ -73,6 +74,14 @@ export const createReferral = async (req, res) => {
     const referralData = result.rows[0];
     sendCandidateReferralEmail(email, referralData.id, name).catch((err) => {
       console.error("Failed to send email but referral was created:", err);
+    });
+
+    // Notify admin (non-blocking)
+    createNotification({
+      type: "referral",
+      title: `${referrer.name || "A referrer"} referred ${name}`,
+      message: `${name} was referred for ${company}${referrer.name ? ` by ${referrer.name}` : ""}.`,
+      referralId: referralData.id,
     });
 
     res.status(201).json({ 
@@ -261,6 +270,52 @@ export const acceptReferral = async (req, res) => {
     res.status(500).json({ message: "Failed to accept referral" });
   }
 };
+// CANDIDATE REJECTS REFERRAL
+export const rejectReferral = async (req, res) => {
+  try {
+    const { referralId } = req.params;
+    const { reason } = req.body;
+
+    if (!referralId) {
+      return res.status(400).json({ message: "Referral ID is required" });
+    }
+
+    const referral = await pool.query(
+      "SELECT * FROM referrals WHERE id=$1",
+      [referralId]
+    );
+
+    if (referral.rows.length === 0) {
+      return res.status(404).json({ message: "Referral not found" });
+    }
+
+    if (referral.rows[0].candidate_accepted) {
+      return res.status(400).json({ message: "This referral has already been accepted and can no longer be rejected." });
+    }
+
+    // Kept in the referrals table (not deleted) so the admin can still review
+    // it — it just moves into a rejected state.
+    const result = await pool.query(
+      `UPDATE referrals
+       SET candidate_rejected=true,
+           candidate_rejected_at=NOW(),
+           rejection_reason=$1,
+           referral_status='rejected',
+           status='reject'
+       WHERE id=$2 RETURNING *`,
+      [reason || null, referralId]
+    );
+
+    res.json({
+      message: "Referral rejected.",
+      data: result.rows[0]
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to reject referral" });
+  }
+};
+
 export const getReferralById = async (req, res) => {
   try {
     const { referralId } = req.params;
