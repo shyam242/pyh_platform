@@ -134,6 +134,47 @@ const ensureJobRequestsTable = async () => {
   }
 };
 
+// Auto-create notifications table if it doesn't exist — powers the admin
+// dashboard "Notifications" section (candidate sign-ins + new referrals).
+// Rows older than 7 days are swept out whenever the list is read, so this
+// table is never expected to grow unbounded.
+const ensureNotificationsTable = async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        type VARCHAR(20) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        referral_id INTEGER REFERENCES referrals(id) ON DELETE CASCADE,
+        is_read BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
+    `);
+    console.log("✓ notifications table ready");
+  } catch (err) {
+    console.error("notifications table setup error:", err.message);
+  }
+};
+
+// Lets a candidate reject a referral from the link in their referral email,
+// while keeping the record around (not deleted) for admin review.
+const ensureCandidateRejectionColumns = async () => {
+  try {
+    await pool.query(`
+      ALTER TABLE referrals
+      ADD COLUMN IF NOT EXISTS candidate_rejected BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS candidate_rejected_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+    `);
+    console.log("✓ referrals.candidate_rejected / candidate_rejected_at / rejection_reason ready");
+  } catch (err) {
+    console.error("candidate rejection columns setup error:", err.message);
+  }
+};
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
@@ -160,6 +201,6 @@ app.use("/api/jobs", jobRoutes);
 app.use("/api/job-requests", jobRequestRoutes);
 
 const PORT = process.env.PORT || 5000;
-Promise.all([ensureResumeViewsTable(), ensureInvitedByColumn(), ensureIncentiveTrackingColumns(), ensureUserImageColumn(), ensureJobRequestsTable()]).then(() => {
+Promise.all([ensureResumeViewsTable(), ensureInvitedByColumn(), ensureIncentiveTrackingColumns(), ensureUserImageColumn(), ensureJobRequestsTable(), ensureNotificationsTable(), ensureCandidateRejectionColumns()]).then(() => {
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 });
