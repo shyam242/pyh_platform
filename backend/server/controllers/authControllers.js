@@ -148,6 +148,17 @@ export const verifyOtp = async (req, res) => {
           { id: newUser.rows[0].id, role: "referrer" },
           process.env.JWT_SECRET
         );
+
+        // This is a brand-new account, created and fully signed in within
+        // this same request — there's no later "existing user" login to
+        // catch it, so notify the admin dashboard right here.
+        createNotification({
+          type: "login",
+          title: `${newUser.rows[0].name || email} signed up`,
+          message: `${newUser.rows[0].name || email} (referrer) joined via magic link and signed in for the first time.`,
+          userId: newUser.rows[0].id,
+        });
+
         return res.json({
           token,
           user: newUser.rows[0],
