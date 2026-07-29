@@ -183,16 +183,6 @@ export const verifyOtp = async (req, res) => {
       process.env.JWT_SECRET
     );
 
-    // Notify admin of the sign-in (skip admins signing into their own dashboard)
-    if (userRole !== "admin") {
-      createNotification({
-        type: "login",
-        title: `${user.rows[0].name || email} signed in`,
-        message: `${user.rows[0].name || email} (${userRole}) signed in to the platform.`,
-        userId: user.rows[0].id,
-      });
-    }
-
     res.json({
       token,
       user: { ...user.rows[0], role: userRole },
