@@ -324,7 +324,7 @@ function SigninInner() {
                 onMouseEnter={e => { if (!loading) e.currentTarget.style.backgroundColor = "#C0601A"; }}
                 onMouseLeave={e => { if (!loading) e.currentTarget.style.backgroundColor = O; }}
               >
-                {loading ? "Sending code..." : <><span>Send verification code</span><ArrowRight size={17} /></>}
+                {loading ? "Sending code..." : <><span>Secure Login</span><ArrowRight size={17} /></>}
               </button>
 
               <p style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", marginTop: 20 }}>
