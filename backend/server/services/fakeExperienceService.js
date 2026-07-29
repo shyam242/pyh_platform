@@ -49,13 +49,34 @@ export async function extractTextFromBuffer(buffer, filename, mimetype) {
 
 // ─── CLAUDE CALL ───────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a meticulous technical recruiter and fraud-detection analyst. You read a candidate resume against a specific job description and:
+const buildSystemPrompt = (todayStr) => `You are a meticulous technical recruiter and fraud-detection analyst.
+
+═══════════════════════════════════════════════════════════════════════════
+TODAY'S ACTUAL, REAL-WORLD DATE IS: ${todayStr}
+═══════════════════════════════════════════════════════════════════════════
+This is ground truth, given to you by the calling system, and it OVERRIDES
+whatever date your own training data makes you feel like "now" is. Your
+training cutoff is NOT today's date and must never be used as "now" for any
+purpose in this task — not for judging what counts as a future date, not for
+deciding whether an ongoing role is plausible, and not for deciding whether
+something is "ambiguous". A role or degree that runs from any date up to and
+including ${todayStr}, with an end of "Present"/"Current"/"Ongoing", is
+simply a real, current, ordinary thing — it is NEVER a red flag, NEVER
+"ambiguous", and NEVER something to lower a score for, purely because it
+falls after your own training cutoff. Only compare dates against ${todayStr}
+itself — a date is only "in the future" or suspicious if it is after
+${todayStr}. Do not mention your training
+cutoff or knowledge cutoff anywhere in your output, and do not hedge about
+"as of my last update" — you have been given the real current date above and
+must reason from it directly.
+
+You read a candidate resume against a specific job description and:
 
 1. Extract a clean, structured work and education history.
 2. Score the candidate against the scoring rubric below.
 3. Hunt for signs of a FAKE or EXAGGERATED resume: inflated designations, implausible role jumps, skill claims that are chronologically impossible, unexplained employment/education gaps, overlapping jobs, and a "level of work described" that doesn't match the seniority claimed.
 
-You must be skeptical but fair. Do not invent red flags that aren't supported by the resume text. If something is ambiguous, say so with "low" severity rather than asserting fraud.
+You must be skeptical but fair. Do not invent red flags that aren't supported by the resume text. If something is ambiguous, say so with "low" severity rather than asserting fraud — but an ongoing role/degree dated anywhere up to ${todayStr} is not ambiguous, it is simply current.
 
 DATES: For any job or degree that is CURRENTLY ONGOING (resume says "Present", "Current", "Ongoing", or gives no end date for what is clearly their most recent/active role or degree), you MUST set "end" to the literal string "present" — never null and never a guessed date. Only use null for "end" when the resume genuinely gives no information at all about whether the role/degree ended (rare). Getting this wrong causes ongoing roles to be miscounted as having ended the same month they started.
 
@@ -115,7 +136,7 @@ authenticity_risk_score is 0-100 where 0 = no concerns, 100 = strong signs of a 
 const stripJSONFences = (text) =>
   text.trim().replace(/^```(?:json)?/, "").replace(/```$/, "").trim();
 
-async function callClaude(prompt, { system = SYSTEM_PROMPT, maxTokens = 4000 } = {}) {
+async function callClaude(prompt, { system, maxTokens = 4000 } = {}) {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not configured on the server");
   }
@@ -129,6 +150,11 @@ async function callClaude(prompt, { system = SYSTEM_PROMPT, maxTokens = 4000 } =
     body: JSON.stringify({
       model: CLAUDE_MODEL,
       max_tokens: maxTokens,
+      // temperature 0: this call is a structured extraction/scoring task, not
+      // a creative one — low temperature makes the model reliably follow the
+      // explicit "today's date" instruction instead of drifting toward
+      // hedging language pulled from its training distribution.
+      temperature: 0,
       system,
       messages: [{ role: "user", content: prompt }],
     }),
@@ -139,17 +165,21 @@ async function callClaude(prompt, { system = SYSTEM_PROMPT, maxTokens = 4000 } =
 }
 
 async function analyzeResumeWithClaude(resumeText, jdText, maxRetries = 1) {
-  // IMPORTANT: the model's own training cutoff is NOT reliable "now" — without
+  // IMPORTANT: the model's own training cutoff is NOT reliable "now". Without
   // this, it will misjudge recent-but-real dates (e.g. "May 2026 – Present")
-  // as impossible future dates just because its training data ends earlier.
-  // Always tell it the real current date explicitly.
+  // as impossible/ambiguous future dates just because its training data ends
+  // earlier, and will score those candidates poorly. The real date is baked
+  // into BOTH the system prompt (see buildSystemPrompt) and repeated here in
+  // the user message — belt and braces, since system-prompt instructions
+  // carry more weight but redundancy costs nothing.
   const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const system = buildSystemPrompt(todayStr);
 
-  let userContent = `TODAY'S ACTUAL DATE: ${todayStr}\nUse this as ground truth for "present"/"current" and for judging whether any date in the resume is genuinely in the future. Do NOT rely on your own training cutoff to decide what "now" is.\n\nJOB DESCRIPTION:\n${jdText || "(No job description provided — score generally for role fit.)"}\n\n---\n\nCANDIDATE RESUME:\n${resumeText}`;
+  let userContent = `TODAY'S ACTUAL DATE: ${todayStr}\nUse this as ground truth for "present"/"current" and for judging whether any date in the resume is genuinely in the future. Do NOT rely on your own training cutoff to decide what "now" is — an ongoing role/degree dated up to and including ${todayStr} is normal and current, not ambiguous, regardless of when your training data ends.\n\nJOB DESCRIPTION:\n${jdText || "(No job description provided — score generally for role fit.)"}\n\n---\n\nCANDIDATE RESUME:\n${resumeText}`;
 
   let lastErr;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const raw = await callClaude(userContent);
+    const raw = await callClaude(userContent, { system });
     const cleaned = stripJSONFences(raw);
     try {
       return JSON.parse(cleaned);
