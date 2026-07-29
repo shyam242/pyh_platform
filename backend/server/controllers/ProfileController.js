@@ -4,6 +4,7 @@ import pool from "../config/db.js";
 import { sendEmail } from "../services/brevoService.js";
 import { parseProjectsForUser } from "./jdMatchController.js";
 import { extractResumeDetails } from "../services/resumeParserService.js";
+import { createNotification } from "../services/notificationService.js";
 
 const ADMIN_EMAILS = process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(",").map(e => e.trim()) : ["shyampickyourhire@gmail.com"];
 
@@ -126,6 +127,18 @@ export const createProfile = async (req, res) => {
       { id: result.rows[0].id, role },
       process.env.JWT_SECRET
     );
+
+    // First-time signup → this is the first moment the user actually has a
+    // row in `users`, so this is where it needs to be logged, not the OTP
+    // step (which only fires for users who already existed).
+    if (isNew && role !== "admin") {
+      createNotification({
+        type: "login",
+        title: `${result.rows[0].name || email} signed up`,
+        message: `${result.rows[0].name || email} (${role}) created a new account and signed in for the first time.`,
+        userId: result.rows[0].id,
+      });
+    }
 
     res.json({ token, user: result.rows[0] });
   } catch (error) {
