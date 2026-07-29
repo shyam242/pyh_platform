@@ -286,10 +286,11 @@ export default function AdminDashboard() {
   const handleLogout = () => { localStorage.removeItem("token"); window.location.href = "/signin"; };
 
   const parseCSV = (text) => {
+    text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
     const lines = []; let cur = ""; let inQ = false;
     for (let i = 0; i < text.length; i++) {
       const c = text[i], n = text[i+1];
-      if (c==='"') { if(inQ&&n==='"'){cur+='"';i++;}else inQ=!inQ; }
+      if (c==='"') { cur+=c; if(inQ&&n==='"'){cur+='"';i++;}else inQ=!inQ; }
       else if (c==="\n"&&!inQ) { if(cur.trim())lines.push(cur); cur=""; }
       else cur+=c;
     }
