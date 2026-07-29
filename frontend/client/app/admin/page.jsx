@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import {
   Users, Briefcase, UserCheck, LogOut, Trash2, Upload,
@@ -89,6 +90,24 @@ export default function AdminDashboard() {
   const [jobRequestSearch, setJobRequestSearch] = useState("");
   const [updatingRequestId, setUpdatingRequestId] = useState(null);
   const clickTimers = useRef({});
+  const searchParams = useSearchParams();
+
+  // One-time deep-link support: /admin?tab=pending-recruiters&search=email
+  // jumps straight to that tab with the search box pre-filled, instead of
+  // always landing on "overview" (used by the Notifications page, since
+  // recruiters — unlike candidates/referrers — don't have a standalone
+  // /admin/recruiters/:id profile page to link to directly).
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    const q = searchParams.get("search");
+    if (!tab) return;
+    setActiveTab(tab);
+    if (q) {
+      if (tab === "pending-recruiters") setRecSearch(q);
+      if (tab === "recruiters") setRecSearchA(q);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Keyboard shortcuts ──────────────────────────────────────
   const handleKeyDown = useCallback((e) => {
