@@ -25,6 +25,12 @@ const profileLinkFor = (n) => {
   if (n.type === "login" && n.user_id) {
     if (n.user_role === "candidate") return `/admin/candidates/${n.user_id}`;
     if (n.user_role === "referrer") return `/admin/referrers/${n.user_id}`;
+    if (n.user_role === "recruiter") {
+      // No standalone recruiter profile route — jump to the Pending
+      // Recruiters tab with the search box pre-filled instead.
+      const q = n.user_email || n.user_name || "";
+      return `/admin?tab=pending-recruiters&search=${encodeURIComponent(q)}`;
+    }
   }
   return "/admin";
 };
