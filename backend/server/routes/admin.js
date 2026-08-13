@@ -46,6 +46,7 @@ import {
   approveRecruiterV2,
   rejectRecruiterV2,
   reconsiderRecruiter,
+  deleteRecruiter,
 } from "../controllers/adminController.js";
 import { adminParseProjects } from "../controllers/jdMatchController.js";
 import {
@@ -136,6 +137,7 @@ router.put("/users/recruiter/:recruiterId", protect, updateRecruiterProfile);
 router.put("/recruiters/:recruiterId/approve", protect, approveRecruiterV2);
 router.put("/recruiters/:recruiterId/reject", protect, rejectRecruiterV2);
 router.put("/recruiters/:recruiterId/reconsider", protect, reconsiderRecruiter);
+router.delete("/recruiters/:recruiterId", protect, deleteRecruiter);
 router.get("/recruiters/approval-center", protect, getRecruiterApprovalCenter);
 router.get("/recruiters/export", protect, exportRecruitersCSV);
 
