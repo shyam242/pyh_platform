@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { ArrowLeft, Mail, Phone, ExternalLink, Edit3, X, Save } from "lucide-react";
+import { ArrowLeft, Mail, Phone, ExternalLink, Edit3, X, Save, Trash2 } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
 
@@ -22,6 +22,7 @@ export default function RecruiterDetailPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("Overview");
   const [suspending, setSuspending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [note, setNote] = useState("");
   const [notes, setNotes] = useState([]);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -68,6 +69,23 @@ export default function RecruiterDetailPage() {
     } catch {
       showError("Failed to suspend recruiter");
       setSuspending(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`Permanently delete ${recruiter?.name}'s recruiter profile? This cannot be undone.`)) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/recruiters/${recruiterId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` }
+      });
+      if (!res.ok) throw new Error("Failed");
+      showSuccess("Recruiter profile deleted");
+      router.push("/admin");
+    } catch {
+      showError("Failed to delete recruiter");
+      setDeleting(false);
     }
   };
 
@@ -149,6 +167,10 @@ export default function RecruiterDetailPage() {
           <button onClick={handleSuspend} disabled={suspending}
             style={{ padding:"8px 18px", backgroundColor:"#fef2f2", color:"#dc2626", border:"1.5px solid #fecaca", borderRadius:9, fontSize:13, fontWeight:700, cursor:suspending?"not-allowed":"pointer", fontFamily:"inherit" }}>
             {suspending ? "Suspending…" : "⛔ Suspend"}
+          </button>
+          <button onClick={handleDelete} disabled={deleting}
+            style={{ padding:"8px 18px", backgroundColor:"#dc2626", color:"#fff", border:"1.5px solid #dc2626", borderRadius:9, fontSize:13, fontWeight:700, cursor:deleting?"not-allowed":"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:6 }}>
+            <Trash2 size={13}/> {deleting ? "Deleting…" : "Delete Profile"}
           </button>
         </div>
       </nav>
