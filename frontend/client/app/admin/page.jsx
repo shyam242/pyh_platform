@@ -276,6 +276,14 @@ function AdminDashboardContent() {
   }[status] || { label: status||"—", bg: "#F1F5F9", color: "#64748b", border: BORDER, dot: "#64748b" });
   const handleApproveRecruiter = async (id) => { try { await axios.put(`${API_BASE_URL}/api/admin/recruiters/${id}/approve`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); showSuccess("Approved"); fetchDashboardData(); } catch { showError("Failed"); } };
   const handleRejectRecruiter = async (id) => { try { await axios.put(`${API_BASE_URL}/api/admin/recruiters/${id}/reject`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); showSuccess("Rejected"); fetchDashboardData(); } catch { showError("Failed"); } };
+  const handleDeleteRecruiter = async (id, name) => {
+    if (!confirm(`Permanently delete ${name || "this recruiter"}'s profile? This cannot be undone.`)) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/api/admin/recruiters/${id}`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+      showSuccess("Recruiter deleted");
+      fetchApprovedRecruiters();
+    } catch { showError("Failed to delete recruiter"); }
+  };
   const handleUpdateIncentive = async (e) => {
     e.preventDefault();
     try { await axios.put(`${API_BASE_URL}/api/admin/incentives/${incentiveForm.referrerId}`, { incentive_value: incentiveForm.value }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); showSuccess("Incentive updated"); setIncentiveForm({ referrerId: "", value: "" }); if (activeTab === "incentives") fetchReferrers(); }
@@ -1111,7 +1119,7 @@ function AdminDashboardContent() {
                   <span style={{ fontWeight:700, fontSize:15 }}>Approved Recruiters ({filtered.length})</span>
                 </div>
                 {/* Col headers */}
-                <div style={{ display:"grid", gridTemplateColumns:"2fr 1.2fr 2fr 2fr 1.4fr 1.2fr 1.4fr", gap:8, padding:"10px 24px", backgroundColor:"#F8FAFC", borderBottom:`1.5px solid ${BORDER}`, fontSize:11, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1.8fr 1fr 1.8fr 1.8fr 1.2fr 1.1fr 1.8fr", gap:8, padding:"10px 24px", backgroundColor:"#F8FAFC", borderBottom:`1.5px solid ${BORDER}`, fontSize:11, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.05em" }}>
                   <span>Recruiter</span><span>Company Logo</span><span>Company</span><span>Email</span><span>Phone</span><span>Approved On</span><span>Actions</span>
                 </div>
 
@@ -1125,7 +1133,7 @@ function AdminDashboardContent() {
                   const companyInitials = (r.company_name||r.company||"?").split(" ").map(w=>w[0]).slice(0,3).join("").toUpperCase();
                   return (
                     <div key={r.id}
-                      style={{ display:"grid", gridTemplateColumns:"2fr 1.2fr 2fr 2fr 1.4fr 1.2fr 1.4fr", gap:8, padding:"14px 24px", borderBottom:i<paginated.length-1?`1px solid ${BORDER}`:"none", alignItems:"center", transition:"background 0.12s" }}
+                      style={{ display:"grid", gridTemplateColumns:"1.8fr 1fr 1.8fr 1.8fr 1.2fr 1.1fr 1.8fr", gap:8, padding:"14px 24px", borderBottom:i<paginated.length-1?`1px solid ${BORDER}`:"none", alignItems:"center", transition:"background 0.12s" }}
                       onMouseEnter={e=>e.currentTarget.style.backgroundColor=O_LITE}
                       onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
                       {/* Recruiter */}
@@ -1155,6 +1163,11 @@ function AdminDashboardContent() {
                           onMouseEnter={e=>{e.currentTarget.style.borderColor=O;e.currentTarget.style.color=O;}}
                           onMouseLeave={e=>{e.currentTarget.style.borderColor=BORDER;e.currentTarget.style.color="#374151";}}>
                           View Details
+                        </button>
+                        <button onClick={()=>handleDeleteRecruiter(r.id, r.name)}
+                          title="Delete recruiter profile"
+                          style={{ padding:"5px 10px", border:"1.5px solid #fecaca", borderRadius:7, backgroundColor:"#fef2f2", color:"#dc2626", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", whiteSpace:"nowrap" }}>
+                          <Trash2 size={13}/>
                         </button>
                       </div>
                     </div>
