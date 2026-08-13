@@ -2234,6 +2234,33 @@ export const rejectRecruiterV2 = async (req, res) => {
   }
 };
 
+// DELETE /api/admin/recruiters/:recruiterId  (permanently deletes the recruiter account)
+export const deleteRecruiter = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    if (!(await isAdmin(adminId))) return res.status(403).json({ message: "Access denied. Admin only." });
+
+    const { recruiterId } = req.params;
+    const check = await pool.query("SELECT * FROM users WHERE id=$1 AND role='recruiter'", [recruiterId]);
+    if (!check.rows.length) return res.status(404).json({ message: "Recruiter not found" });
+    const recruiter = check.rows[0];
+
+    // Clean up related records so the deletion doesn't fail on foreign keys.
+    await pool.query("DELETE FROM recruiter_candidate_status WHERE recruiter_id=$1", [recruiterId]);
+    try { await pool.query("DELETE FROM recruiter_activity_log WHERE recruiter_id=$1", [recruiterId]); } catch (e) { /* table/column may not exist on all installs */ }
+
+    const result = await pool.query(
+      "DELETE FROM users WHERE id=$1 AND role='recruiter' RETURNING *",
+      [recruiterId]
+    );
+
+    res.json({ message: "Recruiter deleted successfully", recruiter: result.rows[0] });
+  } catch (err) {
+    console.error("deleteRecruiter error:", err);
+    res.status(500).json({ message: "Failed to delete recruiter" });
+  }
+};
+
 // PUT /api/admin/recruiters/:recruiterId/reconsider  (move a rejected recruiter back to pending)
 export const reconsiderRecruiter = async (req, res) => {
   try {
