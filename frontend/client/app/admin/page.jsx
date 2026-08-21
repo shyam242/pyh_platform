@@ -11,7 +11,7 @@ import {
   CheckCircle2, XCircle, Clock, ThumbsUp, ThumbsDown, PhoneOff, Star, AlertCircle,
   ClipboardList as ClipboardListIcon
 } from "lucide-react";
-import { showError, showSuccess } from "@/utils/toast";
+import { showError, showSuccess, showInfo } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
 
 const O = "#E87722", O_LITE = "#FFF3E8", O_MID = "#FBBF7A", BORDER = "#E2E8F0";
@@ -37,6 +37,11 @@ function AdminDashboardContent() {
   const [referrers, setReferrers] = useState([]);
   const [pendingRecruiters, setPendingRecruiters] = useState([]);
   const [approvedRecruiters, setApprovedRecruiters] = useState([]);
+  const [rejectedRecruiters, setRejectedRecruiters] = useState([]);
+  const [recruiterActivity, setRecruiterActivity] = useState([]);
+  const [recruiterActivityLoading, setRecruiterActivityLoading] = useState(false);
+  const [recruiterStats, setRecruiterStats] = useState(null);
+  const [exportingRecruiters, setExportingRecruiters] = useState(false);
   const [incentiveForm, setIncentiveForm] = useState({ referrerId: "", value: "" });
   const [loading, setLoading] = useState(true);
   const [uploadingJobs, setUploadingJobs] = useState(false);
@@ -138,6 +143,7 @@ function AdminDashboardContent() {
     if (activeTab === "jobs-list" || activeTab === "jobs") fetchJobs();
     if (activeTab === "manage-status") { fetchCandidateStatusList(); }
     if (activeTab === "job-requests") { fetchJobRequests(); }
+    if (activeTab === "pending-recruiters" || activeTab === "rejected-recruiters") fetchRecruiterApprovalCenter();
   }, [activeTab]);
 
   // ── Fetchers ───────────────────────────────────────────────
@@ -183,6 +189,62 @@ function AdminDashboardContent() {
       setApprovedRecruiters(list.filter(x => x.is_recruiter_approved || x.is_recruiter_approved === "t"));
     } catch { showError("Failed to load recruiters"); }
   };
+  // Real recent activity (recruiter_activity_log) + rejected recruiters + live stats,
+  // sourced from the Recruiter Approval Center endpoint — no hardcoded data.
+  const fetchRecruiterApprovalCenter = async () => {
+    try {
+      setRecruiterActivityLoading(true);
+      const r = await axios.get(`${API_BASE_URL}/api/admin/recruiters/approval-center`, {
+        params: { status: "all" },
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      });
+      setRecruiterActivity(r.data.activity || []);
+      setRecruiterStats(r.data.stats || null);
+      setRejectedRecruiters((r.data.recruiters || []).filter(x => x.recruiter_status === "rejected"));
+    } catch { showError("Failed to load recruiter activity"); } finally { setRecruiterActivityLoading(false); }
+  };
+  const handleReconsiderRecruiter = async (id) => {
+    try {
+      await axios.put(`${API_BASE_URL}/api/admin/recruiters/${id}/reconsider`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+      showSuccess("Moved back to pending review");
+      fetchPendingRecruiters(); fetchRecruiterApprovalCenter();
+    } catch { showError("Failed to reconsider recruiter"); }
+  };
+  const handleExportRecruiters = async (status = "all") => {
+    try {
+      setExportingRecruiters(true);
+      const r = await axios.get(`${API_BASE_URL}/api/admin/recruiters/export`, {
+        params: { status },
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([r.data], { type: "text/csv" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = `recruiters-${status}-${Date.now()}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+      showSuccess("Recruiter list exported");
+    } catch { showError("Failed to export recruiter list"); } finally { setExportingRecruiters(false); }
+  };
+  // Relative-time label for real activity timestamps ("Just now", "3h ago", ...)
+  const timeAgo = (d) => {
+    if (!d) return "—";
+    const diffMs = Date.now() - new Date(d).getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days === 1) return "Yesterday";
+    if (days < 7) return `${days} days ago`;
+    return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  };
+  const activityMeta = (action) => ({
+    approved:      { icon: "✅", color: "#DCFCE7", fg: "#15803d", verb: "approved" },
+    rejected:      { icon: "❌", color: "#FEF2F2", fg: "#dc2626", verb: "rejected" },
+    reconsidered:  { icon: "🔄", color: "#FEF3C7", fg: "#d97706", verb: "moved back to pending" },
+  }[action] || { icon: "👤", color: "#F1F5F9", fg: "#475569", verb: action || "updated" });
   const fetchJobs = async () => {
     try {
       const r = await axios.get(`${API_BASE_URL}/api/jobs/admin/my-jobs`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
@@ -274,14 +336,15 @@ function AdminDashboardContent() {
     inactive: { label: "Paused",  bg: "#FEF3C7", color: "#b45309", border: "#fde68a", dot: "#b45309" },
     closed:   { label: "Closed",  bg: "#FEF2F2", color: "#dc2626", border: "#fecaca", dot: "#dc2626" },
   }[status] || { label: status||"—", bg: "#F1F5F9", color: "#64748b", border: BORDER, dot: "#64748b" });
-  const handleApproveRecruiter = async (id) => { try { await axios.put(`${API_BASE_URL}/api/admin/recruiters/${id}/approve`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); showSuccess("Approved"); fetchDashboardData(); } catch { showError("Failed"); } };
-  const handleRejectRecruiter = async (id) => { try { await axios.put(`${API_BASE_URL}/api/admin/recruiters/${id}/reject`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); showSuccess("Rejected"); fetchDashboardData(); } catch { showError("Failed"); } };
+  const handleApproveRecruiter = async (id) => { try { await axios.put(`${API_BASE_URL}/api/admin/recruiters/${id}/approve`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); showSuccess("Approved"); fetchDashboardData(); fetchRecruiterApprovalCenter(); } catch { showError("Failed"); } };
+  const handleRejectRecruiter = async (id) => { try { await axios.put(`${API_BASE_URL}/api/admin/recruiters/${id}/reject`, {}, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); showSuccess("Rejected"); fetchDashboardData(); fetchRecruiterApprovalCenter(); } catch { showError("Failed"); } };
   const handleDeleteRecruiter = async (id, name) => {
     if (!confirm(`Permanently delete ${name || "this recruiter"}'s profile? This cannot be undone.`)) return;
     try {
       await axios.delete(`${API_BASE_URL}/api/admin/recruiters/${id}`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
       showSuccess("Recruiter deleted");
       fetchApprovedRecruiters();
+      fetchRecruiterApprovalCenter();
     } catch { showError("Failed to delete recruiter"); }
   };
   const handleUpdateIncentive = async (e) => {
@@ -969,9 +1032,8 @@ function AdminDashboardContent() {
                     <div style={{ display:"flex", alignItems:"center", gap:0 }}>
                       {[
                         { icon:"📝", label:"Registration", sub:"Recruiter submits registration", color:"#1d4ed8", bg:"#EFF6FF", num:1 },
-                        { icon:"🏢", label:"Company Documents", sub:"Verify company & legal documents", color:"#7c3aed", bg:"#F3E8FF", num:2 },
-                        { icon:"👤", label:"Admin Review", sub:"Review information and documents", color:"#d97706", bg:"#FEF3C7", num:3 },
-                        { icon:"✅", label:"Approval", sub:"Approve or reject recruiter", color:"#15803d", bg:"#DCFCE7", num:4 },
+                        { icon:"👤", label:"Admin Review", sub:"Review information and documents", color:"#d97706", bg:"#FEF3C7", num:2 },
+                        { icon:"✅", label:"Approval", sub:"Approve or reject recruiter", color:"#15803d", bg:"#DCFCE7", num:3 },
                       ].map((s,i,arr)=>(
                         <div key={s.label} style={{ display:"flex", alignItems:"center", flex:1 }}>
                           <div style={{ flex:1, textAlign:"center" }}>
@@ -992,24 +1054,31 @@ function AdminDashboardContent() {
                   <div style={{ ...CARD }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
                       <h3 style={{ fontSize:14, fontWeight:700, margin:0 }}>Recent Activity</h3>
-                      <button style={{ fontSize:12, color:O, fontWeight:600, background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }}>View All</button>
+                      <button onClick={fetchRecruiterApprovalCenter} style={{ fontSize:12, color:O, fontWeight:600, background:"none", border:"none", cursor:"pointer", fontFamily:"inherit" }}>Refresh</button>
                     </div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-                      {[
-                        { icon:"✅", text:"New recruiter registration submitted", time:"Just now", color:"#DCFCE7", fg:"#15803d" },
-                        { icon:"📄", text:"Company documents updated", time:"Yesterday", color:"#EFF6FF", fg:"#1d4ed8" },
-                        { icon:"🎉", text:"Recruiter registration submitted", time:"Yesterday", color:"#F3E8FF", fg:"#7c3aed" },
-                        { icon:"👤", text:"New recruiter registration pending", time:"2 days ago", color:"#FEF3C7", fg:"#d97706" },
-                      ].map((a,i)=>(
-                        <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
-                          <div style={{ width:30, height:30, borderRadius:"50%", backgroundColor:a.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>{a.icon}</div>
-                          <div style={{ flex:1 }}>
-                            <div style={{ fontSize:12, color:"#374151", lineHeight:1.4 }}>{a.text}</div>
-                            <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{a.time}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    {recruiterActivityLoading ? (
+                      <div style={{ padding:"20px 0", textAlign:"center", fontSize:12, color:"#94a3b8" }}>Loading…</div>
+                    ) : recruiterActivity.length===0 ? (
+                      <div style={{ padding:"20px 0", textAlign:"center", fontSize:12, color:"#94a3b8" }}>No recruiter activity yet. Approvals and rejections will show up here.</div>
+                    ) : (
+                      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                        {recruiterActivity.map((a,i)=>{
+                          const m = activityMeta(a.action);
+                          return (
+                            <div key={a.id||i} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                              <div style={{ width:30, height:30, borderRadius:"50%", backgroundColor:m.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>{m.icon}</div>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:12, color:"#374151", lineHeight:1.4 }}>
+                                  <strong>{a.recruiter_name||"A recruiter"}</strong>{a.company_name?` (${a.company_name})`:""} was {m.verb}
+                                  {a.note ? ` — "${a.note}"` : ""}
+                                </div>
+                                <div style={{ fontSize:11, color:"#94a3b8", marginTop:2 }}>{timeAgo(a.created_at)}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {/* Quick Actions */}
@@ -1017,13 +1086,13 @@ function AdminDashboardContent() {
                     <h3 style={{ fontSize:14, fontWeight:700, margin:"0 0 14px" }}>Quick Actions</h3>
                     {[
                       { label:"View Approved Recruiters", icon:"✅", action:()=>setActiveTab("recruiters") },
-                      { label:"View Rejected Recruiters", icon:"❌", action:()=>{} },
-                      { label:"Export Recruiter List", icon:"📤", action:()=>{} },
-                      { label:"Registration Settings", icon:"⚙️", action:()=>{} },
+                      { label:"View Rejected Recruiters", icon:"❌", action:()=>setActiveTab("rejected-recruiters") },
+                      { label:exportingRecruiters?"Exporting…":"Export Recruiter List", icon:"📤", action:()=>handleExportRecruiters("all"), disabled:exportingRecruiters },
+                      { label:"Registration Settings", icon:"⚙️", action:()=>showInfo("Registration settings (auto-approval rules, required documents) are coming soon.") },
                     ].map((a,i)=>(
-                      <button key={i} onClick={a.action}
-                        style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, backgroundColor:"#fff", cursor:"pointer", fontFamily:"inherit", marginBottom:i<3?8:0, transition:"all 0.15s" }}
-                        onMouseEnter={e=>{e.currentTarget.style.borderColor=O;e.currentTarget.style.backgroundColor=O_LITE;}}
+                      <button key={i} onClick={a.action} disabled={a.disabled}
+                        style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"10px 12px", border:`1.5px solid ${BORDER}`, borderRadius:9, backgroundColor:"#fff", cursor:a.disabled?"default":"pointer", fontFamily:"inherit", marginBottom:i<3?8:0, transition:"all 0.15s", opacity:a.disabled?0.6:1 }}
+                        onMouseEnter={e=>{if(!a.disabled){e.currentTarget.style.borderColor=O;e.currentTarget.style.backgroundColor=O_LITE;}}}
                         onMouseLeave={e=>{e.currentTarget.style.borderColor=BORDER;e.currentTarget.style.backgroundColor="#fff";}}>
                         <span style={{ fontSize:16 }}>{a.icon}</span>
                         <span style={{ fontSize:13, fontWeight:600, color:"#374151", flex:1, textAlign:"left" }}>{a.label}</span>
@@ -1208,6 +1277,80 @@ function AdminDashboardContent() {
                     <div style={{ fontSize:12, color:"#64748b", lineHeight:1.6 }}>These recruiters have successfully completed the verification process and are trusted partners on PickYourHire.</div>
                   </div>
                 </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ═══════════════════════════════════════════════ */}
+        {/* REJECTED RECRUITERS                             */}
+        {/* ═══════════════════════════════════════════════ */}
+        {activeTab==="rejected-recruiters" && (() => {
+          const filtered = rejectedRecruiters.filter(r => {
+            const q = recSearch.toLowerCase();
+            return !q || [r.name,r.email,r.company_name].filter(Boolean).join(" ").toLowerCase().includes(q);
+          });
+
+          return (
+            <div>
+              <BackBtn onClick={()=>setActiveTab("pending-recruiters")} label="Back to Approval Center"/>
+              {/* Hero */}
+              <div style={{ background:"linear-gradient(135deg,#fef2f2 0%,#fef7f7 100%)", border:`1.5px solid ${BORDER}`, borderRadius:18, padding:"26px 32px", marginBottom:24, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <div>
+                  <h2 style={{ fontSize:22, fontWeight:800, margin:"0 0 6px", color:"#0f172a" }}>Rejected Recruiters</h2>
+                  <p style={{ fontSize:13, color:"#64748b", margin:0, maxWidth:420 }}>Recruiters whose registration was declined. You can move any of them back to pending for another look.</p>
+                </div>
+                <div style={{ textAlign:"center", padding:"12px 20px", backgroundColor:"#fff", borderRadius:12, border:`1.5px solid ${BORDER}` }}>
+                  <div style={{ fontSize:28, fontWeight:800, color:"#dc2626" }}>{recruiterStats?.rejected ?? rejectedRecruiters.length}</div>
+                  <div style={{ fontSize:11, color:"#64748b", fontWeight:600 }}>Rejected</div>
+                </div>
+              </div>
+
+              {/* Search */}
+              <div style={{ display:"flex", gap:10, marginBottom:20 }}>
+                <div style={{ flex:1, minWidth:200, display:"flex", alignItems:"center", gap:8, padding:"10px 14px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10 }}>
+                  <Search size={15} color="#94a3b8"/>
+                  <input value={recSearch} onChange={e=>setRecSearch(e.target.value)} placeholder="Search rejected recruiters by name, email or company..."
+                    style={{ flex:1, border:"none", outline:"none", fontSize:13, fontFamily:"inherit", background:"transparent", color:"#0f172a" }}/>
+                  {recSearch && <button onClick={()=>setRecSearch("")} style={{ background:"none", border:"none", cursor:"pointer", color:"#94a3b8", display:"flex" }}><X size={13}/></button>}
+                </div>
+                <button onClick={()=>handleExportRecruiters("rejected")} disabled={exportingRecruiters}
+                  style={{ padding:"10px 16px", backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:10, fontSize:13, fontWeight:700, color:"#374151", cursor:exportingRecruiters?"default":"pointer", fontFamily:"inherit" }}>
+                  {exportingRecruiters ? "Exporting…" : "Export"}
+                </button>
+              </div>
+
+              <div style={{ backgroundColor:"#fff", border:`1.5px solid ${BORDER}`, borderRadius:14, overflow:"hidden" }}>
+                <div style={{ display:"grid", gridTemplateColumns:"1.8fr 1.8fr 1.8fr 1.4fr 1.6fr", gap:8, padding:"10px 24px", backgroundColor:"#F8FAFC", borderBottom:`1.5px solid ${BORDER}`, fontSize:11, fontWeight:700, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                  <span>Recruiter</span><span>Company</span><span>Email</span><span>Rejected On</span><span>Actions</span>
+                </div>
+                {recruiterActivityLoading ? (
+                  <div style={{ padding:"60px", textAlign:"center", color:"#94a3b8" }}>Loading…</div>
+                ) : filtered.length===0 ? (
+                  <div style={{ padding:"60px", textAlign:"center", color:"#94a3b8" }}>
+                    <XCircle size={40} color="#E5E7EB" style={{ display:"block", margin:"0 auto 14px" }}/>
+                    <p style={{ margin:0 }}>No rejected recruiters</p>
+                  </div>
+                ) : filtered.map((r,i)=>(
+                  <div key={r.id}
+                    style={{ display:"grid", gridTemplateColumns:"1.8fr 1.8fr 1.8fr 1.4fr 1.6fr", gap:8, padding:"14px 24px", borderBottom:i<filtered.length-1?`1px solid ${BORDER}`:"none", alignItems:"center" }}
+                    onMouseEnter={e=>e.currentTarget.style.backgroundColor=O_LITE}
+                    onMouseLeave={e=>e.currentTarget.style.backgroundColor="transparent"}>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#0f172a" }}>{r.name||"—"}</div>
+                    <div style={{ fontSize:13, color:"#475569" }}>{r.company_name||"—"}</div>
+                    <div style={{ fontSize:12, color:"#64748b", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.email||"—"}</div>
+                    <div style={{ fontSize:11, color:"#94a3b8" }}>{r.recruiter_rejected_at ? new Date(r.recruiter_rejected_at).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}) : "—"}</div>
+                    <div style={{ display:"flex", gap:6 }}>
+                      <button onClick={()=>handleReconsiderRecruiter(r.id)}
+                        style={{ padding:"5px 14px", backgroundColor:"#EFF6FF", color:"#1d4ed8", border:"1.5px solid #BFDBFE", borderRadius:7, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>Reconsider</button>
+                      <button onClick={()=>handleDeleteRecruiter(r.id, r.name)}
+                        title="Delete recruiter profile"
+                        style={{ padding:"5px 10px", border:"1.5px solid #fecaca", borderRadius:7, backgroundColor:"#fef2f2", color:"#dc2626", fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center" }}>
+                        <Trash2 size={13}/>
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           );
