@@ -1,7 +1,5 @@
 import express from "express";
-import multer from "multer";
 import path from "path";
-import fs from "fs";
 import { fileURLToPath } from "url";
 import {
   createReferral,
@@ -14,52 +12,15 @@ import {
   getReferrerById,
 } from "../controllers/referralController.js";
 import { protect } from "../middleware/authMiddleware.js";
+import { makeResumeUpload } from "../utils/uploadMemory.js";
 
 const router = express.Router();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Create uploads directory with absolute path
-const uploadDir = path.join(__dirname, "../../uploads/cv");
+const upload = makeResumeUpload({ maxSizeMB: 5 });
 
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// ✅ Configure multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // make unique filename
-    const uniqueName =
-      Date.now() + "-" + file.originalname.replace(/\s+/g, "_");
-    cb(null, uniqueName);
-  },
-});
-
-// ✅ Multer setup
-const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = [
-      "application/pdf",
-      "application/msword",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ];
-
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only PDF and DOC files are allowed"));
-    }
-  },
-});
-
-// Routes
 router.post("/create", protect, upload.single("cv"), createReferral);
 router.get("/my", protect, getMyReferrals);
 router.get("/stats", protect, getReferrerStats);
