@@ -10,7 +10,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
-import { API_BASE_URL } from "@/utils/api";
+import { API_BASE_URL, resolveFileUrl } from "@/utils/api";
 
 const AVAILABLE_SKILLS = ["React", "Node.js", "Python", "Java", "AWS", "UI/UX", "TypeScript", "MongoDB"];
 const O       = "#E87722";
@@ -261,7 +261,7 @@ export default function CandidateProfilePage() {
                   profile.resume_file_path ? (
                     <div style={{ display: "flex", gap: 8 }}>
                       {profile.resume_file_path && (
-                        <a href={`${API_BASE_URL}${profile.resume_file_path}`} target="_blank" rel="noopener noreferrer"
+                        <a href={resolveFileUrl(profile.resume_file_path)} target="_blank" rel="noopener noreferrer"
                           style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12.5, fontWeight: 700, color: "#475569", textDecoration: "none", padding: "6px 12px", borderRadius: 8, border: `1px solid ${BORDER}` }}>
                           <Eye size={12} /> Preview
                         </a>
