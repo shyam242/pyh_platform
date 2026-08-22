@@ -2,28 +2,18 @@ import pool from "../config/db.js";
 import path from "path";
 import { sendCandidateReferralEmail } from "../services/emailService.js";
 import { createNotification } from "../services/notificationService.js";
+import { buildObjectKey, uploadBufferToR2, toR2Key } from "../utils/r2Storage.js";
 
-// CREATE REFERRAL WITH CV
 export const createReferral = async (req, res) => {
   try {
     const {
-      name,
-      email,
-      phone,
-      industry,
-      department,
-      skills,
-      experience,
-      company,
-      linkedin,
+      name, email, phone, industry, department, skills, experience, company, linkedin,
     } = req.body;
 
-    // Validate required fields
     if (!name || !email || !phone || !skills || !experience || !company) {
       return res.status(400).json({ message: "All required fields must be filled" });
     }
 
-    // Get current referrer details so we can block self-referrals
     const referrerRecord = await pool.query(
       "SELECT name, email, phone FROM users WHERE id=$1",
       [req.user.id]
@@ -38,10 +28,19 @@ export const createReferral = async (req, res) => {
       return res.status(400).json({ message: "You cannot refer yourself" });
     }
 
-    // Get CV filename if uploaded
-    const cvFile = req.file ? req.file.filename : null;
+    // Upload CV to R2 (if provided) — buffer never touches local disk
+    let cvFile = null;
+    if (req.file) {
+      const objectKey = buildObjectKey("cv/referrals", req.user.id, req.file.originalname);
+      await uploadBufferToR2({
+        buffer: req.file.buffer,
+        key: objectKey,
+        contentType: req.file.mimetype,
+        originalName: req.file.originalname,
+      });
+      cvFile = toR2Key(objectKey);
+    }
 
-    // Check for duplicates
     const dup = await pool.query(
       "SELECT * FROM referrals WHERE email=$1 OR phone=$2",
       [email, phone]
@@ -55,28 +54,18 @@ export const createReferral = async (req, res) => {
       (name,email,phone,industry,department,skills,experience,company,linkedin,referrer_id,status,cv_file,referral_status,experience_type)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11,'pending_candidate_acceptance',$12) RETURNING *`,
       [
-        name,
-        email,
-        phone,
-        industry,
-        department,
+        name, email, phone, industry, department,
         JSON.stringify(Array.isArray(skills) ? skills : skills.split(',').map(s => s.trim())),
-        experience,
-        company,
-        linkedin,
-        req.user.id,
-        cvFile,
+        experience, company, linkedin, req.user.id, cvFile,
         experience === 'fresher' ? 'fresher' : 'experienced'
       ]
     );
 
-    // Send email to candidate (non-blocking)
     const referralData = result.rows[0];
     sendCandidateReferralEmail(email, referralData.id, name).catch((err) => {
       console.error("Failed to send email but referral was created:", err);
     });
 
-    // Notify admin (non-blocking)
     createNotification({
       type: "referral",
       title: `${referrer.name || "A referrer"} referred ${name}`,
@@ -94,14 +83,12 @@ export const createReferral = async (req, res) => {
   }
 };
 
-// GET MY REFERRALS
 export const getMyReferrals = async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT * FROM referrals WHERE referrer_id=$1 ORDER BY id DESC",
       [req.user.id]
     );
-
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -109,12 +96,10 @@ export const getMyReferrals = async (req, res) => {
   }
 };
 
-// GET REFERRER STATS
 export const getReferrerStats = async (req, res) => {
   try {
     const referrerId = req.user.id;
 
-    // Actual per-referrer incentive rate (defaults to 500 if none set by admin yet)
     const incentiveResult = await pool.query(
       "SELECT incentive_value FROM incentives WHERE referrer_id=$1",
       [referrerId]
@@ -148,13 +133,9 @@ export const getReferrerStats = async (req, res) => {
   }
 };
 
-// GET ALL REFERRALS (for recruiters)
 export const getAllReferrals = async (req, res) => {
   try {
-    const result = await pool.query(
-      "SELECT * FROM referrals ORDER BY id DESC"
-    );
-
+    const result = await pool.query("SELECT * FROM referrals ORDER BY id DESC");
     res.json(result.rows);
   } catch (err) {
     console.error(err);
@@ -162,7 +143,6 @@ export const getAllReferrals = async (req, res) => {
   }
 };
 
-// UPDATE STATUS
 export const updateStatus = async (req, res) => {
   try {
     const { id, status } = req.body;
@@ -195,7 +175,6 @@ export const updateStatus = async (req, res) => {
   }
 };
 
-// VERIFY CANDIDATE (CONSENT + SKILL TAGGING)
 export const verifyCandidate = async (req, res) => {
   try {
     const { id, skills } = req.body;
@@ -225,7 +204,6 @@ export const verifyCandidate = async (req, res) => {
   }
 };
 
-// CANDIDATE ACCEPTS REFERRAL
 export const acceptReferral = async (req, res) => {
   try {
     const { referralId } = req.params;
@@ -235,7 +213,6 @@ export const acceptReferral = async (req, res) => {
       return res.status(400).json({ message: "Referral ID is required" });
     }
 
-    // Get the referral
     const referral = await pool.query(
       "SELECT * FROM referrals WHERE id=$1",
       [referralId]
@@ -247,7 +224,6 @@ export const acceptReferral = async (req, res) => {
 
     const ref = referral.rows[0];
 
-    // Update referral with candidate acceptance + edited details
     const result = await pool.query(
       `UPDATE referrals 
        SET candidate_accepted=true, 
@@ -270,7 +246,7 @@ export const acceptReferral = async (req, res) => {
     res.status(500).json({ message: "Failed to accept referral" });
   }
 };
-// CANDIDATE REJECTS REFERRAL
+
 export const rejectReferral = async (req, res) => {
   try {
     const { referralId } = req.params;
@@ -293,8 +269,6 @@ export const rejectReferral = async (req, res) => {
       return res.status(400).json({ message: "This referral has already been accepted and can no longer be rejected." });
     }
 
-    // Kept in the referrals table (not deleted) so the admin can still review
-    // it — it just moves into a rejected state.
     const result = await pool.query(
       `UPDATE referrals
        SET candidate_rejected=true,
@@ -340,7 +314,6 @@ export const getReferralById = async (req, res) => {
   }
 };
 
-// UPDATE REFERRAL DETAILS
 export const updateReferral = async (req, res) => {
   try {
     const { referralId } = req.params;
@@ -350,12 +323,10 @@ export const updateReferral = async (req, res) => {
       return res.status(400).json({ message: "Referral ID is required" });
     }
 
-    // Validate required fields
     if (!name?.trim() || !email?.trim() || !phone?.trim()) {
       return res.status(400).json({ message: "Name, email, and phone are required" });
     }
 
-    // Parse skills if it's a string
     let skillsJson = skills;
     if (typeof skills === "string") {
       skillsJson = JSON.stringify(skills.split(",").map(s => s.trim()).filter(s => s));
@@ -365,28 +336,12 @@ export const updateReferral = async (req, res) => {
 
     const result = await pool.query(
       `UPDATE referrals 
-       SET name=$1,
-           email=$2,
-           phone=$3,
-           linkedin=$4,
-           company=$5,
-           skills=$6,
-           experience=$7,
-           industry=$8,
-           department=$9,
-           updated_at=NOW()
+       SET name=$1, email=$2, phone=$3, linkedin=$4, company=$5, skills=$6,
+           experience=$7, industry=$8, department=$9, updated_at=NOW()
        WHERE id=$10 RETURNING *`,
       [
-        name,
-        email,
-        phone,
-        linkedin || null,
-        company || null,
-        skillsJson,
-        experience || null,
-        industry || null,
-        department || null,
-        referralId
+        name, email, phone, linkedin || null, company || null, skillsJson,
+        experience || null, industry || null, department || null, referralId
       ]
     );
 
@@ -404,7 +359,6 @@ export const updateReferral = async (req, res) => {
   }
 };
 
-// GET REFERRER BY ID
 export const getReferrerById = async (req, res) => {
   try {
     const { referrerId } = req.params;
