@@ -16,6 +16,7 @@ import recruiterRoutes from "./routes/recruiter.js";
 import adminRoutes from "./routes/admin.js";
 import jobRoutes from "./routes/jobs.js";
 import jobRequestRoutes from "./routes/jobRequests.js";
+import migrateRoutes from "./routes/migrate.js"; // TEMP — remove after running the R2 migration once
 import pool from "./config/db.js";
 
 // Auto-create resume_views table if it doesn't exist
@@ -199,6 +200,7 @@ app.use("/api/recruiter", recruiterRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/job-requests", jobRequestRoutes);
+app.use("/api/migrate", migrateRoutes); // TEMP — remove this line + the import above once migration is done
 
 const PORT = process.env.PORT || 5000;
 Promise.all([ensureResumeViewsTable(), ensureInvitedByColumn(), ensureIncentiveTrackingColumns(), ensureUserImageColumn(), ensureJobRequestsTable(), ensureNotificationsTable(), ensureCandidateRejectionColumns()]).then(() => {
