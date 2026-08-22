@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft, Download, Mail, Phone, MapPin, Briefcase, DollarSign, Clock, BookOpen, Award, ExternalLink, Pencil, X, Save } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import axios from "axios";
-import { API_BASE_URL } from "@/utils/api";
+import { API_BASE_URL, resolveFileUrl } from "@/utils/api";
 
 const O = "#ff9d4d";
 const BORDER = "#e2e8f0";
@@ -110,7 +110,7 @@ export default function AdminCandidateDetailsPage() {
       }
       const resumePath = candidate?.resume_file_path || candidate?.resume_url || candidate?.resume;
       const link = document.createElement("a");
-      link.href = `${API_BASE_URL}${resumePath}`;
+      link.href = resolveFileUrl(resumePath);
       link.setAttribute("download", `${candidate.name}_resume.pdf`);
       document.body.appendChild(link);
       link.click();
