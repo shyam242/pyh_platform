@@ -17,6 +17,7 @@ import path from "path";
 import crypto from "crypto";
 import PDFDocument from "pdfkit";
 import pool from "../config/db.js";
+import { isR2Key, isExternalUrl, getSignedDownloadUrl, fromR2Key } from "../utils/r2Storage.js";
 
 const CLAUDE_API = "https://api.anthropic.com/v1/messages";
 const CLAUDE_MODEL = process.env.REPORT_CLAUDE_MODEL || "claude-sonnet-4-5";
@@ -25,16 +26,22 @@ export const hashJdText = (text) => crypto.createHash("md5").update(text.trim())
 
 // ─── RESUME TEXT EXTRACTION (reuses the same file types as the rest of the app) ─
 
-async function extractTextFromFile(filePath, mimetype) {
-  if (mimetype === "text/plain") return fs.readFileSync(filePath, "utf-8");
+async function extractTextFromFile(fileOrPath, mimetype) {
+  const isBuffer = Buffer.isBuffer(fileOrPath);
+  if (mimetype === "text/plain") {
+    return isBuffer ? fileOrPath.toString("utf-8") : fs.readFileSync(fileOrPath, "utf-8");
+  }
   if (mimetype === "application/pdf") {
     const pdfParse = (await import("pdf-parse")).default;
-    const data = await pdfParse(fs.readFileSync(filePath));
+    const buffer = isBuffer ? fileOrPath : fs.readFileSync(fileOrPath);
+    const data = await pdfParse(buffer);
     return data.text;
   }
-  if (mimetype.includes("word") || filePath.endsWith(".docx")) {
+  if (mimetype.includes("word") || (!isBuffer && fileOrPath.endsWith(".docx"))) {
     const mammoth = (await import("mammoth")).default;
-    const result = await mammoth.extractRawText({ path: filePath });
+    const result = isBuffer
+      ? await mammoth.extractRawText({ buffer: fileOrPath })
+      : await mammoth.extractRawText({ path: fileOrPath });
     return result.value;
   }
   return "";
@@ -44,7 +51,23 @@ const UPLOADS_ROOT = path.join(process.cwd(), "uploads");
 
 async function getResumeText(resumePathOrUrl) {
   if (!resumePathOrUrl) return "";
-  if (resumePathOrUrl.startsWith("http")) return ""; // remote links aren't fetched here — score from profile fields only
+
+  if (isR2Key(resumePathOrUrl)) {
+    try {
+      const signedUrl = await getSignedDownloadUrl(fromR2Key(resumePathOrUrl));
+      const upstream = await fetch(signedUrl);
+      if (!upstream.ok) return "";
+      const buffer = Buffer.from(await upstream.arrayBuffer());
+      const mime = resumePathOrUrl.endsWith(".pdf") ? "application/pdf" : "application/msword";
+      return await extractTextFromFile(buffer, mime);
+    } catch {
+      return "";
+    }
+  }
+
+  if (isExternalUrl(resumePathOrUrl)) return ""; // remote links aren't fetched here — score from profile fields only
+
+  // Legacy record from before the R2 migration.
   const candidates = [
     path.join(UPLOADS_ROOT, "resumes", path.basename(resumePathOrUrl)),
     path.join(UPLOADS_ROOT, path.basename(resumePathOrUrl)),
