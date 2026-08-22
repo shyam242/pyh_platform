@@ -5,6 +5,7 @@ import { sendRecruiterApprovalEmail, sendRecruiterRejectionEmail } from "../serv
 import { parseResumeFromURL, parseResumeFromBuffer, extractResumeDetails } from "../services/resumeParserService.js"; // pure regex — no API key needed
 import { computeSuitabilityScore } from "../services/suitabilityScoreService.js";
 import { upsertJobOnPublicSite } from "../services/publicSiteSync.js";
+import { buildObjectKey, uploadBufferToR2, toR2Key, resolveResumeUrl } from "../utils/r2Storage.js";
 
 const ADMIN_EMAIL = "shyampickyourhire@gmail.com";
 
@@ -107,7 +108,16 @@ export const getAllCandidates = async (req, res) => {
       "SELECT id, name, email, phone, skills, verified, resume FROM users WHERE role='candidate' ORDER BY id DESC"
     );
 
-    res.json(candidates.rows);
+    const rows = await Promise.all(
+      candidates.rows.map(async (row) => ({
+        ...row,
+        resume: await resolveResumeUrl(row.resume, {
+          downloadFilename: row.name ? `${row.name}-Resume.pdf` : undefined,
+        }),
+      }))
+    );
+
+    res.json(rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch candidates" });
@@ -145,8 +155,20 @@ export const getCandidateDetails = async (req, res) => {
       [candidateId]
     );
 
+    const candidateRow = candidate.rows[0];
+    // resume_file_path may be an "r2:..." key (private bucket) — resolve to
+    // a fresh signed URL so the admin dashboard's download link works.
+    candidateRow.resume_file_path = await resolveResumeUrl(candidateRow.resume_file_path, {
+      downloadFilename: candidateRow.name ? `${candidateRow.name}-Resume.pdf` : undefined,
+    });
+    if (candidateRow.resume) {
+      candidateRow.resume = await resolveResumeUrl(candidateRow.resume, {
+        downloadFilename: candidateRow.name ? `${candidateRow.name}-Resume.pdf` : undefined,
+      });
+    }
+
     res.json({
-      candidate: candidate.rows[0],
+      candidate: candidateRow,
       referrals: referrals.rows
     });
   } catch (err) {
@@ -1214,7 +1236,18 @@ export const getBulkUploadedCandidates = async (req, res) => {
        ORDER BY upload_date DESC`
     );
 
-    res.json(candidates.rows);
+    // resolveResumeUrl() presigns locally (no network round-trip), so this
+    // is cheap even for a full list.
+    const rows = await Promise.all(
+      candidates.rows.map(async (row) => ({
+        ...row,
+        resume_link: await resolveResumeUrl(row.resume_link, {
+          downloadFilename: row.name ? `${row.name}-Resume.pdf` : undefined,
+        }),
+      }))
+    );
+
+    res.json(rows);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch bulk candidates" });
@@ -1236,7 +1269,12 @@ export const getBulkCandidateDetails = async (req, res) => {
       return res.status(404).json({ message: "Candidate not found" });
     }
 
-    res.json({ candidate: result.rows[0] });
+    const candidateRow = result.rows[0];
+    candidateRow.resume_link = await resolveResumeUrl(candidateRow.resume_link, {
+      downloadFilename: candidateRow.name ? `${candidateRow.name}-Resume.pdf` : undefined,
+    });
+
+    res.json({ candidate: candidateRow });
   } catch (err) {
     console.error("getBulkCandidateDetails error:", err);
     res.status(500).json({ message: "Failed to fetch candidate details" });
@@ -1499,14 +1537,29 @@ export const bulkUploadResumeFiles = async (req, res) => {
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const resumeLink = `${process.env.BACKEND_URL || "https://api.pickyourhire.com"}/uploads/resumes/bulk/${file.filename}`;
       const ext = (file.originalname.split(".").pop() || "").toLowerCase();
+
+      let resumeLink;
+      try {
+        const objectKey = buildObjectKey("resumes/bulk", adminId, file.originalname);
+        await uploadBufferToR2({
+          buffer: file.buffer,
+          key: objectKey,
+          contentType: file.mimetype,
+          originalName: file.originalname,
+        });
+        resumeLink = toR2Key(objectKey);
+      } catch (uploadErr) {
+        console.error(`✗ R2 upload failed for resume ${i + 1}: ${file.originalname} →`, uploadErr.message);
+        errors.push({ index: i + 1, file: file.originalname, error: `Failed to store file: ${uploadErr.message}` });
+        continue;
+      }
 
       try {
         // extractResumeDetails() never throws for "can't auto-read this file"
         // cases (scanned images, empty PDFs, legacy .doc, etc) — it returns
         // { parsed: null, reason } instead so the file+row are still kept.
-        const { parsed, reason } = await extractResumeDetails(file.path, file.originalname);
+        const { parsed, reason } = await extractResumeDetails(file.buffer, file.originalname);
 
         if (parsed?.email) {
           const existing = await pool.query("SELECT id FROM bulk_candidates WHERE email=$1", [parsed.email]);
@@ -1564,7 +1617,7 @@ export const bulkUploadResumeFiles = async (req, res) => {
         }
       } catch (err) {
         // Genuine unexpected failure (DB error, etc) — the file itself is
-        // still on disk (multer already wrote it), it's just not in the DB yet.
+        // already uploaded to R2 successfully, it's just not in the DB yet.
         console.error(`✗ Failed resume ${i + 1}: ${file.originalname} →`, err.message);
         errors.push({ index: i + 1, file: file.originalname, error: err.message });
       }
@@ -1819,7 +1872,19 @@ export const getUnifiedCandidateStatusList = async (req, res) => {
     const totalFiltered = merged.length;
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.max(1, parseInt(req.query.limit) || 10);
-    const paged = merged.slice((page - 1) * limit, page * limit);
+    let paged = merged.slice((page - 1) * limit, page * limit);
+
+    // resume_link may be an "r2:..." key (portal candidates via
+    // resume_file_path, bulk candidates via resume_link itself) — resolve
+    // to a fresh signed URL only for the page actually being returned.
+    paged = await Promise.all(
+      paged.map(async (c) => ({
+        ...c,
+        resume_link: await resolveResumeUrl(c.resume_link, {
+          downloadFilename: c.name ? `${c.name}-Resume.pdf` : undefined,
+        }),
+      }))
+    );
 
     // Distinct filter options for dropdowns (computed from the FULL dataset, not just current page)
     const allForOptions = [...portalRows, ...bulkRows, ...referredRows];
