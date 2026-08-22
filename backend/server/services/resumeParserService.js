@@ -294,14 +294,19 @@ export const parseResumeFromBuffer = async (buffer) => {
 // { parsed: null, reason } instead so the caller can still save the
 // candidate row (and the file) and flag it for manual review, rather than
 // discarding the upload. It only throws for truly unexpected I/O errors.
-export const extractResumeDetails = async (filePath, originalname) => {
+export const extractResumeDetails = async (fileBufferOrPath, originalname) => {
   const ext = "." + (originalname.split(".").pop() || "").toLowerCase();
 
   if (IMAGE_EXTENSIONS.includes(ext)) {
     return { parsed: null, reason: "Image resume — this file type can't be auto-parsed. Please enter the candidate's details manually." };
   }
 
-  const buffer = fs.readFileSync(filePath);
+  // Accepts either an in-memory Buffer (the normal path now that uploads go
+  // straight to R2 via multer memoryStorage) or a legacy filesystem path
+  // string, for any code that still passes one in.
+  const buffer = Buffer.isBuffer(fileBufferOrPath)
+    ? fileBufferOrPath
+    : fs.readFileSync(fileBufferOrPath);
 
   try {
     if (ext === ".pdf") {
