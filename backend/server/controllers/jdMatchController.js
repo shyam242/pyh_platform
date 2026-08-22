@@ -4,6 +4,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { isR2Key, isExternalUrl, getSignedDownloadUrl, fromR2Key, resolveResumeUrl } from "../utils/r2Storage.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -51,20 +52,29 @@ export const jdUpload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-// ─── EXTRACT TEXT FROM UPLOADED JD FILE (PDF/DOCX/TXT) ────────────────────────
-const extractTextFromFile = async (filePath, mimetype) => {
+// ─── EXTRACT TEXT FROM A JD/RESUME FILE (PDF/DOCX/TXT) ────────────────────────
+// Accepts either a local disk path (string) or an in-memory Buffer — the
+// latter is used for resumes pulled from R2, which are never written to disk.
+const extractTextFromFile = async (fileOrPath, mimetype, originalNameForExt = "") => {
+  const isBuffer = Buffer.isBuffer(fileOrPath);
+  const looksLikeDocx = isBuffer
+    ? originalNameForExt.endsWith(".docx")
+    : fileOrPath.endsWith(".docx");
+
   if (mimetype === "text/plain") {
-    return fs.readFileSync(filePath, "utf-8");
+    return isBuffer ? fileOrPath.toString("utf-8") : fs.readFileSync(fileOrPath, "utf-8");
   }
   if (mimetype === "application/pdf") {
     const pdfParse = (await import("pdf-parse")).default;
-    const buffer = fs.readFileSync(filePath);
+    const buffer = isBuffer ? fileOrPath : fs.readFileSync(fileOrPath);
     const data = await pdfParse(buffer);
     return data.text;
   }
-  if (mimetype.includes("word") || filePath.endsWith(".docx")) {
+  if (mimetype.includes("word") || looksLikeDocx) {
     const mammoth = (await import("mammoth")).default;
-    const result = await mammoth.extractRawText({ path: filePath });
+    const result = isBuffer
+      ? await mammoth.extractRawText({ buffer: fileOrPath })
+      : await mammoth.extractRawText({ path: fileOrPath });
     return result.value;
   }
   return "";
@@ -150,6 +160,17 @@ export const filterCandidates = async (req, res) => {
     }
 
     let combined = [...referrals, ...bulkCandidates];
+
+    // cv_file/resume_link may be an "r2:..." key — resolve to a fresh
+    // signed URL so the recruiter dashboard's CV links actually work.
+    combined = await Promise.all(
+      combined.map(async (c) => ({
+        ...c,
+        cv_file: await resolveResumeUrl(c.cv_file, {
+          downloadFilename: c.name ? `${c.name}-CV.pdf` : undefined,
+        }),
+      }))
+    );
 
     // Filter by experience range
     if (min_experience !== undefined && min_experience !== null && min_experience !== "") {
@@ -352,9 +373,24 @@ export const parseProjectsForUser = async (userId) => {
 
   let resumeText = "";
   if (resume_file_path) {
-    let filePath = resume_file_path;
-    if (!filePath.startsWith("http")) {
-      filePath = path.join(__dirname, "../../uploads/resumes", path.basename(resume_file_path));
+    if (isR2Key(resume_file_path)) {
+      const signedUrl = await getSignedDownloadUrl(fromR2Key(resume_file_path));
+      const upstream = await fetch(signedUrl);
+      if (upstream.ok) {
+        const buffer = Buffer.from(await upstream.arrayBuffer());
+        const mime = resume_file_path.endsWith(".pdf") ? "application/pdf" : "application/msword";
+        resumeText = await extractTextFromFile(buffer, mime, resume_file_path);
+      }
+    } else if (isExternalUrl(resume_file_path)) {
+      const upstream = await fetch(resume_file_path);
+      if (upstream.ok) {
+        const buffer = Buffer.from(await upstream.arrayBuffer());
+        const mime = resume_file_path.endsWith(".pdf") ? "application/pdf" : "application/msword";
+        resumeText = await extractTextFromFile(buffer, mime, resume_file_path);
+      }
+    } else {
+      // Legacy record from before the R2 migration.
+      const filePath = path.join(__dirname, "../../uploads/resumes", path.basename(resume_file_path));
       if (fs.existsSync(filePath)) {
         const mime = filePath.endsWith(".pdf") ? "application/pdf" : "application/msword";
         resumeText = await extractTextFromFile(filePath, mime);
