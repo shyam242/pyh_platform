@@ -4,6 +4,19 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.pickyourhire.com";
 
 /**
+ * Resolve a stored file reference into an openable URL.
+ * Resumes/CVs used to always be relative paths like "/uploads/resumes/xyz.pdf",
+ * so callers prefixed them with API_BASE_URL. Now that resumes are served
+ * from Cloudflare R2 via short-lived signed URLs, the backend may hand back
+ * a full "https://..." URL instead — in that case, use it as-is.
+ */
+export function resolveFileUrl(pathOrUrl) {
+  if (!pathOrUrl) return null;
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  return `${API_BASE_URL}${pathOrUrl}`;
+}
+
+/**
  * Make authenticated API requests
  */
 export async function apiFetch(endpoint, options = {}) {
