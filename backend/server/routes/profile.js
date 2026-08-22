@@ -7,6 +7,8 @@ import { createProfile, getUserProfile, updateUserProfile, uploadProfileImage, g
 import { parseProjects } from "../controllers/jdMatchController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { extractResumeDetails } from "../services/resumeParserService.js";
+import { makeResumeUpload } from "../utils/uploadMemory.js";
+import { buildObjectKey, uploadBufferToR2, toR2Key } from "../utils/r2Storage.js";
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -17,23 +19,10 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-const resumeDir = path.join(__dirname, "../../uploads/resumes");
-if (!fs.existsSync(resumeDir)) {
-  fs.mkdirSync(resumeDir, { recursive: true });
-}
-
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
     const uniqueName = `profile-${Date.now()}-${file.originalname.replace(/\s+/g, "_")}`;
-    cb(null, uniqueName);
-  },
-});
-
-const resumeStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, resumeDir),
-  filename: (req, file, cb) => {
-    const uniqueName = `resume-${Date.now()}-${file.originalname.replace(/\s+/g, "_")}`;
     cb(null, uniqueName);
   },
 });
@@ -51,61 +40,37 @@ const upload = multer({
   },
 });
 
-const resumeUpload = multer({
-  storage: resumeStorage,
-  limits: { fileSize: 10 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only PDF and DOC/DOCX files are allowed"));
-    }
-  },
-});
+const resumeUpload = makeResumeUpload({ maxSizeMB: 10 });
 
-// CREATE PROFILE
 router.post("/create", createProfile);
-
-// GET USER PROFILE
 router.get("/user", protect, getUserProfile);
-
-// UPDATE USER PROFILE
 router.put("/update", protect, updateUserProfile);
-
-// UPLOAD PROFILE IMAGE
 router.put("/avatar", protect, upload.single("image"), uploadProfileImage);
-
-// GET BANK DETAILS
 router.get("/bank-details", protect, getBankDetails);
-
-// UPDATE BANK DETAILS (Referrer only)
 router.put("/bank-details", protect, updateBankDetails);
-
-// CREATE CANDIDATE PROFILE (After role selection)
 router.post("/candidate", protect, createCandidateProfile);
-
-// GET CANDIDATE PROFILE
 router.get("/candidate", protect, getCandidateProfile);
-
-// UPDATE CANDIDATE PROFILE
 router.put("/candidate", protect, updateCandidateProfile);
 
-// UPLOAD RESUME (For candidates)
 router.post("/upload-resume", protect, resumeUpload.single("file"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "Resume file is required" });
     }
 
-    const filePath = `/uploads/resumes/${req.file.filename}`;
+    const objectKey = buildObjectKey("resumes/candidates", req.user.id, req.file.originalname);
+    await uploadBufferToR2({
+      buffer: req.file.buffer,
+      key: objectKey,
+      contentType: req.file.mimetype,
+      originalName: req.file.originalname,
+    });
+    const storedValue = toR2Key(objectKey);
 
-    // Best-effort auto-parse — the candidate reviews/edits everything before
-    // it's saved, so a parsing miss here is never fatal to the upload itself.
     let parsed = null;
     let parseNote = null;
     try {
-      const extracted = await extractResumeDetails(req.file.path, req.file.originalname);
+      const extracted = await extractResumeDetails(req.file.buffer, req.file.originalname);
       parsed = extracted.parsed;
       parseNote = extracted.reason;
     } catch (err) {
@@ -114,8 +79,8 @@ router.post("/upload-resume", protect, resumeUpload.single("file"), async (req, 
 
     res.json({
       message: "Resume uploaded successfully",
-      filePath: filePath,
-      filename: req.file.filename,
+      filePath: storedValue,
+      filename: req.file.originalname,
       parsed,
       parseNote,
     });
@@ -125,16 +90,9 @@ router.post("/upload-resume", protect, resumeUpload.single("file"), async (req, 
   }
 });
 
-// VERIFY CANDIDATE PROFILE (Resume & Skills)
 router.post("/verify", protect, resumeUpload.single("file"), verifyCandidateProfile);
-
-// DELETE CANDIDATE PROFILE
 router.delete("/candidate", protect, deleteCandidateProfile);
-
-// PARSE PROJECTS FROM RESUME
 router.post("/parse-projects", protect, parseProjects);
-
-// GET REFERRER PROFILE BY ID
 router.get("/referrer/:referrerId", getReferrerProfile);
 
-export default router;   // ⭐ VERY IMPORTANT
+export default router;
