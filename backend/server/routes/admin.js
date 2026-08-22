@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { protect } from "../middleware/authMiddleware.js";
+import { makeResumeUpload } from "../utils/uploadMemory.js";
 import {
   getDashboardData,
   getAllCandidates,
@@ -85,55 +86,22 @@ const upload = multer({
   },
 });
 
-// Setup multer for direct resume file uploads (PDFs, up to 50 at once)
-const resumeUploadDir = path.join(__dirname, "../../uploads/resumes/bulk");
-if (!fs.existsSync(resumeUploadDir)) fs.mkdirSync(resumeUploadDir, { recursive: true });
+const uploadResumes = makeResumeUpload({ maxSizeMB: 10, allowImages: true });
 
-const resumeStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, resumeUploadDir),
-  filename: (req, file, cb) => {
-    const uniqueName = `resume-${Date.now()}-${Math.round(Math.random() * 1e9)}-${file.originalname.replace(/\s+/g, "_")}`;
-    cb(null, uniqueName);
-  },
-});
-
-// Accepted so that even resumes we can't auto-parse (scanned images, legacy
-// .doc, etc.) are still kept on disk and attached to a manual-review
-// candidate record instead of being rejected outright.
-const RESUME_EXT_ALLOWLIST = [".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".webp"];
-
-const uploadResumes = multer({
-  storage: resumeStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB per file
-  fileFilter: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (RESUME_EXT_ALLOWLIST.includes(ext)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only PDF, Word (.doc/.docx), or image (.jpg/.png/.webp) files are allowed"));
-    }
-  },
-});
-
-// DASHBOARD
 router.get("/dashboard", protect, getDashboardData);
 
-// NOTIFICATIONS (candidate referrals + sign-ins; auto-archived after 7 days)
 router.get("/notifications", protect, getNotifications);
 router.get("/notifications/unread-count", protect, getUnreadNotificationCount);
 router.put("/notifications/:id/read", protect, markNotificationRead);
 
-// CANDIDATES
 router.get("/candidates", protect, getAllCandidates);
 router.get("/candidates/:candidateId", protect, getCandidateDetails);
 router.delete("/candidates/:candidateId", protect, deleteCandidate);
 
-// USERS BY ROLE
 router.get("/users/:role", protect, getCandidatesByRole);
 router.get("/users/recruiter/:recruiterId", protect, getRecruiterDetails);
 router.put("/users/recruiter/:recruiterId", protect, updateRecruiterProfile);
 
-// RECRUITER MANAGEMENT
 router.put("/recruiters/:recruiterId/approve", protect, approveRecruiterV2);
 router.put("/recruiters/:recruiterId/reject", protect, rejectRecruiterV2);
 router.put("/recruiters/:recruiterId/reconsider", protect, reconsiderRecruiter);
@@ -141,7 +109,6 @@ router.delete("/recruiters/:recruiterId", protect, deleteRecruiter);
 router.get("/recruiters/approval-center", protect, getRecruiterApprovalCenter);
 router.get("/recruiters/export", protect, exportRecruitersCSV);
 
-// INCENTIVE MANAGEMENT
 router.get("/referrers", protect, getAllReferrersWithIncentives);
 router.get("/referrers/:referrerId", protect, getReferrerFullDetails);
 router.delete("/referrers/:referrerId", protect, deleteReferrer);
@@ -151,7 +118,6 @@ router.get("/incentives/:referrerId", getReferrerIncentive);
 router.put("/incentives/:referrerId", protect, updateReferrerIncentive);
 router.delete("/incentives/:referrerId", protect, revokeReferrerIncentive);
 
-// BULK UPLOADS
 router.post("/bulk-upload/jobs", protect, bulkUploadJobs);
 router.post("/bulk-upload/candidates", protect, bulkUploadCandidates);
 router.post("/bulk-upload/csv", protect, upload.single("csvFile"), uploadCandidatesCSV);
@@ -161,13 +127,11 @@ router.get("/bulk-candidates", protect, getBulkUploadedCandidates);
 router.get("/bulk-candidates/:candidateId", protect, getBulkCandidateDetails);
 router.delete("/bulk-candidates/:candidateId", protect, deleteBulkCandidate);
 
-// CANDIDATE STATUS MANAGEMENT
 router.put("/bulk-candidates/:candidateId/status", protect, updateBulkCandidateStatus);
 router.put("/bulk-candidates/:candidateId/details", protect, updateBulkCandidateDetails);
 router.put("/candidates/:candidateId/details", protect, updateCandidateDetails);
 router.get("/candidate-status-stats", protect, getCandidateStatusStats);
 
-// UNIFIED CANDIDATE STATUS MANAGEMENT (portal + bulk, tagged & filterable)
 router.get("/candidate-status/list", protect, getUnifiedCandidateStatusList);
 router.get("/candidate-status/overview", protect, getUnifiedCandidateStatusOverview);
 router.get("/candidate-status/export", protect, exportUnifiedCandidateStatusCSV);
@@ -178,12 +142,8 @@ router.put("/referred-candidates/:referralId/details", protect, updateReferredCa
 router.delete("/referred-candidates/:referralId", protect, deleteReferredCandidate);
 router.get("/recruiter-candidate-statuses", protect, getRecruiterCandidateStatuses);
 
-// PROJECT PARSING (admin can trigger for any candidate)
 router.post("/candidates/:userId/parse-projects", protect, adminParseProjects);
 
-// Fake Experience Check — same feature as the recruiter version, kept as a
-// separate route/store namespace so an admin's "last uploaded batch" doesn't
-// collide with any recruiter's. Nothing here is persisted to the database.
 router.post("/fake-experience/analyze", protect, fakeExperienceUpload, adminAnalyze);
 router.get("/fake-experience/last", protect, adminGetLast);
 router.delete("/fake-experience/last", protect, adminClearLast);
