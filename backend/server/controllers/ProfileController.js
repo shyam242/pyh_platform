@@ -5,6 +5,7 @@ import { sendEmail } from "../services/brevoService.js";
 import { parseProjectsForUser } from "./jdMatchController.js";
 import { extractResumeDetails } from "../services/resumeParserService.js";
 import { createNotification } from "../services/notificationService.js";
+import { buildObjectKey, uploadBufferToR2, toR2Key, resolveResumeUrl } from "../utils/r2Storage.js";
 
 const ADMIN_EMAILS = process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(",").map(e => e.trim()) : ["shyampickyourhire@gmail.com"];
 
@@ -42,7 +43,6 @@ const sendAdminNotification = async (recruiter) => {
       </div>
     `;
 
-    // Send to all admin emails
     const results = await Promise.all(
       ADMIN_EMAILS.map((email) =>
         sendEmail(
@@ -74,11 +74,9 @@ export const createProfile = async (req, res) => {
       return res.status(403).json({ error: "Admin account can only be created with the authorized email" });
     }
 
-    // Check if user already exists
     const existingUser = await pool.query("SELECT * FROM users WHERE email = $1", [email]);
     const isNew = existingUser.rows.length === 0;
 
-    // If already fully registered, return existing token
     if (!isNew && existingUser.rows[0].role) {
       const token = jwt.sign(
         { id: existingUser.rows[0].id, role: existingUser.rows[0].role },
@@ -87,7 +85,6 @@ export const createProfile = async (req, res) => {
       return res.json({ token, user: existingUser.rows[0] });
     }
 
-    // Upsert user with role-specific fields
     let result;
     if (role === "referrer") {
       result = await pool.query(
@@ -114,7 +111,6 @@ export const createProfile = async (req, res) => {
         [name, email, role]
       );
     } else {
-      // candidate
       result = await pool.query(
         `INSERT INTO users(name,email,role,phone) VALUES($1,$2,$3,$4)
          ON CONFLICT (email) DO UPDATE SET name=$1,role=$3,phone=$4
@@ -128,9 +124,6 @@ export const createProfile = async (req, res) => {
       process.env.JWT_SECRET
     );
 
-    // First-time signup → this is the first moment the user actually has a
-    // row in `users`, so this is where it needs to be logged, not the OTP
-    // step (which only fires for users who already existed).
     if (isNew && role !== "admin") {
       createNotification({
         type: "login",
@@ -147,15 +140,12 @@ export const createProfile = async (req, res) => {
   }
 };
 
-// GET USER PROFILE
 const buildImageUrl = (filename) => {
   if (!filename) return null;
   if (/^https?:\/\//i.test(filename)) return filename;
   return `${process.env.BACKEND_URL || "https://api.pickyourhire.com"}/uploads/profile_images/${filename}`;
 };
 
-// Self-healing: guarantees users.image / users.linkedin exist even if the
-// server hasn't restarted since these columns were introduced.
 let _userProfileColumnsChecked = false;
 const ensureUserProfileColumnsOnce = async () => {
   if (_userProfileColumnsChecked) return;
@@ -221,14 +211,12 @@ export const getUserProfile = async (req, res) => {
   }
 };
 
-// UPDATE USER PROFILE
 export const updateUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
     await ensureUserProfileColumnsOnce();
     const { name, email, company, experience, phone, linkedin } = req.body;
 
-    // Email is unique — make sure no one else already owns it before updating
     if (email !== undefined) {
       const existing = await pool.query(
         "SELECT id FROM users WHERE email=$1 AND id<>$2",
@@ -239,52 +227,21 @@ export const updateUserProfile = async (req, res) => {
       }
     }
 
-    // Only update provided fields
     let query = "UPDATE users SET ";
     const params = [];
     let paramCount = 1;
 
-    if (name !== undefined) {
-      query += `name=$${paramCount}, `;
-      params.push(name);
-      paramCount++;
-    }
-
-    if (email !== undefined) {
-      query += `email=$${paramCount}, `;
-      params.push(email);
-      paramCount++;
-    }
-
-    if (company !== undefined) {
-      query += `company=$${paramCount}, `;
-      params.push(company);
-      paramCount++;
-    }
-
-    if (experience !== undefined) {
-      query += `experience=$${paramCount}, `;
-      params.push(experience);
-      paramCount++;
-    }
-
-    if (phone !== undefined) {
-      query += `phone=$${paramCount}, `;
-      params.push(phone);
-      paramCount++;
-    }
-
-    if (linkedin !== undefined) {
-      query += `linkedin=$${paramCount}, `;
-      params.push(linkedin);
-      paramCount++;
-    }
+    if (name !== undefined) { query += `name=$${paramCount}, `; params.push(name); paramCount++; }
+    if (email !== undefined) { query += `email=$${paramCount}, `; params.push(email); paramCount++; }
+    if (company !== undefined) { query += `company=$${paramCount}, `; params.push(company); paramCount++; }
+    if (experience !== undefined) { query += `experience=$${paramCount}, `; params.push(experience); paramCount++; }
+    if (phone !== undefined) { query += `phone=$${paramCount}, `; params.push(phone); paramCount++; }
+    if (linkedin !== undefined) { query += `linkedin=$${paramCount}, `; params.push(linkedin); paramCount++; }
 
     if (params.length === 0) {
       return res.status(400).json({ error: "No fields to update" });
     }
 
-    // Remove trailing comma and space
     query = query.slice(0, -2);
     query += ` WHERE id=$${paramCount} RETURNING *`;
     params.push(userId);
@@ -312,7 +269,6 @@ export const updateUserProfile = async (req, res) => {
   }
 };
 
-// UPLOAD PROFILE IMAGE
 export const uploadProfileImage = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -346,7 +302,6 @@ export const uploadProfileImage = async (req, res) => {
   }
 };
 
-// GET BANK DETAILS
 export const getBankDetails = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -368,14 +323,12 @@ export const getBankDetails = async (req, res) => {
   }
 };
 
-// UPDATE BANK DETAILS (Referrer only)
 export const updateBankDetails = async (req, res) => {
   try {
     const userId = req.user.id;
     await ensureUserProfileColumnsOnce();
     const { account_number, ifsc_code } = req.body;
 
-    // Verify user is a referrer
     const userCheck = await pool.query(
       "SELECT role FROM users WHERE id=$1",
       [userId]
@@ -389,7 +342,6 @@ export const updateBankDetails = async (req, res) => {
       return res.status(403).json({ error: "Only referrers can add bank details" });
     }
 
-    // Validate inputs
     if (!account_number || !ifsc_code) {
       return res.status(400).json({ error: "Account number and IFSC code are required" });
     }
@@ -409,31 +361,16 @@ export const updateBankDetails = async (req, res) => {
   }
 };
 
-// CREATE/UPDATE CANDIDATE PROFILE (After role selection)
 export const createCandidateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
     const {
-      job_role,
-      contact,
-      skills,
-      cctc,
-      ectc,
-      current_location,
-      preferred_location,
-      notice_period,
-      offer_in_hand,
-      reason_for_change,
-      current_company_name,
-      highest_qualification,
-      address_aadhaar,
-      technical_skills,
-      soft_skills,
-      linkedin_profile,
-      resume_file_path
+      job_role, contact, skills, cctc, ectc, current_location, preferred_location,
+      notice_period, offer_in_hand, reason_for_change, current_company_name,
+      highest_qualification, address_aadhaar, technical_skills, soft_skills,
+      linkedin_profile, resume_file_path
     } = req.body;
 
-    // Verify user is a candidate
     const userCheck = await pool.query(
       "SELECT role FROM users WHERE id=$1",
       [userId]
@@ -447,56 +384,23 @@ export const createCandidateProfile = async (req, res) => {
       return res.status(403).json({ error: "Only candidates can create candidate profiles" });
     }
 
-    // A resume on file is enough to consider the candidate's profile verified —
-    // this keeps the "Profile status" badge in sync with reality instead of
-    // permanently showing "Pending" for anyone who uploaded a resume through
-    // the onboarding form rather than the quick-verify endpoint.
     const verifiedFlag = !!resume_file_path;
 
-    // Update candidate profile
     const result = await pool.query(
       `UPDATE users SET 
-        job_role=$1,
-        contact=$2,
-        skills=$3,
-        cctc=$4,
-        ectc=$5,
-        current_location=$6,
-        preferred_location=$7,
-        notice_period=$8,
-        offer_in_hand=$9,
-        reason_for_change=$10,
-        current_company_name=$11,
-        highest_qualification=$12,
-        address_aadhaar=$13,
-        technical_skills=$14,
-        soft_skills=$15,
-        linkedin_profile=$16,
-        resume_file_path=$17,
-        candidate_profile_completed=true,
-        verified = verified OR $19
+        job_role=$1, contact=$2, skills=$3, cctc=$4, ectc=$5, current_location=$6,
+        preferred_location=$7, notice_period=$8, offer_in_hand=$9, reason_for_change=$10,
+        current_company_name=$11, highest_qualification=$12, address_aadhaar=$13,
+        technical_skills=$14, soft_skills=$15, linkedin_profile=$16, resume_file_path=$17,
+        candidate_profile_completed=true, verified = verified OR $19
       WHERE id=$18
       RETURNING id, name, email, role, job_role, contact, skills, cctc, ectc, current_location, preferred_location, notice_period, offer_in_hand, reason_for_change, current_company_name, highest_qualification, address_aadhaar, technical_skills, soft_skills, linkedin_profile, resume_file_path, candidate_profile_completed, verified`,
       [
-        job_role,
-        contact,
-        skills,
-        cctc || null,
-        ectc || null,
-        current_location,
-        preferred_location,
-        notice_period,
-        offer_in_hand,
-        reason_for_change,
-        current_company_name,
-        highest_qualification,
-        address_aadhaar,
-        technical_skills,
-        soft_skills,
-        linkedin_profile,
-        resume_file_path,
-        userId,
-        verifiedFlag
+        job_role, contact, skills, cctc || null, ectc || null, current_location,
+        preferred_location, notice_period, offer_in_hand, reason_for_change,
+        current_company_name, highest_qualification, address_aadhaar,
+        technical_skills, soft_skills, linkedin_profile, resume_file_path,
+        userId, verifiedFlag
       ]
     );
 
@@ -509,7 +413,6 @@ export const createCandidateProfile = async (req, res) => {
       user: result.rows[0]
     });
 
-    // Auto-parse projects from resume in the background (don't block response)
     if (resume_file_path) {
       parseProjectsForUser(userId).catch(err =>
         console.error(`Background project parsing failed for user ${userId}:`, err.message)
@@ -521,7 +424,6 @@ export const createCandidateProfile = async (req, res) => {
   }
 };
 
-// GET CANDIDATE PROFILE
 export const getCandidateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -543,7 +445,6 @@ export const getCandidateProfile = async (req, res) => {
 
     const profile = result.rows[0];
 
-    // Attach referrer info if candidate was referred
     const referralResult = await pool.query(
       `SELECT r.id as referral_id, r.referral_status,
               u.name as referrer_name, u.email as referrer_email, u.phone as referrer_phone,
@@ -558,6 +459,13 @@ export const getCandidateProfile = async (req, res) => {
 
     profile.referrer = referralResult.rows[0] || null;
 
+    // resume_file_path may be an "r2:..." key (private bucket) — hand the
+    // frontend a fresh, short-lived signed URL rather than the raw key.
+    profile.resume_file_path = await resolveResumeUrl(profile.resume_file_path, {
+      downloadFilename: profile.name ? `${profile.name}-Resume.pdf` : undefined,
+      expiresIn: 600,
+    });
+
     res.json(profile);
   } catch (error) {
     console.error("Error fetching candidate profile:", error);
@@ -565,31 +473,16 @@ export const getCandidateProfile = async (req, res) => {
   }
 };
 
-// UPDATE CANDIDATE PROFILE
 export const updateCandidateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
     const {
-      job_role,
-      contact,
-      skills,
-      cctc,
-      ectc,
-      current_location,
-      preferred_location,
-      notice_period,
-      offer_in_hand,
-      reason_for_change,
-      current_company_name,
-      highest_qualification,
-      address_aadhaar,
-      technical_skills,
-      soft_skills,
-      linkedin_profile,
-      resume_file_path
+      job_role, contact, skills, cctc, ectc, current_location, preferred_location,
+      notice_period, offer_in_hand, reason_for_change, current_company_name,
+      highest_qualification, address_aadhaar, technical_skills, soft_skills,
+      linkedin_profile, resume_file_path
     } = req.body;
 
-    // Verify user is a candidate
     const userCheck = await pool.query(
       "SELECT role FROM users WHERE id=$1",
       [userId]
@@ -599,121 +492,36 @@ export const updateCandidateProfile = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Update only provided fields
     let query = "UPDATE users SET ";
     const params = [];
     let paramCount = 1;
 
-    if (job_role !== undefined) {
-      query += `job_role=$${paramCount}, `;
-      params.push(job_role);
-      paramCount++;
-    }
-
-    if (contact !== undefined) {
-      query += `contact=$${paramCount}, `;
-      params.push(contact);
-      paramCount++;
-    }
-
-    if (skills !== undefined) {
-      query += `skills=$${paramCount}, `;
-      params.push(skills);
-      paramCount++;
-    }
-
-    if (cctc !== undefined) {
-      query += `cctc=$${paramCount}, `;
-      params.push(cctc || null);
-      paramCount++;
-    }
-
-    if (ectc !== undefined) {
-      query += `ectc=$${paramCount}, `;
-      params.push(ectc || null);
-      paramCount++;
-    }
-
-    if (current_location !== undefined) {
-      query += `current_location=$${paramCount}, `;
-      params.push(current_location);
-      paramCount++;
-    }
-
-    if (preferred_location !== undefined) {
-      query += `preferred_location=$${paramCount}, `;
-      params.push(preferred_location);
-      paramCount++;
-    }
-
-    if (notice_period !== undefined) {
-      query += `notice_period=$${paramCount}, `;
-      params.push(notice_period);
-      paramCount++;
-    }
-
-    if (offer_in_hand !== undefined) {
-      query += `offer_in_hand=$${paramCount}, `;
-      params.push(offer_in_hand);
-      paramCount++;
-    }
-
-    if (reason_for_change !== undefined) {
-      query += `reason_for_change=$${paramCount}, `;
-      params.push(reason_for_change);
-      paramCount++;
-    }
-
-    if (current_company_name !== undefined) {
-      query += `current_company_name=$${paramCount}, `;
-      params.push(current_company_name);
-      paramCount++;
-    }
-
-    if (highest_qualification !== undefined) {
-      query += `highest_qualification=$${paramCount}, `;
-      params.push(highest_qualification);
-      paramCount++;
-    }
-
-    if (address_aadhaar !== undefined) {
-      query += `address_aadhaar=$${paramCount}, `;
-      params.push(address_aadhaar);
-      paramCount++;
-    }
-
-    if (technical_skills !== undefined) {
-      query += `technical_skills=$${paramCount}, `;
-      params.push(technical_skills);
-      paramCount++;
-    }
-
-    if (soft_skills !== undefined) {
-      query += `soft_skills=$${paramCount}, `;
-      params.push(soft_skills);
-      paramCount++;
-    }
-
-    if (linkedin_profile !== undefined) {
-      query += `linkedin_profile=$${paramCount}, `;
-      params.push(linkedin_profile);
-      paramCount++;
-    }
+    if (job_role !== undefined) { query += `job_role=$${paramCount}, `; params.push(job_role); paramCount++; }
+    if (contact !== undefined) { query += `contact=$${paramCount}, `; params.push(contact); paramCount++; }
+    if (skills !== undefined) { query += `skills=$${paramCount}, `; params.push(skills); paramCount++; }
+    if (cctc !== undefined) { query += `cctc=$${paramCount}, `; params.push(cctc || null); paramCount++; }
+    if (ectc !== undefined) { query += `ectc=$${paramCount}, `; params.push(ectc || null); paramCount++; }
+    if (current_location !== undefined) { query += `current_location=$${paramCount}, `; params.push(current_location); paramCount++; }
+    if (preferred_location !== undefined) { query += `preferred_location=$${paramCount}, `; params.push(preferred_location); paramCount++; }
+    if (notice_period !== undefined) { query += `notice_period=$${paramCount}, `; params.push(notice_period); paramCount++; }
+    if (offer_in_hand !== undefined) { query += `offer_in_hand=$${paramCount}, `; params.push(offer_in_hand); paramCount++; }
+    if (reason_for_change !== undefined) { query += `reason_for_change=$${paramCount}, `; params.push(reason_for_change); paramCount++; }
+    if (current_company_name !== undefined) { query += `current_company_name=$${paramCount}, `; params.push(current_company_name); paramCount++; }
+    if (highest_qualification !== undefined) { query += `highest_qualification=$${paramCount}, `; params.push(highest_qualification); paramCount++; }
+    if (address_aadhaar !== undefined) { query += `address_aadhaar=$${paramCount}, `; params.push(address_aadhaar); paramCount++; }
+    if (technical_skills !== undefined) { query += `technical_skills=$${paramCount}, `; params.push(technical_skills); paramCount++; }
+    if (soft_skills !== undefined) { query += `soft_skills=$${paramCount}, `; params.push(soft_skills); paramCount++; }
+    if (linkedin_profile !== undefined) { query += `linkedin_profile=$${paramCount}, `; params.push(linkedin_profile); paramCount++; }
 
     if (resume_file_path !== undefined) {
       query += `resume_file_path=$${paramCount}, `;
       params.push(resume_file_path);
       paramCount++;
-
-      // A resume on file is enough to consider the candidate verified — keep
-      // the "Profile status" badge in sync instead of leaving it stuck on
-      // "Pending" once a resume has actually been uploaded.
       if (resume_file_path) {
         query += `verified=true, `;
       }
     }
 
-    // Remove trailing comma and space
     query = query.slice(0, -2);
     query += ` WHERE id=$${paramCount} RETURNING id, name, email, role, job_role, contact, skills, cctc, ectc, current_location, preferred_location, notice_period, offer_in_hand, reason_for_change, current_company_name, highest_qualification, address_aadhaar, technical_skills, soft_skills, linkedin_profile, resume_file_path, candidate_profile_completed, verified`;
     params.push(userId);
@@ -729,7 +537,6 @@ export const updateCandidateProfile = async (req, res) => {
       user: result.rows[0]
     });
 
-    // Re-parse projects if resume was part of this update
     if (resume_file_path) {
       parseProjectsForUser(userId).catch(err =>
         console.error(`Background project re-parsing failed for user ${userId}:`, err.message)
@@ -741,16 +548,12 @@ export const updateCandidateProfile = async (req, res) => {
   }
 };
 
-// VERIFY CANDIDATE PROFILE (Resume & Skills)
 export const verifyCandidateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    
-    // Get resume file path from multer
-    const resumeFilePath = req.file ? `/uploads/resumes/${req.file.filename}` : null;
+
     let skills = req.body.skills ? JSON.parse(req.body.skills) : [];
 
-    // Verify user is a candidate
     const userCheck = await pool.query(
       "SELECT role FROM users WHERE id=$1",
       [userId]
@@ -764,14 +567,23 @@ export const verifyCandidateProfile = async (req, res) => {
       return res.status(403).json({ error: "Only candidates can verify profiles" });
     }
 
-    // Try to auto-extract skills/experience/education from the resume itself
-    // so the candidate doesn't have to re-type what's already on the page.
-    // Fields the candidate has already filled in are left untouched (via
-    // COALESCE/NULLIF below) — this only fills in blanks, never overwrites.
+    // Upload resume buffer to R2 (multer memoryStorage — never touches disk)
+    let resumeFilePath = null;
+    if (req.file) {
+      const objectKey = buildObjectKey("resumes/candidates", userId, req.file.originalname);
+      await uploadBufferToR2({
+        buffer: req.file.buffer,
+        key: objectKey,
+        contentType: req.file.mimetype,
+        originalName: req.file.originalname,
+      });
+      resumeFilePath = toR2Key(objectKey);
+    }
+
     let parsed = null;
     if (req.file) {
       try {
-        const extracted = await extractResumeDetails(req.file.path, req.file.originalname);
+        const extracted = await extractResumeDetails(req.file.buffer, req.file.originalname);
         parsed = extracted.parsed;
         if (parsed?.skills) {
           const fromResume = parsed.skills.split(",").map(s => s.trim()).filter(Boolean);
@@ -782,8 +594,6 @@ export const verifyCandidateProfile = async (req, res) => {
       }
     }
 
-    // Update resume, skills, verified flag, and any blank profile fields we
-    // could confidently extract from the resume text.
     const result = await pool.query(
       `UPDATE users SET
          resume_file_path = $1,
@@ -818,9 +628,14 @@ export const verifyCandidateProfile = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    const userRow = result.rows[0];
+    userRow.resume_file_path = await resolveResumeUrl(userRow.resume_file_path, {
+      downloadFilename: userRow.name ? `${userRow.name}-Resume.pdf` : undefined,
+    });
+
     res.json({
       message: "Profile verified successfully",
-      user: result.rows[0],
+      user: userRow,
       parsed,
     });
   } catch (error) {
@@ -829,7 +644,6 @@ export const verifyCandidateProfile = async (req, res) => {
   }
 };
 
-// DELETE CANDIDATE PROFILE
 export const deleteCandidateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -864,7 +678,6 @@ export const deleteCandidateProfile = async (req, res) => {
   }
 };
 
-// GET REFERRER PROFILE BY ID
 export const getReferrerProfile = async (req, res) => {
   try {
     const { referrerId } = req.params;
