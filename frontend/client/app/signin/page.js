@@ -20,10 +20,16 @@ function SigninInner() {
   const [errors, setErrors]   = useState({});
   const [resendTimer, setResendTimer] = useState(0);
   const [emailFocused, setEmailFocused] = useState(false);
-  const [termsAccepted, setTermsAccepted] = useState(false);
   const otpRefs = useRef([]);
   const searchParams = useSearchParams();
   const magicToken = searchParams?.get("invite") || (typeof window !== "undefined" ? sessionStorage.getItem("magic_token") : null);
+
+  // Lets a WhatsApp-shared claim link (?email=...) land with the email
+  // already filled in, so the person just has to tap "Secure Login".
+  useEffect(() => {
+    const prefill = searchParams?.get("email");
+    if (prefill) setEmail(prefill);
+  }, [searchParams]);
 
   // countdown timer for resend
   useEffect(() => {
@@ -101,7 +107,6 @@ function SigninInner() {
   const verify = async () => {
     setErrors({});
     if (otpString.length !== 6) { setErrors({ otp: "Enter all 6 digits" }); return; }
-    if (!termsAccepted) { setErrors({ terms: "Please accept the Terms & Privacy Policy to continue" }); return; }
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
@@ -119,6 +124,16 @@ function SigninInner() {
         sessionStorage.removeItem("magic_token");
         showSuccess("Welcome! Complete your referrer profile.");
         window.location.href = "/create-profile";
+        return;
+      }
+      if (data.claimedProfile) {
+        // Email matched a profile an admin had bulk-uploaded — account was
+        // auto-created and pre-filled from that data. Skip role selection
+        // and the blank candidate form; take them straight to review/edit it.
+        localStorage.setItem("token", data.token);
+        sessionStorage.removeItem("magic_token");
+        showSuccess("Welcome! We found your profile — review and edit it below.");
+        window.location.href = "/candidate-profile/edit";
         return;
       }
       if (data.newUser) {
@@ -374,44 +389,11 @@ function SigninInner() {
                 </button>
               </div>
 
-              {/* Terms & Privacy Policy */}
-              <div style={{ backgroundColor: "#FAFAFA", border: `1.5px solid ${errors.terms ? "#ef4444" : termsAccepted ? "#3B6D11" : "#E5E7EB"}`, borderRadius: 12, padding: "14px 16px", marginBottom: 16, transition: "border-color 0.15s" }}>
-                <label style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}>
-                  <div style={{ position: "relative", flexShrink: 0, marginTop: 2 }}>
-                    <input
-                      type="checkbox"
-                      checked={termsAccepted}
-                      onChange={e => { setTermsAccepted(e.target.checked); setErrors(err => ({ ...err, terms: undefined })); }}
-                      style={{ opacity: 0, position: "absolute", inset: 0, margin: 0, cursor: "pointer" }}
-                    />
-                    <div style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${termsAccepted ? "#3B6D11" : "#D1D5DB"}`, backgroundColor: termsAccepted ? "#3B6D11" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
-                      {termsAccepted && (
-                        <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
-                          <path d="M1 4L4 7.5L10 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.55 }}>
-                    I agree to PickYourHire's{" "}
-                    <a href="https://www.pickyourhire.com/terms-of-service" target="_blank" rel="noreferrer" style={{ color: O, fontWeight: 600, textDecoration: "underline" }} onClick={e => e.stopPropagation()}>Terms of Service</a>
-                    {" "}and{" "}
-                    <a href="https://www.pickyourhire.com/privacy-policy" target="_blank" rel="noreferrer" style={{ color: O, fontWeight: 600, textDecoration: "underline" }} onClick={e => e.stopPropagation()}>Privacy Policy</a>
-                    . I understand how my data will be used to match me with relevant job opportunities.
-                  </div>
-                </label>
-                {errors.terms && (
-                  <p style={{ fontSize: 12, color: "#ef4444", margin: "8px 0 0 32px", display: "flex", alignItems: "center", gap: 4 }}>
-                    ⚠ {errors.terms}
-                  </p>
-                )}
-              </div>
-
               <button
-                onClick={verify} disabled={loading || otpString.length !== 6 || !termsAccepted}
-                style={{ width: "100%", padding: "14px", backgroundColor: loading || otpString.length !== 6 || !termsAccepted ? "#F1F5F9" : O, color: loading || otpString.length !== 6 || !termsAccepted ? "#94a3b8" : "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: loading || otpString.length !== 6 || !termsAccepted ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "inherit", marginBottom: 12, transition: "background-color 0.15s" }}
-                onMouseEnter={e => { if (!loading && otpString.length === 6 && termsAccepted) e.currentTarget.style.backgroundColor = "#C0601A"; }}
-                onMouseLeave={e => { if (!loading && otpString.length === 6 && termsAccepted) e.currentTarget.style.backgroundColor = O; }}
+                onClick={verify} disabled={loading || otpString.length !== 6}
+                style={{ width: "100%", padding: "14px", backgroundColor: loading || otpString.length !== 6 ? "#F1F5F9" : O, color: loading || otpString.length !== 6 ? "#94a3b8" : "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: loading || otpString.length !== 6 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontFamily: "inherit", marginBottom: 12, transition: "background-color 0.15s" }}
+                onMouseEnter={e => { if (!loading && otpString.length === 6) e.currentTarget.style.backgroundColor = "#C0601A"; }}
+                onMouseLeave={e => { if (!loading && otpString.length === 6) e.currentTarget.style.backgroundColor = O; }}
               >
                 {loading ? "Verifying..." : <><span>Verify and sign in</span><ArrowRight size={17} /></>}
               </button>
