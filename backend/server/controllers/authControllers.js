@@ -166,6 +166,62 @@ export const verifyOtp = async (req, res) => {
         });
       }
 
+      // ── Claim flow ────────────────────────────────────────────────────
+      // If admin bulk-uploaded this person's resume/data before they ever
+      // signed up, their email will already be sitting in bulk_candidates.
+      // Auto-create their candidate account pre-filled with that data and
+      // skip straight to their (editable) profile, instead of a blank form.
+      const bulkMatch = await pool.query(
+        `SELECT * FROM bulk_candidates WHERE email=$1 AND claimed_by_user_id IS NULL LIMIT 1`,
+        [email]
+      );
+
+      if (bulkMatch.rows.length) {
+        const b = bulkMatch.rows[0];
+        const newUser = await pool.query(
+          `INSERT INTO users(
+             name, email, role, phone, job_role, contact, skills, cctc, ectc,
+             current_location, preferred_location, notice_period, offer_in_hand,
+             reason_for_change, current_company_name, highest_qualification,
+             address_aadhaar, technical_skills, soft_skills, linkedin_profile,
+             resume_file_path, experience, candidate_profile_completed
+           )
+           VALUES ($1,$2,'candidate',$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,true)
+           RETURNING *`,
+          [
+            b.name, email, b.contact, b.role, b.contact, b.skills,
+            b.current_ctc || null, b.expected_ctc || null, b.current_location,
+            b.preferred_location, b.notice_period, b.offer_in_hand,
+            b.reason_for_change, b.current_company_name, b.highest_qualification,
+            b.address, b.technical_skills, b.soft_skills, b.linkedin,
+            b.resume_link, isNaN(parseInt(b.experience, 10)) ? null : parseInt(b.experience, 10),
+          ]
+        );
+
+        await pool.query(
+          `UPDATE bulk_candidates SET claimed_by_user_id=$1, claimed_at=NOW() WHERE id=$2`,
+          [newUser.rows[0].id, b.id]
+        );
+
+        const token = jwt.sign(
+          { id: newUser.rows[0].id, role: "candidate" },
+          process.env.JWT_SECRET
+        );
+
+        createNotification({
+          type: "login",
+          title: `${newUser.rows[0].name || email} claimed their profile`,
+          message: `${newUser.rows[0].name || email} claimed a profile that was bulk-uploaded by an admin and signed in for the first time.`,
+          userId: newUser.rows[0].id,
+        });
+
+        return res.json({
+          token,
+          user: newUser.rows[0],
+          claimedProfile: true, // signal frontend: go straight to (editable) profile, skip role selection & blank form
+        });
+      }
+
       // Regular new user → role selection
       return res.json({ newUser: true, email });
     }
