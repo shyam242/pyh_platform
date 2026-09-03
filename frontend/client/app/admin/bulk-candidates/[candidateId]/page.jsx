@@ -7,6 +7,7 @@ import { showError, showSuccess } from "@/utils/toast";
 import axios from "axios";
 import { API_BASE_URL } from "@/utils/api";
 import CandidateDetailView from "@/components/recruiter/CandidateDetailView";
+import { shareClaimViaWhatsApp } from "@/utils/whatsapp";
 
 const O = "#E87722";
 const BORDER = "#e2e8f0";
@@ -238,6 +239,7 @@ export default function AdminBulkCandidateDetailsPage() {
         onDownloadCV={downloadResume}
         onEditCandidate={() => { setForm(raw); setEditing(true); }}
         onDeleteCandidate={handleDeleteCandidate}
+        onShareCandidate={raw?.claimed_by_user_id ? undefined : () => shareClaimViaWhatsApp({ name: raw?.name, email: raw?.email, phone: raw?.contact })}
       />
     </>
   );
