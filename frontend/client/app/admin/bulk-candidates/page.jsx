@@ -2,9 +2,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
-import { Trash2, AlertCircle, Users, Search, X, Upload } from "lucide-react";
+import { Trash2, AlertCircle, Users, Search, X, Upload, Share2 } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import { API_BASE_URL } from "@/utils/api";
+import { shareSignupViaWhatsApp, shareClaimViaWhatsApp } from "@/utils/whatsapp";
 
 export default function BulkCandidatesPage() {
   const router = useRouter();
@@ -138,6 +139,13 @@ export default function BulkCandidatesPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              onClick={() => shareSignupViaWhatsApp()}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: "#F0FDF4", color: "#16A34A", border: "1px solid #BBF7D0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+              title="Share a self-registration link candidates can open to create their own profile"
+            >
+              <Share2 size={14} /> Invite via WhatsApp
+            </button>
             {selectedCandidates.size > 0 && (
               <button
                 onClick={handleBulkDelete}
@@ -289,15 +297,32 @@ export default function BulkCandidatesPage() {
                         <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: "#374151" }}>{candidate.experience ? `${candidate.experience} yrs` : "—"}</p>
                       </div>
                     </div>
-                    <button
-                      onClick={e => handleDeleteCandidate(candidate.id, e)}
-                      style={{ padding: "5px 8px", background: "none", border: "1px solid #fecaca", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", color: "#dc2626" }}
-                      onMouseEnter={e => e.currentTarget.style.background = "#fef2f2"}
-                      onMouseLeave={e => e.currentTarget.style.background = "none"}
-                      title="Delete candidate"
-                    >
-                      <Trash2 size={13} />
-                    </button>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {candidate.claimed_by_user_id ? (
+                        <span style={{ padding: "5px 9px", background: "#F0FDF4", color: "#16A34A", border: "1px solid #BBF7D0", borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
+                          Claimed
+                        </span>
+                      ) : (
+                        <button
+                          onClick={e => { e.stopPropagation(); shareClaimViaWhatsApp({ name: candidate.name, email: candidate.email, phone: candidate.contact }); }}
+                          style={{ padding: "5px 8px", background: "none", border: "1px solid #BBF7D0", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", color: "#16A34A" }}
+                          onMouseEnter={e => e.currentTarget.style.background = "#F0FDF4"}
+                          onMouseLeave={e => e.currentTarget.style.background = "none"}
+                          title="Share via WhatsApp so this candidate can claim & edit their own profile"
+                        >
+                          <Share2 size={13} />
+                        </button>
+                      )}
+                      <button
+                        onClick={e => handleDeleteCandidate(candidate.id, e)}
+                        style={{ padding: "5px 8px", background: "none", border: "1px solid #fecaca", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", color: "#dc2626" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#fef2f2"}
+                        onMouseLeave={e => e.currentTarget.style.background = "none"}
+                        title="Delete candidate"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -309,4 +334,3 @@ export default function BulkCandidatesPage() {
     </div>
   );
 }
-
