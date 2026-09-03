@@ -14,7 +14,7 @@ export default function ShortlistedPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
-  const { filters, setFilter, clearFilters, activeFilterCount, matchesFilters } = useAdvancedFilters();
+  const { filters, setFilter, clearFilters, activeFilterCount, matchesFilters, EXPERIENCE_PRESETS, applyExperiencePreset } = useAdvancedFilters();
 
   const shortlisted = useMemo(() => candidates.filter(c => c.myStatus === "Shortlisted"), [candidates]);
 
@@ -66,7 +66,7 @@ export default function ShortlistedPage() {
       </div>
 
       {showFilters && (
-        <AdvancedFiltersPanel filters={filters} setFilter={setFilter} clearFilters={clearFilters} activeFilterCount={activeFilterCount} />
+        <AdvancedFiltersPanel filters={filters} setFilter={setFilter} clearFilters={clearFilters} activeFilterCount={activeFilterCount} EXPERIENCE_PRESETS={EXPERIENCE_PRESETS} applyExperiencePreset={applyExperiencePreset} />
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 22 }}>
@@ -90,7 +90,7 @@ export default function ShortlistedPage() {
           No shortlisted candidates yet — shortlist someone from the Candidates page.
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14, alignItems: "stretch" }}>
           {pageItems.map(c => (
             <CandidateCard
               key={`${c.source}:${c.id}`}
