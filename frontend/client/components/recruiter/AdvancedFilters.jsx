@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { BORDER, O, O_LITE } from "./RecruiterSidebarLayout";
 
 const EMPTY_FILTERS = {
-  location: "", preferredLocation: "", skills: "", experience: "",
+  location: "", preferredLocation: "", skills: "", experienceMin: "", experienceMax: "",
   position: "", noticePeriod: "", currentCompany: "", project: "",
   education: "", degree: "", institute: "", gender: "",
   candidateFreshness: "all", jobType: "", jobMode: "", industry: "",
@@ -33,6 +33,20 @@ export function useAdvancedFilters() {
     [filters]
   );
 
+  // Client-side floor for the "12+" experience preset — max input can still
+  // be set separately if the recruiter wants an explicit upper bound.
+  const EXPERIENCE_PRESETS = [
+    { l: "Fresher (0–1 yr)", min: 0, max: 1 },
+    { l: "1–3 yrs", min: 1, max: 3 },
+    { l: "3–5 yrs", min: 3, max: 5 },
+    { l: "5–8 yrs", min: 5, max: 8 },
+    { l: "8–12 yrs", min: 8, max: 12 },
+    { l: "12+ yrs", min: 12, max: "" },
+  ];
+  const applyExperiencePreset = (min, max) => {
+    setFilters(f => ({ ...f, experienceMin: String(min), experienceMax: max === "" ? "" : String(max) }));
+  };
+
   const matchesFilters = (c) => {
     const f = filters;
     if (!ilike(c.current_location, f.location)) return false;
@@ -43,11 +57,13 @@ export function useAdvancedFilters() {
     if (!ilike(c.role || c.current_role, f.position)) return false;
     if (!ilike(c.qualification || c.highest_qualification, f.education)) return false;
     if (!ilike(c.qualification || c.highest_qualification, f.degree)) return false;
-    if (f.experience) {
+    if (f.experienceMin !== "" || f.experienceMax !== "") {
       const exp = parseFloat(c.experience);
-      const [min, max] = f.experience.split("-").map(Number);
-      if (!isNaN(exp) && !isNaN(min)) {
-        if (max ? (exp < min || exp > max) : exp < min) return false;
+      const min = f.experienceMin !== "" ? parseFloat(f.experienceMin) : null;
+      const max = f.experienceMax !== "" ? parseFloat(f.experienceMax) : null;
+      if (!isNaN(exp)) {
+        if (min !== null && !isNaN(min) && exp < min) return false;
+        if (max !== null && !isNaN(max) && exp > max) return false;
       }
     }
     if (f.gender && c.gender && c.gender.toLowerCase() !== f.gender.toLowerCase()) return false;
@@ -71,7 +87,7 @@ export function useAdvancedFilters() {
     return true;
   };
 
-  return { filters, setFilter, clearFilters, activeFilterCount, matchesFilters };
+  return { filters, setFilter, clearFilters, activeFilterCount, matchesFilters, EXPERIENCE_PRESETS, applyExperiencePreset };
 }
 
 const Sel = ({ label, val, onChange, opts }) => (
@@ -91,8 +107,47 @@ const Inp = ({ label, val, onChange, ph }) => (
   </div>
 );
 
+/** Min–max numeric range input, used for the Experience filter. */
+const RangeInp = ({ label, min, max, onMinChange, onMaxChange, presets, onPreset }) => (
+  <div>
+    <label style={labelStyle}>{label}</label>
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <input
+        type="number" min="0" step="0.5" value={min}
+        onChange={e => onMinChange(e.target.value)}
+        placeholder="Min"
+        style={{ ...fieldStyle, cursor: "text" }}
+      />
+      <span style={{ color: "#94a3b8", fontSize: 12 }}>–</span>
+      <input
+        type="number" min="0" step="0.5" value={max}
+        onChange={e => onMaxChange(e.target.value)}
+        placeholder="Max"
+        style={{ ...fieldStyle, cursor: "text" }}
+      />
+      <span style={{ fontSize: 11, color: "#94a3b8", flexShrink: 0 }}>yrs</span>
+    </div>
+    {presets && (
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 6 }}>
+        {presets.map(p => (
+          <button
+            key={p.l}
+            type="button"
+            onClick={() => onPreset(p.min, p.max)}
+            style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 8px", borderRadius: 999, border: `1px solid ${BORDER}`, backgroundColor: "#fff", color: "#64748b", cursor: "pointer", fontFamily: "inherit" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = O; e.currentTarget.style.color = O; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = BORDER; e.currentTarget.style.color = "#64748b"; }}
+          >
+            {p.l}
+          </button>
+        ))}
+      </div>
+    )}
+  </div>
+);
+
 /** The Advanced Filters card itself — drop this under the search bar on any candidate list page. */
-export default function AdvancedFiltersPanel({ filters, setFilter, clearFilters, activeFilterCount }) {
+export default function AdvancedFiltersPanel({ filters, setFilter, clearFilters, activeFilterCount, EXPERIENCE_PRESETS, applyExperiencePreset }) {
   return (
     <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 14, padding: "20px 24px", marginBottom: 16, boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
@@ -113,8 +168,14 @@ export default function AdvancedFiltersPanel({ filters, setFilter, clearFilters,
 
       {/* Row 2: Experience, Position, Notice */}
       <div style={rowStyle}>
-        <Sel label="Experience" val={filters.experience} onChange={v => setFilter("experience", v)}
-          opts={[{ v: "0-1", l: "0–1 yr (Fresher)" }, { v: "1-3", l: "1–3 yrs" }, { v: "3-5", l: "3–5 yrs" }, { v: "5-8", l: "5–8 yrs" }, { v: "8-12", l: "8–12 yrs" }, { v: "12", l: "12+ yrs" }]} />
+        <RangeInp
+          label="Experience"
+          min={filters.experienceMin} max={filters.experienceMax}
+          onMinChange={v => setFilter("experienceMin", v)}
+          onMaxChange={v => setFilter("experienceMax", v)}
+          presets={EXPERIENCE_PRESETS}
+          onPreset={applyExperiencePreset}
+        />
         <Inp label="Position / Role" val={filters.position} onChange={v => setFilter("position", v)} ph="e.g. Software Engineer..." />
         <Sel label="Notice Period" val={filters.noticePeriod} onChange={v => setFilter("noticePeriod", v)}
           opts={["Immediate", "15 days", "1 month", "2 months", "3 months", "More than 3 months"]} />
