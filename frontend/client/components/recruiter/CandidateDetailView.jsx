@@ -130,6 +130,7 @@ export default function CandidateDetailView({
   referrer,
   onEditCandidate,
   onDeleteCandidate,
+  onShareCandidate,
 }) {
   const [tab, setTab] = useState("overview");
 
@@ -396,13 +397,19 @@ export default function CandidateDetailView({
               </div>
             </Card>
 
-            {(onEditCandidate || onDeleteCandidate) && (
+            {(onEditCandidate || onDeleteCandidate || onShareCandidate) && (
               <Card title="Admin Actions">
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {onEditCandidate && (
                     <button onClick={onEditCandidate}
                       style={{ width: "100%", padding: "0.875rem", backgroundColor: O_LITE, color: O, border: `1.5px solid ${O_MID}`, borderRadius: 8, fontSize: 13.5, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, fontFamily: "inherit" }}>
                       <Pencil size={15} /> Edit Candidate Details
+                    </button>
+                  )}
+                  {onShareCandidate && (
+                    <button onClick={onShareCandidate}
+                      style={{ width: "100%", padding: "0.875rem", backgroundColor: "#F0FDF4", color: "#16A34A", border: "1.5px solid #BBF7D0", borderRadius: 8, fontSize: 13.5, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, fontFamily: "inherit" }}>
+                      <Send size={15} /> Share via WhatsApp (claim profile)
                     </button>
                   )}
                   {onDeleteCandidate && (
