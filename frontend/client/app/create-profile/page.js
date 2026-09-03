@@ -83,6 +83,7 @@ export default function CreateProfile() {
   const [companyName, setCompanyName] = useState("");
   const [companyWebsite, setCompanyWebsite] = useState("");
   const [phone, setPhone]             = useState("");
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading]         = useState(false);
   const [errors, setErrors]           = useState({});
   const [step, setStep]               = useState(1); // 1=role, 2=details
@@ -117,6 +118,7 @@ export default function CreateProfile() {
       if (!companyName) validationErrors.companyName = "Company name is required";
       if (!phone)       validationErrors.phone       = "Phone number is required";
     }
+    if (!termsAccepted) validationErrors.terms = "Please accept the Terms & Privacy Policy to continue";
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       Object.values(validationErrors).forEach(err => showError(err));
@@ -276,6 +278,39 @@ export default function CreateProfile() {
               )}
             </div>
 
+            {/* Terms & Privacy Policy */}
+            <div style={{ backgroundColor: "#FAFAFA", border: `1.5px solid ${errors.terms ? "#ef4444" : termsAccepted ? "#3B6D11" : "#E5E7EB"}`, borderRadius: 12, padding: "14px 16px", marginBottom: 20, transition: "border-color 0.15s" }}>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}>
+                <div style={{ position: "relative", flexShrink: 0, marginTop: 2 }}>
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={e => { setTermsAccepted(e.target.checked); setErrors(err => ({ ...err, terms: undefined })); }}
+                    style={{ opacity: 0, position: "absolute", inset: 0, margin: 0, cursor: "pointer" }}
+                  />
+                  <div style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${termsAccepted ? "#3B6D11" : "#D1D5DB"}`, backgroundColor: termsAccepted ? "#3B6D11" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
+                    {termsAccepted && (
+                      <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+                        <path d="M1 4L4 7.5L10 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+                <div style={{ fontSize: 13, color: "#475569", lineHeight: 1.55 }}>
+                  I agree to PickYourHire's{" "}
+                  <a href="https://www.pickyourhire.com/terms-of-service" target="_blank" rel="noreferrer" style={{ color: O, fontWeight: 600, textDecoration: "underline" }} onClick={e => e.stopPropagation()}>Terms of Service</a>
+                  {" "}and{" "}
+                  <a href="https://www.pickyourhire.com/privacy-policy" target="_blank" rel="noreferrer" style={{ color: O, fontWeight: 600, textDecoration: "underline" }} onClick={e => e.stopPropagation()}>Privacy Policy</a>
+                  . I understand how my data will be used to match me with relevant opportunities.
+                </div>
+              </label>
+              {errors.terms && (
+                <p style={{ fontSize: 12, color: "#ef4444", margin: "8px 0 0 32px", display: "flex", alignItems: "center", gap: 4 }}>
+                  ⚠ {errors.terms}
+                </p>
+              )}
+            </div>
+
             {/* Security note */}
             <div style={{ display: "flex", alignItems: "flex-start", gap: 14, backgroundColor: "#F5F3FF", border: "1px solid #DDD6FE", borderRadius: 12, padding: "16px 18px", marginBottom: 24 }}>
               <div style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: "#EDE9FE", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -291,7 +326,7 @@ export default function CreateProfile() {
               <button onClick={() => setStep(1)} style={{ padding: "12px 24px", border: "1.5px solid #E5E7EB", borderRadius: 10, backgroundColor: "#fff", color: "#475569", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 8 }}>
                 <ArrowLeft size={15} /> Back
               </button>
-              <button onClick={submit} disabled={loading} style={{ flex: 1, padding: "12px 24px", backgroundColor: loading ? O_LITE : O, color: loading ? "#B35500" : "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: loading ? "none" : "0 4px 14px rgba(232,119,34,0.28)", transition: "background-color 0.15s" }}>
+              <button onClick={submit} disabled={loading} style={{ flex: 1, padding: "12px 24px", backgroundColor: loading ? O_LITE : O, color: loading ? "#B35500" : "#fff", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, boxShadow: loading ? "none" : "0 4px 14px rgba(232,119,34,0.28)", transition: "background-color 0.15s", opacity: !loading && !termsAccepted ? 0.75 : 1 }}>
                 {loading ? "Creating account..." : <><span>Create my account</span><ArrowRight size={16} /></>}
               </button>
             </div>
