@@ -15,7 +15,7 @@ export default function CandidatesPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
-  const { filters, setFilter, clearFilters, activeFilterCount, matchesFilters } = useAdvancedFilters();
+  const { filters, setFilter, clearFilters, activeFilterCount, matchesFilters, EXPERIENCE_PRESETS, applyExperiencePreset } = useAdvancedFilters();
 
   const filtered = useMemo(() => {
     return candidates.filter(c => {
@@ -76,7 +76,7 @@ export default function CandidatesPage() {
       </div>
 
       {showFilters && (
-        <AdvancedFiltersPanel filters={filters} setFilter={setFilter} clearFilters={clearFilters} activeFilterCount={activeFilterCount} />
+        <AdvancedFiltersPanel filters={filters} setFilter={setFilter} clearFilters={clearFilters} activeFilterCount={activeFilterCount} EXPERIENCE_PRESETS={EXPERIENCE_PRESETS} applyExperiencePreset={applyExperiencePreset} />
       )}
 
       {/* Stat cards */}
@@ -102,7 +102,7 @@ export default function CandidatesPage() {
           No candidates match your filters.
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14, alignItems: "stretch" }}>
           {pageItems.map(c => (
             <CandidateCard
               key={`${c.source}:${c.id}`}
