@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Briefcase, Users, Star, CalendarCheck, Award, TrendingUp, TrendingDown,
-  ChevronRight, UploadCloud, FileEdit, Search, Sparkles, ShieldCheck, Clock,
+  Users, Star, CalendarCheck, Award, TrendingUp, TrendingDown,
+  ChevronRight, UploadCloud, FileEdit, Search, Sparkles, ShieldCheck, Clock, Flame,
 } from "lucide-react";
 import RecruiterSidebarLayout, { O, O_LITE, O_MID, BORDER } from "@/components/recruiter/RecruiterSidebarLayout";
 import { API_BASE_URL } from "@/utils/api";
@@ -50,38 +50,33 @@ const TECH_KEYWORDS = new Set([
   "cybersecurity","r","sas","hadoop","spark","airflow","jira","figma",
 ]);
 
-// Trapezoid-style hiring funnel, drawn to scale with each stage's count.
-function FunnelChart({ stages, loading }) {
-  const chartW = 190, rowH = 46, gap = 6, minWidthFrac = 0.34;
-  const maxVal = Math.max(1, ...stages.map(s => s.value));
-  const rawWidths = stages.map(s => chartW * (minWidthFrac + (s.value / maxVal) * (1 - minWidthFrac)));
-  const widths = rawWidths.map((w, i) => (i === 0 ? w : Math.min(w, rawWidths[i - 1])));
-  const totalH = stages.length * rowH + (stages.length - 1) * gap;
-  const cx = chartW / 2;
-
+// Animated daily-activity bar strip for the "Hiring Momentum" widget — each bar
+// is a day's worth of new candidates, tallest bar and today both called out.
+function MomentumBars({ days, loading }) {
+  const max = Math.max(1, ...days.map(d => d.count));
+  const todayKey = days[days.length - 1]?.key;
   return (
-    <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-      <svg width={chartW} height={totalH} viewBox={`0 0 ${chartW} ${totalH}`} style={{ flexShrink: 0 }}>
-        {stages.map((s, i) => {
-          const y = i * (rowH + gap);
-          const topW = widths[i];
-          const botW = i < stages.length - 1 ? widths[i + 1] : widths[i] * 0.6;
-          const points = [
-            [cx - topW / 2, y], [cx + topW / 2, y],
-            [cx + botW / 2, y + rowH], [cx - botW / 2, y + rowH],
-          ].map(p => p.join(",")).join(" ");
-          return <polygon key={s.label} points={points} fill={loading ? "#F1F5F9" : s.color} rx="4" />;
-        })}
-      </svg>
-      <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: totalH, flex: 1, minWidth: 0 }}>
-        {stages.map(s => (
-          <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 7, height: rowH }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: s.color, flexShrink: 0 }} />
-            <span style={{ fontSize: 12.5, color: "#64748b", whiteSpace: "nowrap" }}>{s.label}</span>
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: "#0f172a", marginLeft: "auto" }}>{loading ? "—" : s.value}</span>
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 8, height: 92 }}>
+      {days.map(d => {
+        const h = loading ? 6 : Math.max(6, Math.round((d.count / max) * 76));
+        const isToday = d.key === todayKey;
+        return (
+          <div key={d.key} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flex: 1 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: d.count ? "#0f172a" : "#cbd5e1", minHeight: 14 }}>
+              {loading ? "" : d.count || ""}
+            </span>
+            <div
+              title={`${d.count} candidate${d.count === 1 ? "" : "s"} added`}
+              style={{
+                width: "100%", height: h, borderRadius: 6,
+                background: loading ? "#F1F5F9" : isToday ? `linear-gradient(180deg, #FDBA74, ${O})` : "#E0E7FF",
+                transition: "height 0.4s ease",
+              }}
+            />
+            <span style={{ fontSize: 10.5, fontWeight: isToday ? 700 : 600, color: isToday ? O : "#94a3b8" }}>{d.label}</span>
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }
@@ -91,7 +86,6 @@ export default function RecruiterHomePage() {
   const [referrals, setReferrals] = useState([]);
   const [bulkCandidates, setBulkCandidates] = useState([]);
   const [statuses, setStatuses] = useState([]); // [{source, candidate_id, status, updated_at}]
-  const [jobs, setJobs] = useState([]);
   const [user, setUser] = useState(null);
   const [isApproved, setIsApproved] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -102,13 +96,12 @@ export default function RecruiterHomePage() {
 
     (async () => {
       const headers = { Authorization: `Bearer ${token}` };
-      const [uRes, aRes, rRes, bRes, sRes, jRes] = await Promise.allSettled([
+      const [uRes, aRes, rRes, bRes, sRes] = await Promise.allSettled([
         fetch(`${API_BASE_URL}/api/profile/user`, { headers }),
         fetch(`${API_BASE_URL}/api/recruiter/approval-status`, { headers }),
         fetch(`${API_BASE_URL}/api/recruiter/all`, { headers }),
         fetch(`${API_BASE_URL}/api/admin/bulk-candidates`, { headers }),
         fetch(`${API_BASE_URL}/api/recruiter/candidate-statuses`, { headers }),
-        fetch(`${API_BASE_URL}/api/jobs`),
       ]);
 
       if (uRes.status === "fulfilled" && uRes.value.ok) setUser(await uRes.value.json());
@@ -127,9 +120,6 @@ export default function RecruiterHomePage() {
       if (sRes.status === "fulfilled" && sRes.value.ok) {
         const d = await sRes.value.json();
         setStatuses(d.statuses || []);
-      }
-      if (jRes.status === "fulfilled" && jRes.value.ok) {
-        setJobs(await jRes.value.json());
       }
       setLoading(false);
     })();
@@ -212,26 +202,47 @@ export default function RecruiterHomePage() {
       }));
   }, [statuses, combined]);
 
+  // ── Weekly hiring momentum: candidates added per day, last 7 vs previous 7 days ──
+  const momentum = useMemo(() => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const dayKey = d => new Date(d).toISOString().slice(0, 10);
+
+    const buckets = {};
+    for (let i = 6; i >= 0; i--) buckets[dayKey(today.getTime() - i * DAY)] = 0;
+
+    let thisWeek = 0, lastWeek = 0;
+    withStatus.forEach(c => {
+      const raw = c.created_at || c.upload_date;
+      if (!raw) return;
+      const t = new Date(raw).getTime();
+      const daysAgo = Math.floor((today.getTime() - new Date(dayKey(t)).getTime()) / DAY);
+      if (daysAgo >= 0 && daysAgo <= 6) { thisWeek++; const k = dayKey(t); if (k in buckets) buckets[k]++; }
+      else if (daysAgo >= 7 && daysAgo <= 13) lastWeek++;
+    });
+
+    const days = Object.entries(buckets).map(([k, count]) => ({
+      key: k, count,
+      label: new Date(k + "T00:00:00").toLocaleDateString("en-US", { weekday: "short" }),
+    }));
+    const trendPct = lastWeek === 0 ? (thisWeek > 0 ? 100 : 0) : Math.round(((thisWeek - lastWeek) / lastWeek) * 100);
+    const busiest = days.reduce((a, b) => (b.count > a.count ? b : a), days[0]);
+
+    return { days, thisWeek, lastWeek, trendPct, busiest };
+  }, [withStatus]);
+
   const statCards = [
-    { key: "jobs",     label: "Open Jobs",         value: jobs.length,       Icon: Briefcase,    accent: "#4F46E5", lite: "#EEF2FF", onClick: () => router.push("/recruiter/jobs") },
     { key: "total",    label: "Total Candidates",   value: counts.total,      Icon: Users,        accent: "#2563EB", lite: "#EFF6FF", onClick: () => router.push("/recruiter/candidates") },
     { key: "short",    label: "Shortlisted",        value: counts.shortlisted,Icon: Star,         accent: "#D97706", lite: "#FFFBEB", onClick: () => router.push("/recruiter/shortlisted") },
     { key: "process",  label: "In Process",         value: counts.inProcess, Icon: CalendarCheck,accent: "#7C3AED", lite: "#F5F3FF", onClick: () => router.push("/recruiter/interviews") },
     { key: "offers",   label: "Offers Made",        value: counts.offers,    Icon: Award,         accent: "#DB2777", lite: "#FDF2F8", onClick: () => router.push("/recruiter/on-hold") },
   ];
 
-  const funnelStages = [
-    { label: "Total Candidates", value: counts.total,       color: "#A5B4FC" },
-    { label: "Shortlisted",      value: counts.shortlisted, color: "#86EFAC" },
-    { label: "In Process",       value: counts.inProcess,   color: "#FDBA74" },
-    { label: "Offer Given",      value: counts.offers,      color: "#F0ABFC" },
-  ];
-
   const userName = user?.name?.split(" ")[0] || "Recruiter";
 
   return (
     <RecruiterSidebarLayout active="dashboard">
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 24, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(260px, 300px)", gap: 24, alignItems: "start" }}>
 
         {/* ── LEFT / MAIN ── */}
         <div style={{ minWidth: 0 }}>
@@ -239,33 +250,33 @@ export default function RecruiterHomePage() {
           <p style={{ fontSize: 14, color: "#64748b", margin: "0 0 24px" }}>Here's your hiring overview. Upload a JD to find the best matching candidates.</p>
 
           {/* Stat cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 22 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 22 }}>
             {statCards.map(c => (
               <button
                 key={c.key}
                 onClick={c.onClick}
                 style={{
                   textAlign: "left", cursor: "pointer", fontFamily: "inherit",
-                  borderRadius: 14, padding: "16px 16px", backgroundColor: "#fff",
+                  borderRadius: 14, padding: "18px 18px", backgroundColor: "#fff",
                   border: `1.5px solid ${BORDER}`, borderTop: `3px solid ${c.accent}`,
-                  transition: "box-shadow 0.15s",
+                  transition: "box-shadow 0.15s, transform 0.15s", minWidth: 0,
                 }}
-                onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.06)"; }}
-                onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; }}
+                onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.06)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+                onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "none"; }}
               >
-                <div style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: c.lite, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 10 }}>
-                  <c.Icon size={16} color={c.accent} />
+                <div style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: c.lite, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                  <c.Icon size={17} color={c.accent} />
                 </div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#0f172a", lineHeight: 1, marginBottom: 5 }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: "#0f172a", lineHeight: 1, marginBottom: 6 }}>
                   {loading ? "—" : c.value}
                 </div>
-                <div style={{ fontSize: 11.5, color: "#94a3b8", fontWeight: 600 }}>{c.label}</div>
+                <div style={{ fontSize: 12, color: "#94a3b8", fontWeight: 600 }}>{c.label}</div>
               </button>
             ))}
           </div>
 
-          {/* Recent candidates + Hiring funnel */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 16, marginBottom: 16 }}>
+          {/* Recent candidates + Hiring momentum */}
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 1.2fr) minmax(280px, 1fr)", gap: 16, marginBottom: 16 }}>
             {/* Recent candidates */}
             <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "18px 20px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
@@ -300,21 +311,47 @@ export default function RecruiterHomePage() {
               })}
             </div>
 
-            {/* Hiring funnel */}
-            <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "18px 20px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                <span style={{ fontSize: 14.5, fontWeight: 700, color: "#0f172a" }}>Hiring Funnel</span>
+            {/* Hiring momentum — dynamic weekly activity, not a static funnel */}
+            <div style={{
+              backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "18px 20px",
+              display: "flex", flexDirection: "column",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 14.5, fontWeight: 700, color: "#0f172a", display: "flex", alignItems: "center", gap: 6 }}>
+                  <Flame size={15} color={O} /> Hiring Momentum
+                </span>
               </div>
-              <FunnelChart stages={funnelStages} loading={loading} />
-              <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid #F1F5F9`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: 12, color: "#64748b" }}>Conversion rate</span>
-                <span style={{ fontSize: 15, fontWeight: 700, color: O }}>{conversionRate}%</span>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 14 }}>
+                <span style={{ fontSize: 26, fontWeight: 700, color: "#0f172a" }}>{loading ? "—" : momentum.thisWeek}</span>
+                <span style={{ fontSize: 12, color: "#94a3b8" }}>candidates this week</span>
+                {!loading && (
+                  <span style={{
+                    marginLeft: "auto", display: "flex", alignItems: "center", gap: 3, fontSize: 11.5, fontWeight: 700,
+                    color: momentum.trendPct >= 0 ? "#16A34A" : "#DC2626",
+                    backgroundColor: momentum.trendPct >= 0 ? "#F0FDF4" : "#FEF2F2",
+                    padding: "3px 8px", borderRadius: 999,
+                  }}>
+                    {momentum.trendPct >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                    {Math.abs(momentum.trendPct)}% vs last week
+                  </span>
+                )}
+              </div>
+
+              <MomentumBars days={momentum.days} loading={loading} />
+
+              <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid #F1F5F9`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <span style={{ fontSize: 11.5, color: "#64748b", lineHeight: 1.5 }}>
+                  {!loading && momentum.busiest?.count > 0
+                    ? <>🔥 Busiest day: <strong style={{ color: "#0f172a" }}>{momentum.busiest.label}</strong> ({momentum.busiest.count} added)</>
+                    : "No new candidates added this week yet."}
+                </span>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: O, whiteSpace: "nowrap" }}>{conversionRate}% → offers</span>
               </div>
             </div>
           </div>
 
           {/* Tech stack + notice period */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
             <div style={{ backgroundColor: "#fff", border: `1.5px solid ${BORDER}`, borderRadius: 16, padding: "18px 20px" }}>
               <div style={{ fontSize: 14.5, fontWeight: 700, color: "#0f172a", marginBottom: 14 }}>Top Tech Stack in Demand</div>
               {loading ? (
